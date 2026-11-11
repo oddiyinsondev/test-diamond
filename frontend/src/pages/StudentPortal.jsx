@@ -57,7 +57,6 @@ export default function StudentPortal() {
   const [availableTests, setAvailableTests] = useState([]);
   const [myResults, setMyResults] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
-  const [coinHistory, setCoinHistory] = useState([]);
   const [studentTestsPolicy, setStudentTestsPolicy] = useState(null);
   const [loadingData, setLoadingData] = useState(false);
 
@@ -73,6 +72,12 @@ export default function StudentPortal() {
   const [timeLeftSeconds, setTimeLeftSeconds] = useState(0);
   const timerRef = useRef(null);
   const testStartedAtRef = useRef(null);
+  const userAnswersRef = useRef({});
+  const isSubmittingRef = useRef(false);
+
+  useEffect(() => {
+    userAnswersRef.current = userAnswers;
+  }, [userAnswers]);
 
   // Completed Test Result View
   const [testResultData, setTestResultData] = useState(null);
@@ -116,11 +121,10 @@ export default function StudentPortal() {
       const targetGradeFilter = canPreviewClasses ? previewGrade : '';
       const leaderboardGrade = canPreviewClasses ? previewGrade || 'all' : user?.grade || '';
 
-      const [testsRes, resultsRes, leadRes, coinsRes, metaRes] = await Promise.allSettled([
+      const [testsRes, resultsRes, leadRes, metaRes] = await Promise.allSettled([
         api.student.getTests(targetGradeFilter),
         api.student.getMyResults(),
         api.student.getLeaderboard(leaderboardGrade),
-        api.student.getCoinHistory(),
         api.auth.meta(),
       ]);
 
@@ -135,10 +139,6 @@ export default function StudentPortal() {
       if (leadRes.status === 'fulfilled') {
         const val = leadRes.value;
         setLeaderboard(Array.isArray(val) ? val : val?.leaderboard || []);
-      }
-      if (coinsRes.status === 'fulfilled') {
-        const val = coinsRes.value;
-        setCoinHistory(Array.isArray(val) ? val : val?.history || val?.recentTransactions || []);
       }
       if (metaRes.status === 'fulfilled' && metaRes.value?.studentTestsPolicy) {
         setStudentTestsPolicy(metaRes.value.studentTestsPolicy);
@@ -236,6 +236,8 @@ export default function StudentPortal() {
       setCurrentTest(detail);
       setCurrentQuestionIdx(0);
       setUserAnswers({});
+      userAnswersRef.current = {};
+      isSubmittingRef.current = false;
       testStartedAtRef.current = Date.now();
 
       // Set duration timer
@@ -256,41 +258,10 @@ export default function StudentPortal() {
     }
   };
 
-  // Countdown timer effect during active test
-  useEffect(() => {
-    if (activeTab === 'runner' && currentTest) {
-      timerRef.current = setInterval(() => {
-        setTimeLeftSeconds((prev) => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current);
-            autoSubmitTest();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-
-      return () => {
-        if (timerRef.current) clearInterval(timerRef.current);
-      };
-    }
-  }, [activeTab, currentTest]);
-
-  // Auto submit when time is up
-  const autoSubmitTest = () => {
-    showToast(
-      tr(
-        'Vaqt tugadi! Test avtomatik topshirilmoqda...',
-        'Время вышло! Тест автоматически отправляется...'
-      ),
-      'warning'
-    );
-    submitTestAnswers();
-  };
-
-  // Submit test answers
+  // Submit test answers (reads live userAnswersRef so timer auto-submit never submits stale state)
   const submitTestAnswers = async () => {
-    if (!currentTest) return;
+    if (!currentTest || isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     if (timerRef.current) clearInterval(timerRef.current);
 
     const durationSecs = (currentTest.duration_minutes || currentTest.durationMinutes || 30) * 60;
@@ -299,7 +270,7 @@ export default function StudentPortal() {
       : Math.max(0, durationSecs - timeLeftSeconds);
 
     try {
-      const res = await api.student.submitTest(currentTest.id, userAnswers, elapsedSeconds);
+      const res = await api.student.submitTest(currentTest.id, userAnswersRef.current, elapsedSeconds);
 
       setTestResultData(res);
       setActiveTab('result');
@@ -313,17 +284,51 @@ export default function StudentPortal() {
             spread: 80,
             origin: { y: 0.6 },
           });
-        } catch (e) {}
+        } catch {}
       }
 
       showToast(tr('Test muvaffaqiyatli topshirildi!', 'Тест успешно сдан!'), 'success');
       loadStudentData();
       if (refreshUser) refreshUser();
     } catch (err) {
+      isSubmittingRef.current = false;
       showToast(err.message || tr('Testni topshirishda xatolik!', 'Ошибка при отправке теста!'), 'error');
       loadStudentData();
     }
   };
+
+  // Countdown timer effect during active test (pure updater, zero side-effects in setState)
+  useEffect(() => {
+    if (activeTab === 'runner' && currentTest) {
+      timerRef.current = setInterval(() => {
+        setTimeLeftSeconds((prev) => {
+          if (prev <= 1) {
+            if (timerRef.current) clearInterval(timerRef.current);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+      };
+    }
+  }, [activeTab, currentTest?.id]);
+
+  // Trigger auto-submit exactly once when countdown reaches 0
+  useEffect(() => {
+    if (activeTab === 'runner' && currentTest && timeLeftSeconds === 0 && !isSubmittingRef.current) {
+      showToast(
+        tr(
+          'Vaqt tugadi! Test avtomatik topshirilmoqda...',
+          'Время вышло! Тест автоматически отправляется...'
+        ),
+        'warning'
+      );
+      submitTestAnswers();
+    }
+  }, [activeTab, currentTest?.id, timeLeftSeconds]);
 
   // Confirm submit test button
   const handleConfirmSubmit = () => {
@@ -866,7 +871,7 @@ export default function StudentPortal() {
                     >
                       <div className="flex items-start justify-between gap-2 font-semibold text-white">
                         <span>
-                          {bIdx + 1}. {b.questionText}
+                          {bIdx + 1}. <MathRenderer text={b.questionText || ''} />
                         </span>
                         {b.isCorrect ? (
                           <CheckCircle size={15} className="text-emerald-400 flex-shrink-0" />
@@ -878,13 +883,15 @@ export default function StudentPortal() {
                         <span>
                           {tr('Sizning javobingiz:', 'Ваш ответ:')}{' '}
                           <strong className={b.isCorrect ? 'text-emerald-300' : 'text-rose-300'}>
-                            {b.selectedText || tr('Tanlanmagan', 'Не выбран')}
+                            {b.selectedText ? <MathRenderer text={b.selectedText} /> : tr('Tanlanmagan', 'Не выбран')}
                           </strong>
                         </span>
                         {!b.isCorrect && b.correctText && (
                           <span>
                             {tr("To'g'ri javob:", 'Правильный ответ:')}{' '}
-                            <strong className="text-emerald-300">{b.correctText}</strong>
+                            <strong className="text-emerald-300">
+                              <MathRenderer text={b.correctText} />
+                            </strong>
                           </span>
                         )}
                       </div>
@@ -991,8 +998,8 @@ export default function StudentPortal() {
                       {canPreviewClasses && !previewGrade
                         ? tr('Barcha Testlar', 'Все тесты')
                         : language === 'ru'
-                        ? `Тесты для класса: ${user?.role === 'student' ? user?.grade || 'Ваш класс' : previewGrade}`
-                        : `${user?.role === 'student' ? user?.grade || 'Sinfingiz' : previewGrade} Sinfiga Biriktirilgan Testlar`}
+                        ? `Тесты для класса: ${localizeGrade(user?.role === 'student' ? user?.grade : previewGrade, language)}`
+                        : `${localizeGrade(user?.role === 'student' ? user?.grade : previewGrade, language)} Sinfiga Biriktirilgan Testlar`}
                     </h3>
                     <p className="text-xs text-slate-400">
                       {user?.role === 'student'
@@ -1021,7 +1028,7 @@ export default function StudentPortal() {
                           <option value="">{tr('Barcha sinflar', 'Все классы')}</option>
                           {previewClasses.map((cls) => (
                             <option key={cls} value={cls}>
-                              {language === 'ru' ? `${cls} класс` : `${cls} sinfi`}
+                              {language === 'ru' ? `${localizeGrade(cls, language)} класс` : `${cls} sinfi`}
                             </option>
                           ))}
                         </select>
@@ -1205,7 +1212,7 @@ export default function StudentPortal() {
                               >
                                 {isAllClasses
                                   ? tr('🌐 Barchasi', '🌐 Все классы')
-                                  : `🎯 ${t.grade || user?.grade || '-'}`}
+                                  : `🎯 ${localizeGrade(t.grade || user?.grade, language)}`}
                               </span>
                             </div>
                           </div>
@@ -1335,8 +1342,8 @@ export default function StudentPortal() {
                     <div className="col-span-2 text-center py-12 text-slate-400 text-xs bg-slate-900/40 rounded-2xl border border-slate-800">
                       {canPreviewClasses && previewGrade
                         ? language === 'ru'
-                          ? `Тесты для класса «${previewGrade}» не найдены.`
-                          : `"${previewGrade}" sinfiga biriktirilgan testlar topilmadi.`
+                          ? `Тесты для класса «${localizeGrade(previewGrade, language)}» не найдены.`
+                          : `"${localizeGrade(previewGrade, language)}" sinfiga biriktirilgan testlar topilmadi.`
                         : tr(
                             "Hozirda sinfingiz uchun topshirishga yangi testlar yo'q. Yangi test qo'shilganda bu yerda ko'rinadi!",
                             'Сейчас для вашего класса нет доступных тестов. Как только появится новый тест, он отобразится здесь!'
@@ -1410,7 +1417,7 @@ export default function StudentPortal() {
                             </td>
                             <td>
                               <span className="badge badge-info text-[11px] font-semibold">
-                                {item.grade}
+                                {localizeGrade(item.grade, language)}
                               </span>
                             </td>
                             <td className="text-xs text-slate-300">

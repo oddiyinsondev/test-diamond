@@ -74,7 +74,7 @@ export async function apiClient(url, options = {}) {
   let data;
   try {
     data = await response.json();
-  } catch (err) {
+  } catch {
     data = null;
   }
 

@@ -832,17 +832,22 @@ def api_admin_students(request):
 
 
     elif request.method == 'POST':
-        # Yangi O'quvchi qo'shish
+        # Yangi O'quvchi qo'shish (JSON yoki FormData)
+        user = None
         try:
-            data = json.loads(request.body.decode('utf-8'))
-            username = data.get('username', '').strip()
-            password = data.get('password', '').strip()
-            full_name = data.get('fullName', '').strip()
-            grade = data.get('grade', '').strip()
-            phone = data.get('phone', '').strip()
+            is_json = (request.content_type or '').startswith('application/json')
+            data = json.loads(request.body.decode('utf-8')) if is_json and request.body else request.POST
+            username = (data.get('username') or '').strip()
+            password = (data.get('password') or '').strip()
+            full_name = (data.get('fullName') or data.get('full_name') or '').strip()
+            grade = (data.get('grade') or '').strip()
+            phone = (data.get('phone') or '').strip()
 
             if not username or not password or not full_name or not grade:
                 return JsonResponse({'error': _msg(lang, "Barcha majburiy maydonlarni to'ldiring!", "Заполните все обязательные поля!")}, status=400)
+
+            if len(password) < 3:
+                return JsonResponse({'error': _msg(lang, "Parol kamida 3 ta belgidan iborat bo'lishi kerak!", "Пароль должен содержать минимум 3 символа!")}, status=400)
 
             if CustomUser.objects.filter(username=username).exists():
                 return JsonResponse({'error': _msg(lang, "Ushbu login bilan foydalanuvchi allaqachon mavjud!", "Пользователь с таким логином уже существует!")}, status=400)
@@ -855,7 +860,20 @@ def api_admin_students(request):
                 grade=grade,
                 phone=phone
             )
-            return JsonResponse({'success': True, 'studentId': user.id})
+            if 'avatar' in request.FILES:
+                save_validated_user_avatar(user, request.FILES['avatar'], lang=lang)
+                user.save(update_fields=['avatar'])
+
+            return JsonResponse({
+                'success': True,
+                'studentId': user.id,
+                'user': serialize_user_payload(user),
+                'avatarUrl': user.get_avatar_url(),
+            })
+        except ValueError as ve:
+            if user and user.id:
+                user.delete()
+            return JsonResponse({'error': str(ve)}, status=400)
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=400)
 
@@ -962,7 +980,7 @@ def api_update_profile(request):
 
     try:
         data = {}
-        if request.content_type == 'application/json' or (request.body and request.body.startswith(b'{')):
+        if (request.content_type or '').startswith('application/json') or (request.body and request.body.startswith(b'{')):
             try:
                 data = json.loads(request.body.decode('utf-8'))
             except Exception:
@@ -1124,6 +1142,8 @@ def api_student_analytics(request):
         subject_labels = ['Matematika', 'Fizika', 'Informatika', 'Ingliz tili']
         subject_scores = [88, 80, 95, 86]
 
+    effective_avg = avg_score if total_completed > 0 else 85
+
     return JsonResponse({
         'timeline': {
             'labels': timeline_labels,
@@ -1136,12 +1156,12 @@ def api_student_analytics(request):
         'kpis': {
             'rank': my_rank,
             'totalTests': total_completed,
-            'avgScore': avg_score or 85,
+            'avgScore': effective_avg,
             'xp': xp_points,
             'xpPoints': xp_points
         },
         'totalCompleted': total_completed,
-        'avgScore': avg_score or 85
+        'avgScore': effective_avg
     })
 
 
@@ -2899,11 +2919,13 @@ def api_diamond_showcase(request):
     talents_qs = TalentedStudent.objects.filter(is_active=True).order_by('order', 'id')
     talented_students = []
     for s in talents_qs:
+        photo_url = s.get_image_url()
         talented_students.append({
             'id': s.id,
             'name': s.name,
             'grade': s.grade,
-            'photo': s.get_image_url(),
+            'image': photo_url,
+            'photo': photo_url,
             'achievement': s.achievement,
             'badge': s.badge,
             'quote': s.quote,
@@ -3065,12 +3087,16 @@ def api_admin_delete_showcase_item(request):
     if request.method != 'POST':
         return JsonResponse({'error': _msg(lang, 'Faqat POST ruxsat etilgan', 'Разрешён только POST-запрос')}, status=405)
     try:
-        item_type = request.POST.get('type')
-        item_id = request.POST.get('id')
+        is_json = (request.content_type or '').startswith('application/json')
+        data = json.loads(request.body.decode('utf-8')) if is_json and request.body else request.POST
+        item_type = data.get('type')
+        item_id = data.get('id')
         if item_type == 'teacher':
             TeacherShowcase.objects.filter(id=item_id).delete()
         elif item_type == 'student':
             TalentedStudent.objects.filter(id=item_id).delete()
+        else:
+            return JsonResponse({'error': _msg(lang, "Noto'g'ri element turi", "Неверный тип элемента")}, status=400)
         return JsonResponse({'success': True})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -3086,16 +3112,22 @@ def api_contact_submit(request):
         return JsonResponse({'error': _msg(lang, "Faqat POST so'rovi qabul qilinadi", "Принимаются только POST-запросы")}, status=405)
 
     try:
-        if request.content_type == 'application/json':
+        is_json = (request.content_type or '').startswith('application/json')
+        if is_json and request.body:
             data = json.loads(request.body.decode('utf-8'))
         else:
             data = request.POST
 
-        full_name = data.get('name') or data.get('full_name') or ''
+        full_name = data.get('name') or data.get('fullName') or data.get('full_name') or ''
         full_name = str(full_name).strip()
         phone = data.get('phone') or ''
         phone = str(phone).strip()
-        grade_interest = data.get('grade') or data.get('grade_interest') or _msg(lang, "Umumiy ma'lumot", "Общая информация")
+        grade_interest = (
+            data.get('grade')
+            or data.get('gradeInterest')
+            or data.get('grade_interest')
+            or _msg(lang, "Umumiy ma'lumot", "Общая информация")
+        )
         grade_interest = str(grade_interest).strip()
         message = data.get('message') or ''
         message = str(message).strip()
@@ -3158,9 +3190,35 @@ def api_admin_contact_messages(request):
             'messages': items
         })
 
-    elif request.method == 'POST':
+    elif request.method in ('PUT', 'PATCH', 'DELETE'):
         try:
-            if request.content_type == 'application/json':
+            data = {}
+            if (request.content_type or '').startswith('application/json') and request.body:
+                data = json.loads(request.body.decode('utf-8'))
+            msg_id = request.GET.get('id') or data.get('id')
+            if not msg_id:
+                return JsonResponse({'error': _msg(lang, "Xabar IDsi ko'rsatilmadi", "Не указан ID сообщения")}, status=400)
+
+            msg = ContactMessage.objects.get(id=msg_id)
+            if request.method == 'DELETE':
+                msg.delete()
+                return JsonResponse({'success': True, 'deleted': True})
+
+            val = True
+            if 'is_contacted' in data or 'isContacted' in data:
+                raw_val = data.get('is_contacted') if 'is_contacted' in data else data.get('isContacted')
+                val = str(raw_val).lower() in ['true', '1', 'yes', 'on']
+            msg.is_contacted = val
+            msg.save()
+            return JsonResponse({'success': True, 'isContacted': msg.is_contacted})
+        except ContactMessage.DoesNotExist:
+            return JsonResponse({'error': _msg(lang, 'Murojaat topilmadi', 'Обращение не найдено')}, status=404)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+
+    elif request.method in ('POST', 'PUT', 'PATCH'):
+        try:
+            if (request.content_type or '').startswith('application/json') and request.body:
                 data = json.loads(request.body.decode('utf-8'))
             else:
                 data = request.POST
@@ -3229,9 +3287,9 @@ def api_admin_site_settings(request):
             'statDevices': settings_obj.stat_devices,
         })
 
-    elif request.method == 'POST':
+    elif request.method in ('POST', 'PUT', 'PATCH'):
         try:
-            if request.content_type == 'application/json':
+            if (request.content_type or '').startswith('application/json') and request.body:
                 data = json.loads(request.body.decode('utf-8'))
             else:
                 data = request.POST
@@ -3463,9 +3521,9 @@ def api_admin_classes(request):
             }
         })
 
-    elif request.method == 'POST':
+    elif request.method in ('POST', 'PUT', 'PATCH'):
         try:
-            if request.content_type == 'application/json':
+            if (request.content_type or '').startswith('application/json') and request.body:
                 data = json.loads(request.body.decode('utf-8'))
             else:
                 data = request.POST
@@ -3543,9 +3601,9 @@ def api_admin_class_manage(request, class_id):
         sc.delete()
         return JsonResponse({'success': True, 'message': _msg(lang, f"'{class_name}' sinfi tizimdan o'chirildi!", f"Класс '{class_name}' удалён из системы!")})
 
-    elif request.method == 'POST':
+    elif request.method in ('POST', 'PUT', 'PATCH'):
         try:
-            if request.content_type == 'application/json':
+            if (request.content_type or '').startswith('application/json') and request.body:
                 data = json.loads(request.body.decode('utf-8'))
             else:
                 data = request.POST
@@ -4238,7 +4296,7 @@ def api_coin_rankings(request):
         p = (tx.portal or '').strip().lower()
         if p in ('test_score', 'test_bonus') or (not p and tx.test_result_id and not tx.given_by_id):
             bkey = 'test_auto'
-        elif p in ('teacher_results', 'test_create') or (tx.test_result_id and tx.given_by_id):
+        elif p in ('teacher_results', 'test_create', 'admin_test_reward') or (tx.test_result_id and tx.given_by_id):
             bkey = 'test_manual'
         elif p in ('lesson_activity', 'teacher') or (not p and not tx.test_result_id and tx.given_by and tx.given_by.role == 'teacher'):
             bkey = 'teacher_lesson'

@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient } from './client.js';
 
 export const api = {
   // --- AUTH & COMMON ---
@@ -22,6 +22,14 @@ export const api = {
   diamond: {
     getShowcase: () => apiClient('/api/diamond/showcase/'),
     submitContact: (data) =>
+      apiClient('/api/contact/submit/', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+  },
+
+  contact: {
+    submit: (data) =>
       apiClient('/api/contact/submit/', {
         method: 'POST',
         body: JSON.stringify(data),

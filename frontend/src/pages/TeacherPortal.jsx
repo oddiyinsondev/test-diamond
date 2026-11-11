@@ -1202,9 +1202,14 @@ export default function TeacherPortal() {
           >
             <Coins size={15} />
             <span>
-              {coinSelectedGrade}: {coinsUsedToday} / {maxCoinsPerDay} {tr('Coin', 'койнов')}
+              {localizeGrade(coinSelectedGrade, language)}: {coinsUsedToday} / {maxCoinsPerDay} {tr('Coin', 'койнов')}
             </span>
           </button>
+          {loadingData && (
+            <span className="inline-flex items-center px-2 py-2 text-cyan-400" title={tr('Yuklanmoqda...', 'Загрузка...')}>
+              <Loader2 size={15} className="animate-spin" />
+            </span>
+          )}
           <button
             type="button"
             onClick={() => setActiveTab('profile')}
@@ -3356,7 +3361,10 @@ export default function TeacherPortal() {
                           Number(coinAmount) > coinsRemainingToday;
                         const btnLabel =
                           coinsRemainingToday <= 0
-                            ? tr(`${coinSelectedGrade} Limiti Tugadi`, `Лимит ${localizeGrade(coinSelectedGrade, language)} исчерпан`)
+                            ? tr(
+                                `${localizeGrade(coinSelectedGrade, language)} Limiti Tugadi`,
+                                `Лимит ${localizeGrade(coinSelectedGrade, language)} исчерпан`
+                              )
                             : classStudentsList.length === 0
                             ? tr("Sinfda O'quvchi Yo'q", 'В классе нет учеников')
                             : tr('Coin Taqdim Etish', 'Начислить койны');
@@ -3412,7 +3420,10 @@ export default function TeacherPortal() {
                   <div className="flex items-center gap-2">
                     <Users size={18} className="text-cyan-400" />
                     <h4 className="text-sm font-bold text-white uppercase tracking-wider">
-                      {tr(`${coinSelectedGrade} Sinf O'quvchilari (${classStudentsList.length} nafar)`, `Ученики класса ${localizeGrade(coinSelectedGrade, language)} (${classStudentsList.length})`)}
+                      {tr(
+                        `${localizeGrade(coinSelectedGrade, language)} Sinf O'quvchilari (${classStudentsList.length} nafar)`,
+                        `Ученики класса ${localizeGrade(coinSelectedGrade, language)} (${classStudentsList.length})`
+                      )}
                     </h4>
                   </div>
                   <span className="text-xs text-slate-400 flex items-center gap-1.5">
@@ -3489,12 +3500,12 @@ export default function TeacherPortal() {
                                 const tooltipText =
                                   isTeacherRestricted && coinsRemainingToday <= 0
                                     ? tr(
-                                        `Bugun '${coinSelectedGrade}' sinfi uchun kunlik ${maxCoinsPerDay} coin limiti tugadi`,
+                                        `Bugun '${localizeGrade(coinSelectedGrade, language)}' sinfi uchun kunlik ${maxCoinsPerDay} coin limiti tugadi`,
                                         `Сегодня для класса '${localizeGrade(coinSelectedGrade, language)}' дневной лимит (${maxCoinsPerDay} койнов) исчерпан`
                                       )
                                     : isTeacherRestricted && btn.amt > coinsRemainingToday
                                     ? tr(
-                                        `Bugun '${coinSelectedGrade}' sinfiga yana ko'pi bilan ${coinsRemainingToday} coin berish mumkin`,
+                                        `Bugun '${localizeGrade(coinSelectedGrade, language)}' sinfiga yana ko'pi bilan ${coinsRemainingToday} coin berish mumkin`,
                                         `Сегодня классу '${localizeGrade(coinSelectedGrade, language)}' можно выдать ещё макс. ${coinsRemainingToday} койнов`
                                       )
                                     : `${btn.reason} +${btn.amt} ${tr('coin', 'койнов')}`;
@@ -3527,7 +3538,10 @@ export default function TeacherPortal() {
                     </div>
                     <div className="space-y-1 max-w-md">
                       <h5 className="text-sm font-bold text-white">
-                        {tr(`${coinSelectedGrade} sinfida hozircha o'quvchilar yo'q`, `В классе ${localizeGrade(coinSelectedGrade, language)} пока нет учеников`)}
+                        {tr(
+                          `${localizeGrade(coinSelectedGrade, language)} sinfida hozircha o'quvchilar yo'q`,
+                          `В классе ${localizeGrade(coinSelectedGrade, language)} пока нет учеников`
+                        )}
                       </h5>
                       <p className="text-xs text-slate-400 leading-relaxed">
                         {tr(

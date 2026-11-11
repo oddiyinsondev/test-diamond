@@ -17,7 +17,7 @@ export default function MathRenderer({ text, className = '' }) {
 
     try {
       // Split by math delimiters
-      const regex = /(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\$[^\$\n]+?\$|\\\(.*?\\\))/g;
+      const regex = /(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\$[^$\n]+?\$|\\\(.*?\\\))/g;
       const parts = text.split(regex);
 
       return parts.map((part, index) => {
@@ -50,7 +50,7 @@ export default function MathRenderer({ text, className = '' }) {
         // Regular text
         return <span key={index}>{part}</span>;
       });
-    } catch (e) {
+    } catch {
       return text;
     }
   }, [text]);

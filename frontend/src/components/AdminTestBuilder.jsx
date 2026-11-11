@@ -964,7 +964,10 @@ export default function AdminTestBuilder({
                 {testForm.targetClasses.length === normalizedClasses.length &&
                 normalizedClasses.length > 1
                   ? tr('🌐 Barchasi (hamma sinflarga)', '🌐 Все классы')
-                  : `${tr('🎯 Faqat:', '🎯 Только:')} ${testForm.targetClasses.slice(0, 4).join(', ')}${
+                  : `${tr('🎯 Faqat:', '🎯 Только:')} ${testForm.targetClasses
+                      .slice(0, 4)
+                      .map((cls) => localizeGrade(cls, language))
+                      .join(', ')}${
                       testForm.targetClasses.length > 4
                         ? ` +${testForm.targetClasses.length - 4}`
                         : ''
@@ -1044,7 +1047,7 @@ export default function AdminTestBuilder({
                   >
                     {isSelected ? '✓' : '+'}
                   </span>
-                  <span>{cls}</span>
+                  <span>{localizeGrade(cls, language)}</span>
                 </button>
               );
             })}
@@ -1428,7 +1431,7 @@ export default function AdminTestBuilder({
                             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-200 font-semibold"
                           >
                             <span>{s.fullName || s.username}</span>
-                            <span className="text-cyan-300">({s.grade})</span>
+                            <span className="text-cyan-300">({localizeGrade(s.grade, language)})</span>
                             <span className="text-emerald-300">
                               {language === 'ru' ? `${s.testsPassed} тест.` : `${s.testsPassed} test`}
                             </span>
@@ -1480,7 +1483,7 @@ export default function AdminTestBuilder({
                         <option value="all">{tr('Barcha sinflar', 'Все классы')}</option>
                         {normalizedClasses.map((c) => (
                           <option key={c} value={c}>
-                            {language === 'ru' ? `${c} класс` : `${c} sinf`}
+                            {language === 'ru' ? `${localizeGrade(c, language)} класс` : `${c} sinf`}
                           </option>
                         ))}
                       </select>
@@ -1554,7 +1557,7 @@ export default function AdminTestBuilder({
                                   {s.fullName || s.username}
                                 </div>
                                 <div className="text-[10px] text-slate-400">
-                                  {s.grade} •{' '}
+                                  {localizeGrade(s.grade, language)} •{' '}
                                   {language === 'ru'
                                     ? `${s.testsPassed || 0} тест.`
                                     : `${s.testsPassed || 0} ta test`}{' '}

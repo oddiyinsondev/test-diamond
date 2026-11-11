@@ -30,7 +30,6 @@ import {
   FileCheck2,
   TrendingUp,
   Coins,
-  Gem,
   Plus,
   Search,
   Trash2,
@@ -68,7 +67,7 @@ const ADMIN_VALID_TABS = ['teachers', 'students', 'tests', 'coins', 'classes', '
 export default function AdminPortal() {
   const { user, login, language, tr } = useAuth();
   const { showToast } = useToast();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
 
   // Gate state
   const [gateUsername, setGateUsername] = useState('admin');
@@ -202,7 +201,6 @@ export default function AdminPortal() {
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
   const [isAddClassOpen, setIsAddClassOpen] = useState(false);
   const [isAwardCoinsOpen, setIsAwardCoinsOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState(null);
 
   // Confirm delete modal state
   const [confirmModalState, setConfirmModalState] = useState({
@@ -1670,9 +1668,9 @@ export default function AdminPortal() {
                 <Mail size={18} />
               </div>
               <span className="portal-nav-label">{tr("Arizalar & Bog'lanish", 'Заявки и контакты')}</span>
-              {(Array.isArray(contactMessages) ? contactMessages : []).filter((m) => !m.is_read).length > 0 && (
+              {(Array.isArray(contactMessages) ? contactMessages : []).filter((m) => !(m.isContacted || m.is_contacted)).length > 0 && (
                 <span className="portal-nav-badge bg-rose-500 text-white font-bold">
-                  {(Array.isArray(contactMessages) ? contactMessages : []).filter((m) => !m.is_read).length}
+                  {(Array.isArray(contactMessages) ? contactMessages : []).filter((m) => !(m.isContacted || m.is_contacted)).length}
                 </span>
               )}
             </button>

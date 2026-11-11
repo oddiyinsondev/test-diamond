@@ -564,22 +564,51 @@ export default function LandingPage() {
           : `${gradeLabel} bo'yicha qabulga yozilish (Qayta qo'ng'iroq)`,
       });
       if (res && (res.success || res.status === 'ok')) {
-        showToast(t.cntSuccess, 'success');
+        showToast(res.message || t.cntSuccess, 'success');
         setContactName('');
         setContactPhone('+998 ');
       } else {
-        showToast(res?.message || t.cntSuccess, 'success');
-        setContactName('');
-        setContactPhone('+998 ');
+        showToast(
+          res?.error ||
+            (isRu
+              ? 'Не удалось отправить заявку. Пожалуйста, попробуйте ещё раз.'
+              : "Arizani yuborishda xatolik yuz berdi. Iltimos, qayta urinib ko'ring."),
+          'error'
+        );
       }
     } catch (err) {
-      showToast(t.cntSuccess, 'success');
-      setContactName('');
-      setContactPhone('+998 ');
+      showToast(
+        err?.message ||
+          (isRu
+            ? 'Ошибка соединения при отправке заявки. Попробуйте позже.'
+            : "Ariza yuborishda server bilan bog'lanish xatosi yuz berdi."),
+        'error'
+      );
     } finally {
       setSubmittingContact(false);
     }
   };
+
+  const statStudentsVal =
+    showcaseData.stats?.studentsCount || showcaseData.siteSettings?.statStudents || '1,500+';
+  const statTestsVal =
+    showcaseData.stats?.testsCount || showcaseData.siteSettings?.statTests || '120+';
+  const statCapacityVal = showcaseData.siteSettings?.statCapacity || '600+';
+  const statFairVal = showcaseData.stats?.transparency || '100%';
+  const displayAddress =
+    (isRu ? showcaseData.siteSettings?.addressRu : showcaseData.siteSettings?.addressUz) ||
+    t.cntAddrText;
+  const rawLandmark = (showcaseData.siteSettings?.landmark || '').trim();
+  const displayLandmark =
+    !rawLandmark || (isRu && rawLandmark === 'Shahriston metro bekati')
+      ? t.cntLandmark
+      : rawLandmark.toLowerCase().startsWith("mo'ljal:") ||
+        rawLandmark.toLowerCase().startsWith('ориентир:')
+      ? rawLandmark
+      : `${isRu ? 'Ориентир' : "Mo'ljal"}: ${rawLandmark}`;
+  const displayHours =
+    (isRu ? showcaseData.siteSettings?.workingHoursRu : showcaseData.siteSettings?.workingHoursUz) ||
+    t.cntHoursText;
 
   return (
     <div className="page-home-clean">
@@ -653,19 +682,19 @@ export default function LandingPage() {
       {/* 2. ASOSIY 4 TA STATISTIKA STRIP */}
       <div className="quick-stats-strip">
         <div className="stat-item-box">
-          <div className="stat-num">1,500+</div>
+          <div className="stat-num">{statStudentsVal}</div>
           <div className="stat-lbl">{t.statStudents}</div>
         </div>
         <div className="stat-item-box">
-          <div className="stat-num">120+</div>
+          <div className="stat-num">{statTestsVal}</div>
           <div className="stat-lbl">{t.statTests}</div>
         </div>
         <div className="stat-item-box">
-          <div className="stat-num">600+</div>
+          <div className="stat-num">{statCapacityVal}</div>
           <div className="stat-lbl">{t.statCapacity}</div>
         </div>
         <div className="stat-item-box">
-          <div className="stat-num">100%</div>
+          <div className="stat-num">{statFairVal}</div>
           <div className="stat-lbl">{t.statFair}</div>
         </div>
       </div>
@@ -868,7 +897,7 @@ export default function LandingPage() {
 
                   <div className="student-avatar-round">
                     <img
-                      src={std.image || `https://api.dicebear.com/7.x/initials/svg?seed=${std.name}&backgroundColor=0284c7`}
+                      src={std.image || std.photo || std.imageUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${std.name}&backgroundColor=0284c7`}
                       alt={std.name}
                     />
                   </div>
@@ -936,8 +965,8 @@ export default function LandingPage() {
             <div className="adm-detail-icon"><i className="fa-solid fa-location-dot"></i></div>
             <div className="adm-detail-text">
               <div className="adm-detail-sub">{t.cntLblAddr}</div>
-              <div style={{ fontWeight: 600, color: '#FFFFFF' }}>{t.cntAddrText}</div>
-              <div style={{ fontSize: '0.78rem', color: '#29B7E1' }}>{t.cntLandmark}</div>
+              <div style={{ fontWeight: 600, color: '#FFFFFF' }}>{displayAddress}</div>
+              <div style={{ fontSize: '0.78rem', color: '#29B7E1' }}>{displayLandmark}</div>
             </div>
           </div>
 
@@ -945,7 +974,7 @@ export default function LandingPage() {
             <div className="adm-detail-icon"><i className="fa-solid fa-clock"></i></div>
             <div className="adm-detail-text">
               <div className="adm-detail-sub">{t.cntLblHours}</div>
-              <div style={{ fontWeight: 600, color: '#FFFFFF' }}>{t.cntHoursText}</div>
+              <div style={{ fontWeight: 600, color: '#FFFFFF' }}>{displayHours}</div>
             </div>
           </div>
         </div>
