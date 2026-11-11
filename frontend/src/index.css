@@ -56,7 +56,8 @@ body.dark-theme, body {
   display: flex !important;
   align-items: center !important;
   justify-content: space-between !important;
-  padding: 0.9rem 2rem !important;
+  gap: 12px !important;
+  padding: 0.75rem 1.5rem !important;
   background: rgba(7, 13, 24, 0.94) !important;
   border-bottom: 1px solid rgba(56, 189, 248, 0.18) !important;
   backdrop-filter: blur(16px) !important;
@@ -109,14 +110,23 @@ body.dark-theme, body {
   margin-left: 6px !important;
 }
 
+.navbar-center-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+}
+
 .nav-link-item {
   color: var(--text-muted, #94a3b8) !important;
   font-weight: 700 !important;
-  font-size: 0.88rem !important;
+  font-size: 0.84rem !important;
   text-decoration: none !important;
-  letter-spacing: 0.5px !important;
-  padding: 6px 12px !important;
+  letter-spacing: 0.4px !important;
+  padding: 6px 10px !important;
   border-radius: 8px !important;
+  white-space: nowrap !important;
   transition: all 0.2s ease !important;
 }
 .nav-link-item:hover,
@@ -128,7 +138,8 @@ body.dark-theme, body {
 .nav-actions {
   display: flex !important;
   align-items: center !important;
-  gap: 14px !important;
+  gap: 10px !important;
+  flex-shrink: 0 !important;
 }
 
 /* User Badge in Navbar */
@@ -1589,6 +1600,92 @@ body.dark-theme, body {
   background: #ef4444 !important;
   color: #FFFFFF !important;
   box-shadow: 0 0 12px rgba(239, 68, 68, 0.4) !important;
+}
+
+/* 5. NAVBAR BILINGUAL (UZ / RU) SWITCHER */
+.diamond-lang-switcher {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(11, 25, 44, 0.92);
+  border: 1.5px solid rgba(56, 189, 248, 0.35);
+  border-radius: 9999px;
+  padding: 3px;
+  gap: 3px;
+  height: 36px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), inset 0 1px 2px rgba(56, 189, 248, 0.16);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  flex-shrink: 0;
+  transition: all 0.25s ease;
+}
+.diamond-lang-switcher:hover {
+  border-color: rgba(56, 189, 248, 0.65);
+  box-shadow: 0 0 16px rgba(0, 180, 216, 0.28);
+}
+.diamond-lang-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #94a3b8;
+  font-family: inherit;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.diamond-lang-btn:hover:not(.active) {
+  color: #f8fafc;
+  background: rgba(56, 189, 248, 0.14);
+}
+.diamond-lang-btn.active {
+  background: linear-gradient(135deg, #0284c7 0%, #00b4d8 100%);
+  color: #ffffff;
+  border-color: rgba(125, 211, 252, 0.55);
+  box-shadow: 0 2px 10px rgba(0, 180, 216, 0.45);
+  font-weight: 800;
+}
+.diamond-lang-flag {
+  width: 18px;
+  height: 12px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  display: block;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+.diamond-lang-code {
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.05em;
+}
+@media (max-width: 640px) {
+  .diamond-lang-switcher {
+    height: 32px;
+    padding: 2px;
+    gap: 2px;
+  }
+  .diamond-lang-btn {
+    height: 26px;
+    padding: 0 8px;
+    gap: 4px;
+  }
+  .diamond-lang-flag {
+    width: 15px;
+    height: 10px;
+  }
+  .diamond-lang-code {
+    font-size: 0.72rem;
+  }
 }
 
 

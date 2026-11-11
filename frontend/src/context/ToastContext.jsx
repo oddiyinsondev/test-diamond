@@ -38,7 +38,7 @@ export function ToastProvider({ children }) {
               type="button"
               className="toast-close"
               onClick={() => removeToast(toast.id)}
-              aria-label={typeof window !== 'undefined' && window.localStorage?.getItem('diamond_language') === 'ru' ? 'Закрыть' : 'Yopish'}
+              aria-label={typeof window !== 'undefined' && (document.documentElement.lang === 'ru' || window.localStorage?.getItem('diamond_lang') === 'ru') ? 'Закрыть' : 'Yopish'}
             >
               <X size={15} />
             </button>

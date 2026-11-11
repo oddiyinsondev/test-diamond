@@ -13,7 +13,12 @@ export function AuthProvider({ children }) {
   const [authInitialRole, setAuthInitialRole] = useState('student');
 
   useEffect(() => {
-    document.documentElement.lang = language || 'uz';
+    const lang = language === 'ru' ? 'ru' : 'uz';
+    document.documentElement.lang = lang;
+    document.title =
+      lang === 'ru'
+        ? 'Diamond School — Будущее начинается со знаний'
+        : 'Diamond School — Kelajak Bilimdan Boshlanadi';
   }, [language]);
 
   // Dictionary translation helper

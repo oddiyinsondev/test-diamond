@@ -27,7 +27,7 @@ export default function Navbar() {
       </div>
 
       {/* Center Nav Links */}
-      <nav style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
+      <nav className="navbar-center-nav">
         <Link
           to="/"
           className={`nav-link-item ${location.pathname === '/' ? 'active-nav-section' : ''}`}
@@ -157,9 +157,10 @@ export default function Navbar() {
             type="button"
             className={`diamond-lang-btn ${language === 'uz' ? 'active' : ''}`}
             onClick={() => switchLanguage('uz')}
+            aria-pressed={language === 'uz'}
             title="O'zbek tili"
           >
-            <svg width="17" height="12" viewBox="0 0 500 250" style={{ borderRadius: '2px', display: 'inline-block', verticalAlign: 'middle' }}>
+            <svg className="diamond-lang-flag" viewBox="0 0 500 250" aria-hidden="true">
               <rect width="500" height="83" fill="#0099b5" />
               <rect y="83" width="500" height="84" fill="#ffffff" />
               <rect y="167" width="500" height="83" fill="#1eb53a" />
@@ -178,9 +179,10 @@ export default function Navbar() {
             type="button"
             className={`diamond-lang-btn ${language === 'ru' ? 'active' : ''}`}
             onClick={() => switchLanguage('ru')}
+            aria-pressed={language === 'ru'}
             title="Русский язык"
           >
-            <svg width="17" height="12" viewBox="0 0 500 250" style={{ borderRadius: '2px', display: 'inline-block', verticalAlign: 'middle', border: '1px solid rgba(255,255,255,0.2)' }}>
+            <svg className="diamond-lang-flag" viewBox="0 0 500 250" aria-hidden="true">
               <rect width="500" height="83" fill="#ffffff" />
               <rect y="83" width="500" height="84" fill="#0039a6" />
               <rect y="167" width="500" height="83" fill="#d52b1e" />
