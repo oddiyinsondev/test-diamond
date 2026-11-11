@@ -1,0 +1,1878 @@
+{% extends 'base.html' %}
+
+{% block title %}Diamond School — Kelajak Bilimdan Boshlanadi{% endblock %}
+
+{% block extra_head %}
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+
+<style>
+/* ==========================================================================
+   DIAMOND SCHOOL — DYNAMIC EDITORIAL & AUTO-CAROUSEL SYSTEM
+   Hero Text Slider, Teachers Carousel, Students Carousel & Infinite Live Ticker
+   ========================================================================== */
+
+.page-home-clean {
+  width: 100%;
+  color: #F8FAFC;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  overflow-x: hidden;
+}
+
+/* 1. INFINITE RUNNING TICKER (MAKTAB MA'LUMOTLARI LENTASI) */
+.live-info-ticker-wrap {
+  width: 100%;
+  overflow: hidden;
+  background: rgba(11, 31, 51, 0.92);
+  border: 1px solid rgba(41, 183, 225, 0.28);
+  border-radius: 14px;
+  padding: 10px 0;
+  margin-bottom: 1.75rem;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.ticker-title-badge {
+  background: linear-gradient(135deg, #0873AA, #29B7E1);
+  color: #FFFFFF;
+  font-size: 0.74rem;
+  font-weight: 800;
+  padding: 4px 14px;
+  border-radius: 8px;
+  margin-left: 14px;
+  margin-right: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  z-index: 5;
+  box-shadow: 0 0 15px rgba(41, 183, 225, 0.4);
+}
+
+.ticker-track {
+  display: flex;
+  gap: 2.5rem;
+  white-space: nowrap;
+  will-change: transform;
+  animation: smoothTicker 28s linear infinite;
+}
+.ticker-track:hover {
+  animation-play-state: paused;
+}
+
+.ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #CBD5E1;
+}
+.ticker-item i {
+  color: #29B7E1;
+  font-size: 0.82rem;
+}
+.ticker-item strong {
+  color: #FFFFFF;
+}
+
+@keyframes smoothTicker {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* 2. DYNAMIC HERO CAROUSEL BANNER */
+.hero-showcase {
+  position: relative;
+  min-height: 550px;
+  border-radius: 24px;
+  overflow: hidden;
+  background-color: #071322;
+  background-image: 
+    linear-gradient(90deg, 
+      rgba(7, 19, 34, 0.98) 0%, 
+      rgba(7, 19, 34, 0.92) 42%, 
+      rgba(7, 19, 34, 0.45) 66%, 
+      rgba(7, 19, 34, 0.05) 86%, 
+      transparent 100%),
+    url('/static/img/diamond_hero_students.jpg');
+  background-size: cover;
+  background-position: right 25%;
+  background-repeat: no-repeat;
+  border: 1px solid rgba(41, 183, 225, 0.28);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  padding: 3.5rem 3.25rem;
+  margin-bottom: 2rem;
+}
+
+.hero-slider-wrap {
+  max-width: 580px;
+  z-index: 2;
+  position: relative;
+  min-height: 380px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Individual Hero Slide (Dynamic Carousel Animation) */
+.hero-slide {
+  display: none;
+  opacity: 0;
+}
+.hero-slide.active-slide {
+  display: block;
+  animation: heroSlideIn 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes heroSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero-slide.active-slide .hero-badge-pill {
+  animation: heroSubFade 0.5s 0.04s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+.hero-slide.active-slide .hero-main-title {
+  animation: heroSubFade 0.6s 0.10s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+.hero-slide.active-slide .hero-lead-text {
+  animation: heroSubFade 0.65s 0.18s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+.hero-slide.active-slide .hero-btn-row {
+  animation: heroSubFade 0.7s 0.25s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+@keyframes heroSubFade {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-radius: 99px;
+  background: rgba(41, 183, 225, 0.12);
+  border: 1px solid rgba(41, 183, 225, 0.35);
+  color: #29B7E1;
+  font-size: 0.76rem;
+  font-weight: 750;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 0 15px rgba(41, 183, 225, 0.15);
+}
+
+.hero-badge-pill .pulse-gem {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #29B7E1;
+  box-shadow: 0 0 10px #29B7E1;
+  animation: pulseDot 2s infinite ease-in-out;
+}
+
+@keyframes pulseDot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(0.75); opacity: 0.5; }
+}
+
+.hero-main-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 3.2rem;
+  font-weight: 700;
+  line-height: 1.16;
+  color: #FFFFFF;
+  margin-bottom: 1.25rem;
+  letter-spacing: -0.5px;
+}
+.hero-main-title span {
+  color: #29B7E1;
+  font-style: italic;
+}
+
+.hero-lead-text {
+  font-size: 1.1rem;
+  line-height: 1.7;
+  color: #CBD5E1;
+  margin-bottom: 2rem;
+}
+
+.hero-btn-row {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.btn-primary-diamond {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #0873AA 0%, #29B7E1 100%);
+  color: #FFFFFF !important;
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 13px 26px;
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 6px 20px rgba(8, 115, 170, 0.45);
+  text-decoration: none;
+  transition: all 0.25s ease;
+  cursor: pointer;
+}
+.btn-primary-diamond:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(41, 183, 225, 0.55);
+}
+
+.btn-ghost-diamond {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(11, 31, 51, 0.7);
+  color: #FFFFFF !important;
+  font-weight: 650;
+  font-size: 0.95rem;
+  padding: 13px 26px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(41, 183, 225, 0.35);
+  backdrop-filter: blur(10px);
+  text-decoration: none;
+  transition: all 0.25s ease;
+  cursor: pointer;
+}
+.btn-ghost-diamond:hover {
+  background: rgba(41, 183, 225, 0.15);
+  border-color: #29B7E1;
+  color: #29B7E1 !important;
+  transform: translateY(-2px);
+}
+
+/* Hero Carousel Controls (Progress bars & arrows) */
+.hero-carousel-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 1.75rem;
+}
+.hero-nav-dots {
+  display: flex;
+  gap: 8px;
+}
+.hero-progress-line {
+  width: 32px;
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  transition: width 0.3s ease, background 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+.hero-progress-line:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+.hero-progress-line.active {
+  width: 56px;
+  background: rgba(41, 183, 225, 0.28);
+}
+.hero-progress-line.active::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  background: linear-gradient(90deg, #0873AA, #29B7E1);
+  box-shadow: 0 0 10px #29B7E1;
+  animation: heroBarFill 3s linear;
+}
+@keyframes heroBarFill {
+  0% { transform: scaleX(0); transform-origin: left; }
+  100% { transform: scaleX(1); transform-origin: left; }
+}
+.hero-arrow-btn {
+  background: rgba(11, 31, 51, 0.7);
+  border: 1px solid rgba(41, 183, 225, 0.3);
+  color: #29B7E1;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.2s ease;
+}
+.hero-arrow-btn:hover {
+  background: #0873AA;
+  color: #FFFFFF;
+  border-color: #29B7E1;
+}
+
+/* 3. DYNAMIC STATS STRIP */
+.quick-stats-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  background: rgba(11, 31, 51, 0.85);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(41, 183, 225, 0.22);
+  border-radius: 18px;
+  padding: 1.4rem 2rem;
+  margin-bottom: 4rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.stat-item-box {
+  text-align: center;
+  border-right: 1px solid rgba(41, 183, 225, 0.15);
+  padding: 0 10px;
+  transition: transform 0.25s ease;
+}
+.stat-item-box:hover {
+  transform: translateY(-3px);
+}
+.stat-item-box:last-child {
+  border-right: none;
+}
+
+.stat-num {
+  font-family: 'Cinzel', serif;
+  font-size: 2.1rem;
+  font-weight: 800;
+  color: #FFFFFF;
+  line-height: 1.1;
+  margin-bottom: 4px;
+}
+.stat-lbl {
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: #29B7E1;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* 4. SECTION HEADINGS */
+.clean-head {
+  text-align: center;
+  max-width: 680px;
+  margin: 0 auto 3rem auto;
+}
+.clean-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  border-radius: 99px;
+  background: rgba(41, 183, 225, 0.1);
+  border: 1px solid rgba(41, 183, 225, 0.3);
+  color: #29B7E1;
+  font-size: 0.74rem;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 0.75rem;
+}
+.clean-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-bottom: 0.75rem;
+  line-height: 1.25;
+}
+.clean-title span {
+  color: #29B7E1;
+  font-style: italic;
+}
+.clean-desc {
+  font-size: 1rem;
+  color: #94A3B8;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* 5. WHY US — 3 CORE PILLARS */
+.why-section-wrap {
+  margin-bottom: 4.5rem;
+}
+.why-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+.why-card {
+  background: rgba(11, 31, 51, 0.75);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(41, 183, 225, 0.2);
+  border-radius: 18px;
+  padding: 2.2rem 1.8rem;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+.why-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #29B7E1, transparent);
+  transition: left 0.6s ease;
+}
+.why-card:hover::after {
+  left: 100%;
+}
+.why-card:hover {
+  transform: translateY(-6px);
+  border-color: #29B7E1;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4), 0 0 20px rgba(41, 183, 225, 0.15);
+}
+.why-icon-box {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: rgba(41, 183, 225, 0.12);
+  border: 1px solid rgba(41, 183, 225, 0.35);
+  color: #29B7E1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  margin-bottom: 1.25rem;
+}
+.why-card-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-bottom: 0.75rem;
+}
+.why-card-text {
+  font-size: 0.92rem;
+  color: #94A3B8;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* 6. TEACHERS AUTO-CAROUSEL */
+.teachers-section-wrap {
+  margin-bottom: 4.5rem;
+}
+.carousel-outer {
+  position: relative;
+}
+.carousel-track-viewport {
+  overflow: hidden;
+  border-radius: 18px;
+  padding: 8px 4px;
+}
+.teachers-slides-row {
+  display: flex;
+  gap: 1.5rem;
+  transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform;
+}
+.teacher-slide-card {
+  flex: 0 0 calc(25% - 1.15rem);
+  min-width: 250px;
+  background: rgba(11, 31, 51, 0.88);
+  border: 1.5px solid rgba(41, 183, 225, 0.25);
+  border-radius: 20px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  box-sizing: border-box;
+}
+.teacher-slide-card:hover {
+  transform: translateY(-8px);
+  border-color: #29B7E1;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.5), 0 0 25px rgba(41, 183, 225, 0.25);
+}
+
+/* Card Header (Subject badge + Experience) */
+.teacher-top-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0.85rem;
+}
+.teacher-subj-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(41, 183, 225, 0.12);
+  border: 1px solid rgba(41, 183, 225, 0.35);
+  color: #29B7E1;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.teacher-exp-chip {
+  font-size: 0.72rem;
+  font-weight: 650;
+  color: #94A3B8;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Framed Portrait Box */
+.teacher-portrait-box {
+  position: relative;
+  width: 100%;
+  height: 215px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 30%, rgba(8, 115, 170, 0.2) 0%, #071322 80%);
+  border: 1px solid rgba(41, 183, 225, 0.2);
+  margin-bottom: 1rem;
+}
+.teacher-portrait-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+  transition: transform 0.4s ease;
+}
+.teacher-slide-card:hover .teacher-portrait-box img {
+  transform: scale(1.05);
+}
+
+/* Floating Rating Pill */
+.teacher-rating-pill {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(7, 19, 34, 0.92);
+  border: 1px solid rgba(41, 183, 225, 0.35);
+  color: #FFFFFF;
+  font-size: 0.74rem;
+  font-weight: 750;
+  padding: 4px 9px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Info Details */
+.teacher-info-content {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+.teacher-name-txt {
+  font-size: 1.15rem;
+  font-weight: 750;
+  color: #FFFFFF;
+  margin-bottom: 3px;
+  line-height: 1.25;
+}
+.teacher-role-txt {
+  font-size: 0.82rem;
+  color: #29B7E1;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+.teacher-stats-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: rgba(7, 19, 34, 0.65);
+  border: 1px solid rgba(41, 183, 225, 0.15);
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+  font-size: 0.76rem;
+  color: #CBD5E1;
+}
+.teacher-stats-bar i {
+  color: #29B7E1;
+}
+.teacher-quote-line {
+  font-size: 0.78rem;
+  font-style: italic;
+  color: #94A3B8;
+  line-height: 1.5;
+  margin-top: auto;
+}
+
+/* 7. TALENTED STUDENTS CAROUSEL */
+.talented-section-wrap {
+  margin-bottom: 4.5rem;
+}
+.carousel-slides-row {
+  display: flex;
+  gap: 1.5rem;
+  transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform;
+}
+.student-slide-card {
+  flex: 0 0 calc(33.333% - 1rem);
+  min-width: 280px;
+  background: rgba(11, 31, 51, 0.8);
+  border: 1.5px solid rgba(41, 183, 225, 0.22);
+  border-radius: 18px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
+}
+.student-slide-card:hover {
+  border-color: #29B7E1;
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+}
+.student-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+.student-grade-pill {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #f59e0b;
+}
+.student-avatar-round {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid #29B7E1;
+  margin-bottom: 0.75rem;
+  box-shadow: 0 0 12px rgba(41, 183, 225, 0.3);
+}
+.student-avatar-round img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.student-name-bold {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-bottom: 4px;
+}
+.student-achieve-box {
+  font-size: 0.85rem;
+  color: #F8FAFC;
+  background: rgba(7, 19, 34, 0.7);
+  border: 1px solid rgba(41, 183, 225, 0.2);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 0.75rem 0;
+}
+.student-quote-txt {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: #94A3B8;
+  margin-top: auto;
+}
+
+/* Common Carousel Buttons */
+.car-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(11, 31, 51, 0.9);
+  border: 1.5px solid rgba(41, 183, 225, 0.4);
+  color: #29B7E1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 5;
+  transition: all 0.2s ease;
+}
+.car-btn:hover {
+  background: #0873AA;
+  color: #FFFFFF;
+  border-color: #29B7E1;
+}
+.car-btn.prev-arrow { left: -18px; }
+.car-btn.next-arrow { right: -18px; }
+
+.car-dots-row {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 1.5rem;
+}
+.car-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(41, 183, 225, 0.25);
+  border: none;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+.car-dot.active {
+  width: 22px;
+  border-radius: 99px;
+  background: #29B7E1;
+}
+
+/* 8. ADMISSION FORM & CONTACT */
+.admission-clean-box {
+  background: radial-gradient(circle at 50% 0%, rgba(8, 115, 170, 0.25) 0%, rgba(11, 31, 51, 0.95) 75%);
+  border: 1.5px solid rgba(41, 183, 225, 0.35);
+  border-radius: 24px;
+  padding: 3.5rem 3rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3.5rem;
+  align-items: center;
+  margin-bottom: 4rem;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+.adm-info-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 2.3rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-bottom: 1rem;
+  line-height: 1.25;
+}
+.adm-info-desc {
+  font-size: 0.98rem;
+  color: #94A3B8;
+  line-height: 1.6;
+  margin-bottom: 2rem;
+}
+
+.adm-detail-line {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 1.25rem;
+}
+.adm-detail-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(41, 183, 225, 0.12);
+  border: 1px solid rgba(41, 183, 225, 0.3);
+  color: #29B7E1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+.adm-detail-text a {
+  color: #FFFFFF;
+  font-weight: 700;
+  text-decoration: none;
+}
+.adm-detail-sub {
+  font-size: 0.8rem;
+  color: #94A3B8;
+}
+
+/* Form */
+.adm-form-card {
+  background: rgba(7, 19, 34, 0.85);
+  border: 1px solid rgba(41, 183, 225, 0.3);
+  border-radius: 18px;
+  padding: 2rem;
+}
+.adm-form-card h3 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-bottom: 0.4rem;
+}
+.adm-form-card p {
+  font-size: 0.85rem;
+  color: #94A3B8;
+  margin-bottom: 1.25rem;
+}
+
+.clean-input-group {
+  margin-bottom: 1rem;
+}
+.clean-input-group label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: #CBD5E1;
+  margin-bottom: 5px;
+}
+.clean-input, .clean-select {
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(41, 183, 225, 0.25);
+  background: rgba(11, 31, 51, 0.7);
+  color: #FFFFFF;
+  font-size: 0.92rem;
+  outline: none;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+.clean-input:focus, .clean-select:focus {
+  border-color: #29B7E1;
+  box-shadow: 0 0 0 3px rgba(41, 183, 225, 0.2);
+}
+.clean-select option {
+  background: #0B1F33;
+  color: #FFFFFF;
+}
+
+.form-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+}
+
+/* RESPONSIVE */
+@media (max-width: 1024px) {
+  .hero-showcase { min-height: 480px; padding: 2.5rem 2rem; }
+  .hero-main-title { font-size: 2.6rem; }
+  .quick-stats-strip { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+  .why-grid-3 { grid-template-columns: 1fr; }
+  .teacher-slide-card { flex: 0 0 calc(50% - 0.75rem); min-width: 0; }
+  .student-slide-card { flex: 0 0 calc(50% - 0.75rem); min-width: 0; }
+  .admission-clean-box { grid-template-columns: 1fr; padding: 2.5rem 1.75rem; gap: 2.5rem; }
+  .car-btn { display: none; }
+}
+
+@media (max-width: 680px) {
+  .hero-showcase {
+    padding: 2.5rem 1.25rem;
+    background-image: 
+      linear-gradient(180deg, 
+        rgba(7, 19, 34, 0.96) 0%, 
+        rgba(7, 19, 34, 0.85) 60%, 
+        rgba(7, 19, 34, 0.75) 100%),
+      url('/static/img/diamond_hero_students.jpg');
+    background-position: center top;
+  }
+  .hero-main-title { font-size: 2.1rem; }
+  .quick-stats-strip { grid-template-columns: 1fr 1fr; padding: 1.25rem 1rem; }
+  .teacher-slide-card {
+    flex: 0 0 100%;
+    min-width: 0;
+    padding: 1.15rem;
+  }
+  .teacher-portrait-box {
+    height: 195px;
+  }
+  .form-two-col {
+    grid-template-columns: 1fr !important;
+    gap: 0.65rem;
+  }
+  .student-slide-card { flex: 0 0 100%; min-width: 0; }
+  .stat-num { font-size: 1.7rem; }
+  .clean-title { font-size: 1.85rem; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-home-clean">
+
+  <!-- ================= 0. JONLI MAKTAB MA'LUMOTLARI LENTASI (INFINITE TICKER) ================= -->
+  <div class="live-info-ticker-wrap">
+    <div class="ticker-title-badge">
+      <i class="fa-solid fa-bolt"></i> DIAMOND LIVE
+    </div>
+    <div class="ticker-track" id="live-info-track">
+      <div class="ticker-item"><i class="fa-solid fa-gem"></i> <strong>2026–2027</strong> O'quv yili qabuli davom etmoqda</div>
+      <div class="ticker-item"><i class="fa-solid fa-trophy"></i> <strong>120+</strong> Xalqaro va Respublika olimpiada testlari</div>
+      <div class="ticker-item"><i class="fa-solid fa-graduation-cap"></i> <strong>1,500+</strong> Iqtidorli yoshlar ta'lim olmoqda</div>
+      <div class="ticker-item"><i class="fa-solid fa-laptop-code"></i> <strong>IT & Robototexnika</strong> bo'yicha zamonaviy laboratoriyalar</div>
+      <div class="ticker-item"><i class="fa-solid fa-language"></i> <strong>IELTS & SAT</strong> maqsadli tayyorgarlik dasturlari</div>
+      <div class="ticker-item"><i class="fa-solid fa-shield-halved"></i> <strong>100%</strong> Shaffof avtomatlashtirilgan baholash tizimi</div>
+      <div class="ticker-item"><i class="fa-solid fa-book-open"></i> <strong>5,000+</strong> Nusxadan iborat boy kutubxona fondi</div>
+      <!-- Duplicate for seamless infinite loop -->
+      <div class="ticker-item"><i class="fa-solid fa-gem"></i> <strong>2026–2027</strong> O'quv yili qabuli davom etmoqda</div>
+      <div class="ticker-item"><i class="fa-solid fa-trophy"></i> <strong>120+</strong> Xalqaro va Respublika olimpiada testlari</div>
+      <div class="ticker-item"><i class="fa-solid fa-graduation-cap"></i> <strong>1,500+</strong> Iqtidorli yoshlar ta'lim olmoqda</div>
+      <div class="ticker-item"><i class="fa-solid fa-laptop-code"></i> <strong>IT & Robototexnika</strong> bo'yicha zamonaviy laboratoriyalar</div>
+      <div class="ticker-item"><i class="fa-solid fa-language"></i> <strong>IELTS & SAT</strong> maqsadli tayyorgarlik dasturlari</div>
+      <div class="ticker-item"><i class="fa-solid fa-shield-halved"></i> <strong>100%</strong> Shaffof avtomatlashtirilgan baholash tizimi</div>
+      <div class="ticker-item"><i class="fa-solid fa-book-open"></i> <strong>5,000+</strong> Nusxadan iborat boy kutubxona fondi</div>
+    </div>
+  </div>
+
+  <!-- ================= 1. DYNAMIC HERO SLIDER (TEXT CAROUSEL OVER IMAGE) ================= -->
+  <section class="hero-showcase" id="hero-section">
+    <div class="hero-slider-wrap" id="hero-slider-container">
+
+      <!-- SLIDE 1: Fundamental bilim -->
+      <div class="hero-slide active-slide" id="hero-slide-0">
+        <div class="hero-badge-pill">
+          <span class="pulse-gem"></span> <span class="h-badge-txt">2026–2027 O'QUV YILI • QABUL OCHIQ</span>
+        </div>
+        <h1 class="hero-main-title">
+          Kelajak <span>bilimdan</span> boshlanadi.
+        </h1>
+        <p class="hero-lead-text">
+          Fundamental fanlarni chuqur o'rganish, mustaqil tahliliy fikrlash va har bir o'quvchining ichki qobiliyatini yuksak natijalarga olib chiqish maskani.
+        </p>
+        <div class="hero-btn-row">
+          <a href="#contact-section" class="btn-primary-diamond">
+            <i class="fa-solid fa-graduation-cap"></i> Qabulga yozilish
+          </a>
+          <a href="#why-section" class="btn-ghost-diamond">
+            <i class="fa-solid fa-compass"></i> Maktab haqida
+          </a>
+        </div>
+      </div>
+
+      <!-- SLIDE 2: IT va Zamonaviy ko'nikmalar -->
+      <div class="hero-slide" id="hero-slide-1">
+        <div class="hero-badge-pill">
+          <span class="pulse-gem"></span> <span class="h-badge-txt">KELAJAK KASBLARI VA IT</span>
+        </div>
+        <h1 class="hero-main-title">
+          Amaliy dasturlash va <span>innovatsiyalar.</span>
+        </h1>
+        <p class="hero-lead-text">
+          Robototexnika, axborot texnologiyalari va amaliy loyihalar orqali yosh dasturchilarni xalqaro darajadagi zamonaviy kasblarga puxta tayyorlaymiz.
+        </p>
+        <div class="hero-btn-row">
+          <a href="#contact-section" class="btn-primary-diamond">
+            <i class="fa-solid fa-laptop-code"></i> IT Dasturlari
+          </a>
+          <a href="#teachers-section" class="btn-ghost-diamond">
+            <i class="fa-solid fa-user-tie"></i> Mentorlarimiz
+          </a>
+        </div>
+      </div>
+
+      <!-- SLIDE 3: Xalqaro olimpiadalar va tillar -->
+      <div class="hero-slide" id="hero-slide-2">
+        <div class="hero-badge-pill">
+          <span class="pulse-gem"></span> <span class="h-badge-txt">XALQARO DARAJA VA OLIMPIADALAR</span>
+        </div>
+        <h1 class="hero-main-tiWtle">
+          G'alabalar sari <span>dadil qadam.</span>
+        </h1>
+        <p class="hero-lead-text">
+          Cambridge standartlari, intensiv IELTS va SAT darslari hamda xalqaro olimpiada sovrinlari bilan nufuzli oliygohlarga grantlar imkoniyati.
+        </p>
+        <div class="hero-btn-row">
+          <a href="#talented-section" class="btn-primary-diamond">
+            <i class="fa-solid fa-trophy"></i> Yutuqlarimiz
+          </a>
+          <a href="#contact-section" class="btn-ghost-diamond">
+            <i class="fa-solid fa-headset"></i> Bog'lanish
+          </a>
+        </div>
+      </div>
+
+      <!-- Hero Carousel Controls (Progress bars & buttons) -->
+      <div class="hero-carousel-controls">
+        <button class="hero-arrow-btn" onclick="manualPrevHeroSlide()" aria-label="Oldingi"><i class="fa-solid fa-chevron-left"></i></button>
+        <div class="hero-nav-dots">
+          <div class="hero-progress-line active" onclick="goToHeroSlide(0)"></div>
+          <div class="hero-progress-line" onclick="goToHeroSlide(1)"></div>
+          <div class="hero-progress-line" onclick="goToHeroSlide(2)"></div>
+        </div>
+        <button class="hero-arrow-btn" onclick="manualNextHeroSlide()" aria-label="Keyingi"><i class="fa-solid fa-chevron-right"></i></button>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ================= 2. ASOSIY 4 TA STATISTIKA ================= -->
+  <div class="quick-stats-strip">
+    <div class="stat-item-box">
+      <div class="stat-num" id="stats-students">1,500+</div>
+      <div class="stat-lbl" id="i18n-stat-students">O'quvchilar</div>
+    </div>
+    <div class="stat-item-box">
+      <div class="stat-num" id="stats-tests">120+</div>
+      <div class="stat-lbl" id="i18n-stat-tests">Olimpiada & Testlar</div>
+    </div>
+    <div class="stat-item-box">
+      <div class="stat-num" id="stats-capacity">600+</div>
+      <div class="stat-lbl" id="i18n-stat-capacity">O'quvchi Sig'imi</div>
+    </div>
+    <div class="stat-item-box">
+      <div class="stat-num">100%</div>
+      <div class="stat-lbl" id="i18n-stat-fair">Shaffof Baholash</div>
+    </div>
+  </div>
+
+  <!-- ================= 3. NEGA DIAMOND SCHOOL? ================= -->
+  <section class="why-section-wrap" id="why-section">
+    <div class="clean-head">
+      <div class="clean-badge" id="i18n-why-badge"><i class="fa-solid fa-gem"></i> Nega Diamond School?</div>
+      <h2 class="clean-title" id="i18n-why-title">Bilim, Tajriba va <span>Imkoniyat</span></h2>
+      <p class="clean-desc" id="i18n-why-desc">Biz har bir o'quvchiga o'z maqsadiga ishonch bilan erishishi uchun mustahkam poydevor beramiz.</p>
+    </div>
+
+    <div class="why-grid-3">
+      <!-- 1. Ustozlar -->
+      <div class="why-card">
+        <div class="why-icon-box"><i class="fa-solid fa-chalkboard-user"></i></div>
+        <h3 class="why-card-title" id="i18n-why1-title">Kuchli Ustozlar Jamoasi</h3>
+        <p class="why-card-text" id="i18n-why1-text">Xalqaro sertifikatlarga va ko'p yillik tajribaga ega bo'lgan nufuzli pedagog-mentorlar har bir o'quvchiga individual yondashadi.</p>
+      </div>
+
+      <!-- 2. IT va Tillar -->
+      <div class="why-card">
+        <div class="why-icon-box"><i class="fa-solid fa-laptop-code"></i></div>
+        <h3 class="why-card-title" id="i18n-why2-title">Zamonaviy IT & Xorijiy Tillar</h3>
+        <p class="why-card-text" id="i18n-why2-text">Dasturlash, robototexnika va chuqurlashtirilgan chet tillari amaliy darslar orqali zamonaviy kasblarga poydevor bo'ladi.</p>
+      </div>
+
+      <!-- 3. Olimpiadalar -->
+      <div class="why-card">
+        <div class="why-icon-box"><i class="fa-solid fa-trophy"></i></div>
+        <h3 class="why-card-title" id="i18n-why3-title">Olimpiadalar va Yutuqlar</h3>
+        <p class="why-card-text" id="i18n-why3-text">O'quvchilar muntazam respublika va xalqaro olimpiadalarga tayyorlanadi, o'z bilimlarini sinovdan o'tkazib grantlar yutadi.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 4. BIZNING USTOZLAR (AUTO-CAROUSEL) ================= -->
+  <section class="teachers-section-wrap" id="teachers-section">
+    <div class="clean-head">
+      <div class="clean-badge" id="i18n-tch-badge"><i class="fa-solid fa-graduation-cap"></i> Pedagoglar</div>
+      <h2 class="clean-title" id="i18n-tch-title">Bizning <span>Ustozlarimiz</span></h2>
+      <p class="clean-desc" id="i18n-tch-subtitle">Har bir fanni yuksak mahorat bilan o'rgatuvchi yetakchi mutaxassislar.</p>
+    </div>
+
+    <div class="carousel-outer" id="teachers-carousel-wrapper">
+      <button class="car-btn prev-arrow" id="teachers-prev-btn" aria-label="Oldingi" onclick="moveTeachersSlide(-1)">
+        <i class="fa-solid fa-chevron-left"></i>
+      </button>
+
+      <div class="carousel-track-viewport" id="teachers-viewport">
+        <div class="teachers-slides-row" id="teachers-container">
+          <!-- API dan render bo'ladi -->
+        </div>
+      </div>
+
+      <button class="car-btn next-arrow" id="teachers-next-btn" aria-label="Keyingi" onclick="moveTeachersSlide(1)">
+        <i class="fa-solid fa-chevron-right"></i>
+      </button>
+
+      <div class="car-dots-row" id="teachers-dots-container"></div>
+    </div>
+
+    <div style="text-align: center; margin-top: 1.5rem;">
+      <a href="#teachers-section" class="btn-ghost-diamond" id="i18n-tch-more-btn" style="padding: 10px 22px; font-size: 0.88rem;">
+        Barcha ustozlar bilan tanishish <i class="fa-solid fa-arrow-right"></i>
+      </a>
+    </div>
+  </section>
+
+  <!-- ================= 5. IQTIDORLI O'QUVCHILAR (AUTO-CAROUSEL) ================= -->
+  <section class="talented-section-wrap" id="talented-section">
+    <div class="clean-head">
+      <div class="clean-badge" id="i18n-talented-badge"><i class="fa-solid fa-star"></i> Maktab Faxrlari</div>
+      <h2 class="clean-title" id="i18n-talented-title">Iqtidorli <span>O'quvchilar</span></h2>
+      <p class="clean-desc" id="i18n-talented-subtitle">Olimpiada va tanlovlar g'oliblari — bizning faxrimiz.</p>
+    </div>
+
+    <div class="carousel-outer" id="talented-carousel-wrapper">
+      <button class="car-btn prev-arrow" id="talented-prev-btn" aria-label="Oldingi" onclick="moveTalentedSlide(-1)">
+        <i class="fa-solid fa-chevron-left"></i>
+      </button>
+
+      <div class="carousel-track-viewport" id="talented-viewport">
+        <div class="carousel-slides-row" id="talented-carousel-track">
+          <!-- API dan render bo'ladi -->
+        </div>
+      </div>
+
+      <button class="car-btn next-arrow" id="talented-next-btn" aria-label="Keyingi" onclick="moveTalentedSlide(1)">
+        <i class="fa-solid fa-chevron-right"></i>
+      </button>
+
+      <div class="car-dots-row" id="talented-dots-container"></div>
+    </div>
+  </section>
+
+  <!-- ================= 6. QABUL VA BOG'LANISH ================= -->
+  <section class="admission-clean-box" id="contact-section">
+    <!-- Chap: Aloqa ma'lumotlari -->
+    <div class="adm-info-column">
+      <div class="clean-badge" id="i18n-contact-badge"><i class="fa-solid fa-headset"></i> Qabul 2026–2027</div>
+      <h2 class="adm-info-title" id="i18n-contact-title">
+        Farzandingiz kelajagi uchun <span style="color: #29B7E1; font-style: italic;">ilk qadam.</span>
+      </h2>
+      <p class="adm-info-desc" id="i18n-contact-subtitle">
+        Diamond School ta'lim muhiti va qabul shartlari haqida batafsil ma'lumot olish uchun biz bilan bog'laning.
+      </p>
+
+      <div class="adm-detail-line">
+        <div class="adm-detail-icon"><i class="fa-solid fa-phone"></i></div>
+        <div class="adm-detail-text">
+          <div class="adm-detail-sub" id="i18n-cnt-lbl-phone">Qabul bo'limi:</div>
+          <a href="tel:+998712000000" id="contact-primary-phone">+998 (71) 200-00-00</a>
+        </div>
+      </div>
+
+      <div class="adm-detail-line">
+        <div class="adm-detail-icon"><i class="fa-solid fa-location-dot"></i></div>
+        <div class="adm-detail-text">
+          <div class="adm-detail-sub" id="i18n-cnt-lbl-addr">Maktab manzili:</div>
+          <div style="font-weight: 600; color: #FFFFFF;" id="contact-address">Toshkent shahri, Yunusobod tumani, Amir Temur shohi, 120</div>
+          <div style="font-size: 0.78rem; color: #29B7E1;" id="contact-landmark">Mo'ljal: Shahriston metro bekati</div>
+        </div>
+      </div>
+
+      <div class="adm-detail-line">
+        <div class="adm-detail-icon"><i class="fa-solid fa-clock"></i></div>
+        <div class="adm-detail-text">
+          <div class="adm-detail-sub" id="i18n-cnt-lbl-hours">Ish vaqti:</div>
+          <div style="font-weight: 600; color: #FFFFFF;" id="contact-hours">Dushanba — Shanba, 08:30 — 18:00</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- O'ng: Qisqa va qulay ariza formasi -->
+    <div class="adm-form-card">
+      <h3 id="i18n-cnt-form-title">Qabulga Yozilish</h3>
+      <p id="i18n-cnt-form-sub">Ma'lumotlaringizni qoldiring, mutaxassisimiz siz bilan 15 daqiqa ichida bog'lanadi.</p>
+
+      <form id="contact-consult-form" onsubmit="handleContactSubmit(event)">
+        <div class="clean-input-group">
+          <label id="i18n-cnt-lbl-name">Ism va Familiyangiz *</label>
+          <input type="text" id="contact-name" class="clean-input" placeholder="Ismingizni kiriting" required>
+        </div>
+
+        <div class="form-two-col">
+          <div class="clean-input-group">
+            <label id="i18n-cnt-lbl-phone-input">Telefon Raqamingiz *</label>
+            <input type="tel" id="contact-phone" class="clean-input" placeholder="+998 (90) 123-45-67" required>
+          </div>
+          <div class="clean-input-group">
+            <label id="i18n-cnt-lbl-grade">Sinfni tanlang</label>
+            <select id="contact-grade" class="clean-select">
+              <option value="5-sinf">5-sinf</option>
+              <option value="6-sinf">6-sinf</option>
+              <option value="7-sinf">7-sinf</option>
+              <option value="8-sinf">8-sinf</option>
+              <option value="9-sinf">9-sinf</option>
+              <option value="10-sinf">10-sinf</option>
+              <option value="11-sinf">11-sinf</option>
+              <option value="olimpiada">Olimpiada & Testlar</option>
+            </select>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-primary-diamond" style="width: 100%; justify-content: center; margin-top: 0.5rem;" id="i18n-cnt-btn-send">
+          <i class="fa-solid fa-paper-plane"></i> Yuborish
+        </button>
+
+        <div id="contact-feedback" style="display: none; margin-top: 1rem; padding: 10px; border-radius: 8px; font-size: 0.88rem;"></div>
+      </form>
+    </div>
+  </section>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  /* ==========================================================================
+     DIAMOND SCHOOL — BILINGUAL TRANSLATION (UZ / RU)
+     ========================================================================== */
+  const I18N_INDEX = {
+    uz: {
+      navHome: 'BOSH SAHIFA',
+      navTeachers: 'USTOZLAR',
+      navTalented: 'IQTIDORLILAR',
+      navContact: 'BOG\'LANISH',
+
+      statStudents: 'O\'quvchilar',
+      statTests: 'Olimpiada & Testlar',
+      statCapacity: 'O\'quvchi Sig\'imi',
+      statFair: 'Shaffof Baholash',
+
+      whyBadge: '<i class="fa-solid fa-gem"></i> Nega Diamond School?',
+      whyTitle: 'Bilim, Tajriba va <span>Imkoniyat</span>',
+      whyDesc: 'Biz har bir o\'quvchiga o\'z maqsadiga ishonch bilan erishishi uchun mustahkam poydevor beramiz.',
+      why1Title: 'Kuchli Ustozlar Jamoasi',
+      why1Text: 'Xalqaro sertifikatlarga va ko\'p yillik tajribaga ega bo\'lgan nufuzli pedagog-mentorlar har bir o\'quvchiga individual yondashadi.',
+      why2Title: 'Zamonaviy IT & Xorijiy Tillar',
+      why2Text: 'Dasturlash, robototexnika va chuqurlashtirilgan chet tillari amaliy darslar orqali zamonaviy kasblarga poydevor bo\'ladi.',
+      why3Title: 'Olimpiadalar va Yutuqlar',
+      why3Text: 'O\'quvchilar muntazam respublika va xalqaro olimpiadalarga tayyorlanadi, o\'z bilimlarini sinovdan o\'tkazib grantlar yutadi.',
+
+      tchBadge: '<i class="fa-solid fa-graduation-cap"></i> Pedagoglar',
+      tchTitle: 'Bizning <span>Ustozlarimiz</span>',
+      tchSubtitle: 'Har bir fanni yuksak mahorat bilan o\'rgatuvchi yetakchi mutaxassislar.',
+      tchAvgScore: 'O\'rtacha ball',
+      tchMoreBtn: 'Barcha ustozlar bilan tanishish <i class="fa-solid fa-arrow-right"></i>',
+
+      talentedBadge: '<i class="fa-solid fa-star"></i> Maktab Faxrlari',
+      talentedTitle: 'Iqtidorli <span>O\'quvchilar</span>',
+      talentedSubtitle: 'Olimpiada va tanlovlar g\'oliblari — bizning faxrimiz.',
+
+      contactBadge: '<i class="fa-solid fa-headset"></i> Qabul 2026–2027',
+      contactTitle: 'Farzandingiz kelajagi uchun <span style="color: #29B7E1; font-style: italic;">ilk qadam.</span>',
+      contactSubtitle: 'Diamond School ta\'lim muhiti va qabul shartlari haqida batafsil ma\'lumot olish uchun biz bilan bog\'laning.',
+      cntLblPhone: 'Qabul bo\'limi:',
+      cntLblAddr: 'Maktab manzili:',
+      cntLblHours: 'Ish vaqti:',
+      cntFormTitle: 'Qabulga Yozilish',
+      cntFormSub: 'Ma\'lumotlaringizni qoldiring, mutaxassisimiz siz bilan 15 daqiqa ichida bog\'lanadi.',
+      cntLblName: 'Ism va Familiyangiz *',
+      cntLblPhoneInput: 'Telefon Raqamingiz *',
+      cntLblGrade: 'Sinfni tanlang',
+      cntBtnSend: '<i class="fa-solid fa-paper-plane"></i> Yuborish',
+
+      footerHome: 'Bosh sahifa',
+      footerTeachers: 'Ustozlar',
+      footerTalented: 'Iqtidorlilar',
+      footerContact: 'Bog\'lanish',
+      footerRights: '© 2026 Diamond School. Barcha huquqlar himoyalangan.'
+    },
+
+    ru: {
+      navHome: 'ГЛАВНАЯ',
+      navTeachers: 'УЧИТЕЛЯ',
+      navTalented: 'ТАЛАНТЫ',
+      navContact: 'КОНТАКТЫ',
+
+      statStudents: 'Ученики',
+      statTests: 'Олимпиады и Тесты',
+      statCapacity: 'Вместимость',
+      statFair: 'Честная Оценка',
+
+      whyBadge: '<i class="fa-solid fa-gem"></i> Почему Diamond School?',
+      whyTitle: 'Знания, Опыт и <span>Возможности</span>',
+      whyDesc: 'Мы создаем прочный фундамент, чтобы каждый ученик уверенно достигал своих больших целей.',
+      why1Title: 'Сильная Команда Учителей',
+      why1Text: 'Ведущие педагоги-наставники с международными сертификатами обеспечивают индивидуальный подход к каждому ребенку.',
+      why2Title: 'Современный IT и Языки',
+      why2Text: 'Практическое программирование, робототехника и иностранные языки готовят к востребованным профессиям будущего.',
+      why3Title: 'Олимпиады и Победы',
+      why3Text: 'Системная подготовка к республиканским и международным олимпиадам, победы и гранты.',
+
+      tchBadge: '<i class="fa-solid fa-graduation-cap"></i> Педагоги',
+      tchTitle: 'Наши <span>Учителя</span>',
+      tchSubtitle: 'Ведущие специалисты, обучающие каждому предмету на высшем уровне.',
+      tchAvgScore: 'Средний балл',
+      tchMoreBtn: 'Познакомиться со всеми учителями <i class="fa-solid fa-arrow-right"></i>',
+
+      talentedBadge: '<i class="fa-solid fa-star"></i> Гордость Школы',
+      talentedTitle: 'Талантливые <span>Ученики</span>',
+      talentedSubtitle: 'Победители олимпиад и конкурсов — наша гордость.',
+
+      contactBadge: '<i class="fa-solid fa-headset"></i> Приём 2026–2027',
+      contactTitle: 'Первый шаг к будущему <span style="color: #29B7E1; font-style: italic;">вашего ребенка.</span>',
+      contactSubtitle: 'Свяжитесь с нами, чтобы узнать подробнее об учебных программах и условиях поступления.',
+      cntLblPhone: 'Приёмная комиссия:',
+      cntLblAddr: 'Адрес школы:',
+      cntLblHours: 'Режим работы:',
+      cntFormTitle: 'Запись на Приём',
+      cntFormSub: 'Оставьте данные, наш специалист свяжется с вами в течение 15 минут.',
+      cntLblName: 'Ваше Имя и Фамилия *',
+      cntLblPhoneInput: 'Номер Телефона *',
+      cntLblGrade: 'Выберите класс',
+      cntBtnSend: '<i class="fa-solid fa-paper-plane"></i> Отправить',
+
+      footerHome: 'Главная',
+      footerTeachers: 'Учителя',
+      footerTalented: 'Таланты',
+      footerContact: 'Контакты',
+      footerRights: '© 2026 Diamond School. Все права защищены.'
+    }
+  };
+
+  /* ==========================================================================
+     HERO TEXT SLIDER CONTROLLER (AVTO-O'TUVCHI SLAYDER)
+     ========================================================================== */
+  let currentHeroSlideIndex = 0;
+  let heroSlideTimer = null;
+  let isHeroHovered = false;
+  const TOTAL_HERO_SLIDES = 3;
+
+  function showHeroSlide(index) {
+    currentHeroSlideIndex = (index + TOTAL_HERO_SLIDES) % TOTAL_HERO_SLIDES;
+    for (let i = 0; i < TOTAL_HERO_SLIDES; i++) {
+      const slide = document.getElementById(`hero-slide-${i}`);
+      if (slide) {
+        slide.classList.toggle('active-slide', i === currentHeroSlideIndex);
+      }
+    }
+    const lines = document.querySelectorAll('.hero-progress-line');
+    lines.forEach((line, i) => {
+      line.classList.remove('active');
+      if (i === currentHeroSlideIndex) {
+        void line.offsetWidth; // Reflow for instant CSS animation replay
+        line.classList.add('active');
+      }
+    });
+  }
+
+  function nextHeroSlide() {
+    showHeroSlide(currentHeroSlideIndex + 1);
+  }
+
+  function prevHeroSlide() {
+    showHeroSlide(currentHeroSlideIndex - 1);
+  }
+
+  function manualNextHeroSlide() {
+    nextHeroSlide();
+    startHeroSliderTimer();
+  }
+
+  function manualPrevHeroSlide() {
+    prevHeroSlide();
+    startHeroSliderTimer();
+  }
+
+  function goToHeroSlide(index) {
+    showHeroSlide(index);
+    startHeroSliderTimer();
+  }
+
+  function startHeroSliderTimer() {
+    if (heroSlideTimer) clearInterval(heroSlideTimer);
+    heroSlideTimer = setInterval(() => {
+      if (!isHeroHovered) nextHeroSlide();
+    }, 3000);
+  }
+
+  function initHeroInteractions() {
+    const heroSec = document.getElementById('hero-section');
+    if (!heroSec || heroSec.dataset.bound) return;
+    heroSec.dataset.bound = 'true';
+
+    heroSec.addEventListener('mouseenter', () => { isHeroHovered = true; });
+    heroSec.addEventListener('mouseleave', () => { isHeroHovered = false; });
+
+    let heroTouchStartX = 0;
+    heroSec.addEventListener('touchstart', (e) => {
+      heroTouchStartX = e.changedTouches[0].screenX;
+    }, { passive: true });
+    heroSec.addEventListener('touchend', (e) => {
+      const diff = heroTouchStartX - e.changedTouches[0].screenX;
+      if (diff > 45) { manualNextHeroSlide(); }
+      else if (diff < -45) { manualPrevHeroSlide(); }
+    }, { passive: true });
+  }
+
+  /* ==========================================================================
+     TEACHERS AUTO-CAROUSEL CONTROLLER
+     ========================================================================== */
+  let currentTeacherIndex = 0;
+  let teachersAutoTimer = null;
+  let isTeachersHovered = false;
+
+  function renderTeachersCards(lang) {
+    if (!globalShowcaseData || !globalShowcaseData.teachers) return;
+    const t = I18N_INDEX[lang] || I18N_INDEX.uz;
+    const container = document.getElementById('teachers-container');
+    if (!container) return;
+
+    container.innerHTML = globalShowcaseData.teachers.map((teacher) => `
+      <div class="teacher-slide-card">
+        <div class="teacher-top-meta">
+          <span class="teacher-subj-badge"><i class="fa-solid fa-gem"></i> ${teacher.subject || 'Fan'}</span>
+          <span class="teacher-exp-chip"><i class="fa-solid fa-award"></i> ${teacher.experience || '5+ yil tajriba'}</span>
+        </div>
+
+        <div class="teacher-portrait-box">
+          <img src="${teacher.image}" alt="${teacher.name}" loading="lazy" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=600&q=80'">
+          <div class="teacher-rating-pill">
+            <i class="fa-solid fa-star" style="color: #f59e0b;"></i> ${teacher.avgScore || '96%'}
+          </div>
+        </div>
+
+        <div class="teacher-info-content">
+          <div class="teacher-name-txt">${teacher.name}</div>
+          <div class="teacher-role-txt">${teacher.title || 'Pedagog-mentor'}</div>
+
+          <div class="teacher-stats-bar">
+            <span><i class="fa-solid fa-user-graduate"></i> <strong>${teacher.studentsCount || '300+'}</strong> ${lang === 'ru' ? 'учеников' : 'o\'quvchi'}</span>
+            <span style="opacity: 0.35;">•</span>
+            <span><i class="fa-solid fa-circle-check" style="color: #34d399;"></i> ${lang === 'ru' ? 'Высшая категория' : 'Oliy toifa'}</span>
+          </div>
+
+          ${teacher.quote ? `<div class="teacher-quote-line">"${teacher.quote}"</div>` : ''}
+        </div>
+      </div>
+    `).join('');
+
+    renderTeachersDots(globalShowcaseData.teachers.length);
+    updateTeachersPosition();
+    startTeachersAutoPlay();
+
+    const wrapper = document.getElementById('teachers-carousel-wrapper');
+    if (wrapper && !wrapper.dataset.hoverBound) {
+      wrapper.dataset.hoverBound = 'true';
+      wrapper.addEventListener('mouseenter', () => { isTeachersHovered = true; });
+      wrapper.addEventListener('mouseleave', () => { isTeachersHovered = false; });
+
+      let touchStartX = 0;
+      wrapper.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; }, { passive: true });
+      wrapper.addEventListener('touchend', (e) => {
+        const diff = touchStartX - e.changedTouches[0].screenX;
+        if (diff > 45) moveTeachersSlide(1);
+        else if (diff < -45) moveTeachersSlide(-1);
+      }, { passive: true });
+    }
+  }
+
+  function getTeachersPerView() {
+    if (window.innerWidth <= 680) return 1;
+    if (window.innerWidth <= 1024) return 2;
+    return 4;
+  }
+
+  function renderTeachersDots(totalCards) {
+    const dotsContainer = document.getElementById('teachers-dots-container');
+    if (!dotsContainer) return;
+    const perView = getTeachersPerView();
+    const totalSteps = Math.max(1, totalCards - perView + 1);
+
+    dotsContainer.innerHTML = '';
+    for (let i = 0; i < totalSteps; i++) {
+      const dot = document.createElement('button');
+      dot.className = 'car-dot' + (i === currentTeacherIndex ? ' active' : '');
+      dot.setAttribute('aria-label', `Ustoz ${i + 1}`);
+      dot.onclick = () => goToTeacherSlide(i);
+      dotsContainer.appendChild(dot);
+    }
+  }
+
+  function goToTeacherSlide(index) {
+    if (!globalShowcaseData || !globalShowcaseData.teachers) return;
+    const totalCards = globalShowcaseData.teachers.length;
+    const perView = getTeachersPerView();
+    const maxIndex = Math.max(0, totalCards - perView);
+    currentTeacherIndex = Math.max(0, Math.min(index, maxIndex));
+    updateTeachersPosition();
+    startTeachersAutoPlay();
+  }
+
+  function moveTeachersSlide(dir) {
+    if (!globalShowcaseData || !globalShowcaseData.teachers) return;
+    const totalCards = globalShowcaseData.teachers.length;
+    const perView = getTeachersPerView();
+    const maxIndex = Math.max(0, totalCards - perView);
+
+    let nextIndex = currentTeacherIndex + dir;
+    if (nextIndex > maxIndex) nextIndex = 0;
+    else if (nextIndex < 0) nextIndex = maxIndex;
+    currentTeacherIndex = nextIndex;
+    updateTeachersPosition();
+    startTeachersAutoPlay();
+  }
+
+  function updateTeachersPosition() {
+    const track = document.getElementById('teachers-container');
+    if (!track) return;
+    const firstCard = track.querySelector('.teacher-slide-card');
+    if (!firstCard) return;
+
+    const cardWidth = firstCard.offsetWidth;
+    let gap = 24;
+    try {
+      const compGap = parseFloat(window.getComputedStyle(track).gap);
+      if (!isNaN(compGap)) gap = compGap;
+    } catch(e) {}
+    track.style.transform = `translateX(-${currentTeacherIndex * (cardWidth + gap)}px)`;
+
+    const dots = document.querySelectorAll('#teachers-dots-container .car-dot');
+    dots.forEach((dot, idx) => {
+      dot.classList.toggle('active', idx === currentTeacherIndex);
+    });
+  }
+
+  function startTeachersAutoPlay() {
+    if (teachersAutoTimer) clearInterval(teachersAutoTimer);
+    teachersAutoTimer = setInterval(() => {
+      if (!isTeachersHovered) moveTeachersSlide(1);
+    }, 4500);
+  }
+
+  /* ==========================================================================
+     TALENTED STUDENTS AUTO-CAROUSEL CONTROLLER
+     ========================================================================== */
+  let currentTalentedIndex = 0;
+  let talentedAutoPlayTimer = null;
+  let isCarouselHovered = false;
+
+  function renderTalentedCarousel() {
+    const track = document.getElementById('talented-carousel-track');
+    if (!track || !globalShowcaseData || !globalShowcaseData.talentedStudents) return;
+
+    const students = globalShowcaseData.talentedStudents;
+    if (!students.length) {
+      track.innerHTML = '<p style="text-align:center; width:100%; color:#94A3B8; padding: 1.5rem;">Ma\'lumot kiritilmagan</p>';
+      return;
+    }
+
+    track.innerHTML = students.map((s) => `
+      <div class="student-slide-card">
+        <div class="student-header-row">
+          <span style="font-size: 0.72rem; color: #29B7E1; font-weight: 750;"><i class="fa-solid fa-graduation-cap"></i> Diamond</span>
+          <span class="student-grade-pill">${s.grade}</span>
+        </div>
+
+        <div class="student-avatar-round">
+          <img src="${s.photo}" alt="${s.name}" loading="lazy" onerror="this.onerror=null; this.src='https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(s.name)}&backgroundColor=0873AA,29B7E1'">
+        </div>
+
+        <div class="student-name-bold">${s.name}</div>
+        <div style="font-size: 0.78rem; color: #29B7E1; font-weight: 700;">${s.badge || 'Maktab Faxri'}</div>
+
+        <div class="student-achieve-box">
+          <i class="fa-solid fa-trophy" style="color: #f59e0b; margin-right: 5px;"></i> ${s.achievement}
+        </div>
+
+        <div class="student-quote-txt">"${s.quote || 'Katta marralarga faqat chuqur bilim bilan erishiladi.'}"</div>
+      </div>
+    `).join('');
+
+    renderTalentedDots(students.length);
+    updateCarouselPosition();
+    startTalentedAutoPlay();
+
+    const wrapper = document.getElementById('talented-carousel-wrapper');
+    if (wrapper && !wrapper.dataset.hoverBound) {
+      wrapper.dataset.hoverBound = 'true';
+      wrapper.addEventListener('mouseenter', () => { isCarouselHovered = true; });
+      wrapper.addEventListener('mouseleave', () => { isCarouselHovered = false; });
+      
+      let touchStartX = 0;
+      wrapper.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; }, { passive: true });
+      wrapper.addEventListener('touchend', (e) => {
+        const touchEndX = e.changedTouches[0].screenX;
+        if (touchStartX - touchEndX > 45) moveTalentedSlide(1);
+        else if (touchEndX - touchStartX > 45) moveTalentedSlide(-1);
+      }, { passive: true });
+    }
+  }
+
+  function getCardsPerView() {
+    if (window.innerWidth <= 680) return 1;
+    if (window.innerWidth <= 1024) return 2;
+    return 3;
+  }
+
+  function renderTalentedDots(totalCards) {
+    const dotsContainer = document.getElementById('talented-dots-container');
+    if (!dotsContainer) return;
+    const perView = getCardsPerView();
+    const totalSteps = Math.max(1, totalCards - perView + 1);
+
+    dotsContainer.innerHTML = '';
+    for (let i = 0; i < totalSteps; i++) {
+      const dot = document.createElement('button');
+      dot.className = 'car-dot' + (i === currentTalentedIndex ? ' active' : '');
+      dot.setAttribute('aria-label', `Slayd ${i + 1}`);
+      dot.onclick = () => goToTalentedSlide(i);
+      dotsContainer.appendChild(dot);
+    }
+  }
+
+  function goToTalentedSlide(index) {
+    if (!globalShowcaseData || !globalShowcaseData.talentedStudents) return;
+    const totalCards = globalShowcaseData.talentedStudents.length;
+    const perView = getCardsPerView();
+    const maxIndex = Math.max(0, totalCards - perView);
+    currentTalentedIndex = Math.max(0, Math.min(index, maxIndex));
+    updateCarouselPosition();
+    startTalentedAutoPlay();
+  }
+
+  function moveTalentedSlide(dir) {
+    if (!globalShowcaseData || !globalShowcaseData.talentedStudents) return;
+    const totalCards = globalShowcaseData.talentedStudents.length;
+    const perView = getCardsPerView();
+    const maxIndex = Math.max(0, totalCards - perView);
+
+    let nextIndex = currentTalentedIndex + dir;
+    if (nextIndex > maxIndex) nextIndex = 0;
+    else if (nextIndex < 0) nextIndex = maxIndex;
+    currentTalentedIndex = nextIndex;
+    updateCarouselPosition();
+    startTalentedAutoPlay();
+  }
+
+  function updateCarouselPosition() {
+    const track = document.getElementById('talented-carousel-track');
+    if (!track) return;
+    const firstCard = track.querySelector('.student-slide-card');
+    if (!firstCard) return;
+
+    const cardWidth = firstCard.offsetWidth;
+    let gap = 24;
+    try {
+      const compGap = parseFloat(window.getComputedStyle(track).gap);
+      if (!isNaN(compGap)) gap = compGap;
+    } catch(e) {}
+    track.style.transform = `translateX(-${currentTalentedIndex * (cardWidth + gap)}px)`;
+
+    const dots = document.querySelectorAll('#talented-dots-container .car-dot');
+    dots.forEach((dot, idx) => {
+      dot.classList.toggle('active', idx === currentTalentedIndex);
+    });
+  }
+
+  function startTalentedAutoPlay() {
+    if (talentedAutoPlayTimer) clearInterval(talentedAutoPlayTimer);
+    talentedAutoPlayTimer = setInterval(() => {
+      if (!isCarouselHovered) moveTalentedSlide(1);
+    }, 4500);
+  }
+
+  window.addEventListener('resize', () => {
+    if (globalShowcaseData) {
+      if (globalShowcaseData.talentedStudents) {
+        renderTalentedDots(globalShowcaseData.talentedStudents.length);
+        goToTalentedSlide(currentTalentedIndex);
+      }
+      if (globalShowcaseData.teachers) {
+        renderTeachersDots(globalShowcaseData.teachers.length);
+        goToTeacherSlide(currentTeacherIndex);
+      }
+    }
+  });
+
+  async function handleContactSubmit(e) {
+    e.preventDefault();
+    const btn = document.getElementById('i18n-cnt-btn-send');
+    const name = document.getElementById('contact-name').value.trim();
+    const phone = document.getElementById('contact-phone').value.trim();
+    const grade = document.getElementById('contact-grade').value;
+    const fb = document.getElementById('contact-feedback');
+
+    if (!name || !phone) return;
+
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Yuborilmoqda...`;
+
+    try {
+      const res = await fetch('/api/contact/submit/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, phone, grade, message: "Bosh sahifadan tezkor ariza" })
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        fb.style.backgroundColor = 'rgba(16, 185, 129, 0.2)';
+        fb.style.color = '#34d399';
+        fb.style.border = '1px solid rgba(52, 211, 153, 0.4)';
+        fb.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${data.message || "Rahmat! Sizning arizangiz qabul qilindi. 15 daqiqa ichida siz bilan bog'lanamiz!"}`;
+        fb.style.display = 'block';
+        document.getElementById('contact-consult-form').reset();
+        setTimeout(() => { fb.style.display = 'none'; }, 8000);
+      } else {
+        fb.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
+        fb.style.color = '#f87171';
+        fb.style.border = '1px solid rgba(248, 113, 113, 0.4)';
+        fb.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${data.error || 'Xatolik yuz berdi. Iltimos qaytadan urinib ko\'ring.'}`;
+        fb.style.display = 'block';
+      }
+    } catch (err) {
+      fb.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
+      fb.style.color = '#f87171';
+      fb.style.border = '1px solid rgba(248, 113, 113, 0.4)';
+      fb.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Server bilan aloqada xatolik yuz berdi.`;
+      fb.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
+  }
+
+  function applyLanguageTranslations(lang) {
+    const t = I18N_INDEX[lang] || I18N_INDEX.uz;
+
+    // Nav
+    const nH = document.getElementById('nav-link-home');
+    const nT = document.getElementById('nav-link-teachers');
+    const nL = document.getElementById('nav-link-talented');
+    const nC = document.getElementById('nav-link-contact');
+    if (nH) nH.textContent = t.navHome;
+    if (nT) nT.textContent = t.navTeachers;
+    if (nL) nL.textContent = t.navTalented;
+    if (nC) nC.textContent = t.navContact;
+
+    // Stats
+    const sStd = document.getElementById('i18n-stat-students');
+    const sTst = document.getElementById('i18n-stat-tests');
+    const sCap = document.getElementById('i18n-stat-capacity');
+    const sFair = document.getElementById('i18n-stat-fair');
+    if (sStd) sStd.textContent = t.statStudents;
+    if (sTst) sTst.textContent = t.statTests;
+    if (sCap) sCap.textContent = t.statCapacity;
+    if (sFair) sFair.textContent = t.statFair;
+
+    // Why
+    const wB = document.getElementById('i18n-why-badge');
+    const wT = document.getElementById('i18n-why-title');
+    const wD = document.getElementById('i18n-why-desc');
+    const w1T = document.getElementById('i18n-why1-title');
+    const w1X = document.getElementById('i18n-why1-text');
+    const w2T = document.getElementById('i18n-why2-title');
+    const w2X = document.getElementById('i18n-why2-text');
+    const w3T = document.getElementById('i18n-why3-title');
+    const w3X = document.getElementById('i18n-why3-text');
+    if (wB) wB.innerHTML = t.whyBadge;
+    if (wT) wT.innerHTML = t.whyTitle;
+    if (wD) wD.textContent = t.whyDesc;
+    if (w1T) w1T.textContent = t.why1Title;
+    if (w1X) w1X.textContent = t.why1Text;
+    if (w2T) w2T.textContent = t.why2Title;
+    if (w2X) w2X.textContent = t.why2Text;
+    if (w3T) w3T.textContent = t.why3Title;
+    if (w3X) w3X.textContent = t.why3Text;
+
+    // Teachers
+    const tB = document.getElementById('i18n-tch-badge');
+    const tT = document.getElementById('i18n-tch-title');
+    const tS = document.getElementById('i18n-tch-subtitle');
+    const tM = document.getElementById('i18n-tch-more-btn');
+    if (tB) tB.innerHTML = t.tchBadge;
+    if (tT) tT.innerHTML = t.tchTitle;
+    if (tS) tS.textContent = t.tchSubtitle;
+    if (tM) tM.innerHTML = t.tchMoreBtn;
+
+    // Talented
+    const lB = document.getElementById('i18n-talented-badge');
+    const lT = document.getElementById('i18n-talented-title');
+    const lS = document.getElementById('i18n-talented-subtitle');
+    if (lB) lB.innerHTML = t.talentedBadge;
+    if (lT) lT.innerHTML = t.talentedTitle;
+    if (lS) lS.textContent = t.talentedSubtitle;
+
+    // Contact
+    const cB = document.getElementById('i18n-contact-badge');
+    const cT = document.getElementById('i18n-contact-title');
+    const cS = document.getElementById('i18n-contact-subtitle');
+    const cLPhone = document.getElementById('i18n-cnt-lbl-phone');
+    const cLAddr = document.getElementById('i18n-cnt-lbl-addr');
+    const cLHours = document.getElementById('i18n-cnt-lbl-hours');
+    const cFT = document.getElementById('i18n-cnt-form-title');
+    const cFS = document.getElementById('i18n-cnt-form-sub');
+    const cLN = document.getElementById('i18n-cnt-lbl-name');
+    const cLP = document.getElementById('i18n-cnt-lbl-phone-input');
+    const cLG = document.getElementById('i18n-cnt-lbl-grade');
+    const cSend = document.getElementById('i18n-cnt-btn-send');
+
+    if (cB) cB.innerHTML = t.contactBadge;
+    if (cT) cT.innerHTML = t.contactTitle;
+    if (cS) cS.textContent = t.contactSubtitle;
+    if (cLPhone) cLPhone.textContent = t.cntLblPhone;
+    if (cLAddr) cLAddr.textContent = t.cntLblAddr;
+    if (cLHours) cLHours.textContent = t.cntLblHours;
+    if (cFT) cFT.textContent = t.cntFormTitle;
+    if (cFS) cFS.textContent = t.cntFormSub;
+    if (cLN) cLN.textContent = t.cntLblName;
+    if (cLP) cLP.textContent = t.cntLblPhoneInput;
+    if (cLG) cLG.textContent = t.cntLblGrade;
+    if (cSend) cSend.innerHTML = t.cntBtnSend;
+
+    // Footer
+    const fH = document.getElementById('i18n-footer-home');
+    const fTch = document.getElementById('i18n-footer-teachers');
+    const fTal = document.getElementById('i18n-footer-talented');
+    const fCont = document.getElementById('i18n-footer-contact');
+    const fRt = document.getElementById('i18n-footer-rights');
+    if (fH) fH.textContent = t.footerHome;
+    if (fTch) fTch.textContent = t.footerTeachers;
+    if (fTal) fTal.textContent = t.footerTalented;
+    if (fCont) fCont.textContent = t.footerContact;
+    if (fRt) fRt.textContent = t.footerRights;
+
+    renderTeachersCards(lang);
+  }
+
+  async function loadDiamondShowcase() {
+    try {
+      const res = await fetch('/api/diamond/showcase/');
+      const data = await res.json();
+      globalShowcaseData = data;
+
+      if (data.stats) {
+        const stdEl = document.getElementById('stats-students');
+        if (stdEl && data.stats.studentsCount) stdEl.textContent = data.stats.studentsCount;
+        const testEl = document.getElementById('stats-tests');
+        if (testEl && data.stats.testsCount) testEl.textContent = data.stats.testsCount;
+      }
+
+      if (data.siteSettings) {
+        const capEl = document.getElementById('stats-capacity');
+        if (capEl && data.siteSettings.statCapacity) capEl.textContent = data.siteSettings.statCapacity;
+
+        if (data.siteSettings.phonePrimary) {
+          const p1 = document.getElementById('contact-primary-phone');
+          if (p1) {
+            p1.textContent = data.siteSettings.phonePrimary;
+            p1.href = `tel:${data.siteSettings.phonePrimary.replace(/[^0-9+]/g, '')}`;
+          }
+        }
+        if (data.siteSettings.addressUz) {
+          const addr = document.getElementById('contact-address');
+          if (addr) addr.textContent = data.siteSettings.addressUz;
+        }
+        if (data.siteSettings.workingHoursUz) {
+          const hrs = document.getElementById('contact-hours');
+          if (hrs) hrs.textContent = data.siteSettings.workingHoursUz;
+        }
+      }
+
+      const curLang = (typeof getSavedLanguage === 'function') ? getSavedLanguage() : 'uz';
+      renderTeachersCards(curLang);
+      renderTalentedCarousel();
+      applyLanguageTranslations(curLang);
+      startHeroSliderTimer();
+      initHeroInteractions();
+
+    } catch (err) {
+      console.error('Error loading diamond showcase:', err);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', loadDiamondShowcase);
+</script>
+{% endblock %}

@@ -1,0 +1,2769 @@
+{% extends 'base.html' %}
+
+{% block title %}O'qituvchi Portali - Diamond School{% endblock %}
+
+{% block portal_badge %}
+  <span class="portal-tag" style="background: rgba(0, 180, 216, 0.15); color: #00b4d8; border: 1px solid rgba(0, 180, 216, 0.3);">👨‍🏫 O'qituvchi Portali</span>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .portal-app-layout {
+    display: flex !important;
+    gap: 24px !important;
+    align-items: flex-start !important;
+    margin-top: 1.25rem !important;
+    width: 100% !important;
+  }
+  .portal-sidebar {
+    width: 280px !important;
+    min-width: 280px !important;
+    max-width: 280px !important;
+    flex-shrink: 0 !important;
+    background: #0f172a !important;
+    border: 1px solid rgba(56, 189, 248, 0.25) !important;
+    border-radius: 18px !important;
+    padding: 1.25rem 1rem !important;
+    position: sticky !important;
+    top: 85px !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3) !important;
+    box-sizing: border-box !important;
+  }
+  .portal-sidebar-nav {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 7px !important;
+  }
+  .portal-nav-btn {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    width: 100% !important;
+    padding: 12px 14px !important;
+    border-radius: 12px !important;
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    color: #94a3b8 !important;
+    font-size: 0.94rem !important;
+    font-weight: 700 !important;
+    cursor: pointer !important;
+    text-align: left !important;
+    box-sizing: border-box !important;
+    transition: all 0.2s ease !important;
+  }
+  .portal-nav-btn:hover {
+    background: rgba(255, 255, 255, 0.06) !important;
+    color: #f8fafc !important;
+    transform: translateX(4px) !important;
+  }
+  .portal-nav-btn.active {
+    background: linear-gradient(135deg, rgba(0, 180, 216, 0.25), rgba(2, 132, 199, 0.12)) !important;
+    color: #38bdf8 !important;
+    border: 1px solid rgba(56, 189, 248, 0.45) !important;
+    box-shadow: 0 4px 15px rgba(0, 180, 216, 0.2) !important;
+  }
+  .portal-nav-btn.nav-coin.active {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(217, 119, 6, 0.12)) !important;
+    color: #f59e0b !important;
+    border: 1px solid rgba(245, 158, 11, 0.5) !important;
+    box-shadow: 0 4px 15px rgba(245, 158, 11, 0.2) !important;
+  }
+  .portal-nav-btn .portal-nav-icon {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    border-radius: 9px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 1rem !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    color: inherit !important;
+    flex-shrink: 0 !important;
+  }
+  .portal-main-area {
+    flex: 1 !important;
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 🔒 ROLE ISOLATION: TEACHER GATE IF NOT LOGGED IN AS TEACHER -->
+<div id="teacher-auth-gate" style="display: none;">
+  <div class="portal-login-gate">
+    <div style="width: 70px; height: 70px; border-radius: 50%; background: rgba(0, 180, 216, 0.15); border: 2px solid #00b4d8; display: flex; align-items: center; justify-content: center; font-size: 2rem; color: #00b4d8; margin: 0 auto 1.5rem auto; box-shadow: 0 0 25px rgba(0, 180, 216, 0.35);">
+      <i class="fa-solid fa-user-tie"></i>
+    </div>
+    <div class="diamond-pill-badge" style="margin-bottom: 1rem;">
+      <i class="fa-solid fa-chalkboard-user"></i> O'qituvchi Kabineti
+    </div>
+    <h2 style="font-size: 1.6rem; font-weight: 850; margin-bottom: 0.5rem; color: var(--text-main);">
+      O'qituvchi Tizimiga Kirish
+    </h2>
+    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.75rem;">
+      Testlar yaratish, tahrirlash va o'quvchilar natijalarini boshqarish uchun o'qituvchi hisobingiz bilan kiring.
+    </p>
+
+    <div id="teacher-role-warning" class="alert alert-warning" style="display: none; margin-bottom: 1.25rem; text-align: left; font-size: 0.88rem;">
+      <i class="fa-solid fa-triangle-exclamation"></i> <span id="teacher-role-warning-text"></span>
+      <div style="margin-top: 8px;">
+        <button class="btn btn-secondary btn-sm" onclick="globalLogout()">Boshqa hisob bilan kirish</button>
+      </div>
+    </div>
+
+    <form id="teacher-login-form" onsubmit="handleTeacherDirectLogin(event)">
+      <div class="form-group" style="text-align: left; margin-bottom: 1rem;">
+        <label class="form-label">O'qituvchi Logini:</label>
+        <div style="position: relative;">
+          <i class="fa-solid fa-user" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+          <input type="text" id="teacher-gate-username" class="form-input" style="padding-left: 38px;" placeholder="sardor_muallim" required>
+        </div>
+      </div>
+      <div class="form-group" style="text-align: left; margin-bottom: 1.5rem;">
+        <label class="form-label">Parol:</label>
+        <div style="position: relative;">
+          <i class="fa-solid fa-key" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+          <input type="password" id="teacher-gate-password" class="form-input" style="padding-left: 38px;" placeholder="••••••••" required>
+        </div>
+      </div>
+      <div id="teacher-gate-error" class="alert alert-danger" style="display: none; margin-bottom: 1rem; font-size: 0.88rem;"></div>
+      <button type="submit" class="btn btn-diamond-cyan" style="width: 100%; justify-content: center; padding: 13px 20px; font-size: 1rem;">
+        <i class="fa-solid fa-right-to-bracket"></i> O'qituvchi Kabinetiga Kirish
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Main Teacher Dashboard Container -->
+<div id="teacher-main-dashboard" style="display: none;">
+  <div class="dashboard-header">
+    <div class="dashboard-title">
+      <h1 style="font-size: 1.7rem; font-weight: 800;" id="t-welcome">👨‍🏫 O'qituvchi Kabineti</h1>
+      <p style="color: var(--text-muted); font-size: 0.9rem;">Testlar tuzish, testlarni tahrirlash, o'quvchilar natijalarini monitoring qilish va ta'lim samaradorligini tahlil qilish</p>
+    </div>
+    <div>
+      <button class="btn btn-diamond-cyan" onclick="switchTeacherTab('create', document.getElementById('tab-btn-create'))">
+        <i class="fa-solid fa-plus-circle"></i> Yangi Test Yaratish
+      </button>
+    </div>
+  </div>
+
+<!-- Teacher Stats Grid -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-icon blue"><i class="fa-solid fa-book-bookmark"></i></div>
+    <div class="stat-info">
+      <span class="stat-number" id="tch-tests-count">0</span>
+      <span class="stat-label">Yaratilgan Testlar</span>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon purple"><i class="fa-solid fa-user-check"></i></div>
+    <div class="stat-info">
+      <span class="stat-number" id="tch-subs-count">0</span>
+      <span class="stat-label">Jami Topshirishlar</span>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon green"><i class="fa-solid fa-bullseye"></i></div>
+    <div class="stat-info">
+      <span class="stat-number" id="tch-avg-score">0%</span>
+      <span class="stat-label">O'rtacha Ball</span>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon amber"><i class="fa-solid fa-trophy"></i></div>
+    <div class="stat-info">
+      <span class="stat-number" id="tch-pass-rate">0%</span>
+      <span class="stat-label">Muvaffaqiyat (≥60%)</span>
+    </div>
+  </div>
+</div>
+
+  <!-- Mobile Sidebar Toggle Bar (Faqat kichik ekranlarda ko'rinadi) -->
+  <div class="mobile-sidebar-toggle-bar">
+    <button type="button" class="mobile-toggle-btn" onclick="toggleTeacherSidebar(true)">
+      <i class="fa-solid fa-bars"></i> Menyu
+    </button>
+    <div class="mobile-current-tab-pill" id="tchMobileCurrentTabTitle">
+      <i class="fa-solid fa-layer-group" style="color: #00b4d8;"></i> Mening Testlarim
+    </div>
+  </div>
+
+  <!-- Mobile Backdrop Overlay -->
+  <div class="portal-sidebar-backdrop" id="tchSidebarBackdrop" onclick="toggleTeacherSidebar(false)"></div>
+
+  <!-- Two-Column Portal Layout -->
+  <div class="portal-app-layout">
+    <!-- LEFT SIDEBAR -->
+    <aside class="portal-sidebar" id="tchSidebar">
+      <button type="button" class="portal-sidebar-close-btn" onclick="toggleTeacherSidebar(false)">&times;</button>
+
+      <!-- Mini Profile Info in Sidebar -->
+      <div class="portal-sidebar-userbox">
+        <img id="tch-sidebar-avatar-img" src="https://api.dicebear.com/7.x/initials/svg?seed=Teacher" width="44" height="44" style="width: 44px !important; height: 44px !important; min-width: 44px !important; max-width: 44px !important; border-radius: 12px; object-fit: cover; display: block;" class="portal-sidebar-avatar" alt="Avatar">
+        <div class="portal-sidebar-info">
+          <div class="portal-sidebar-name" id="tch-sidebar-name">O'qituvchi</div>
+          <div class="portal-sidebar-role">
+            <i class="fa-solid fa-chalkboard-user" style="color: #00b4d8;"></i>
+            <span id="tch-sidebar-subject">Fan Ustozi</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="portal-sidebar-nav-title">O'QITUVCHI MENYUSI</div>
+      <nav class="portal-sidebar-nav">
+        <button type="button" class="portal-nav-btn active" id="tch-nav-tests" onclick="switchTeacherTab('tests', this, 'Mening Testlarim', 'fa-layer-group')">
+          <div class="portal-nav-icon"><i class="fa-solid fa-layer-group"></i></div>
+          <span class="portal-nav-label">Mening Testlarim</span>
+        </button>
+
+        <button type="button" class="portal-nav-btn" id="tch-nav-create" onclick="switchTeacherTab('create', this, 'Yangi Test Yaratish', 'fa-pen-to-square')">
+          <div class="portal-nav-icon"><i class="fa-solid fa-pen-to-square"></i></div>
+          <span class="portal-nav-label">Yangi Test Yaratish</span>
+        </button>
+
+        <button type="button" class="portal-nav-btn" id="tch-nav-results" onclick="switchTeacherTab('results', this, 'Natijalar Jurnali', 'fa-square-poll-vertical')">
+          <div class="portal-nav-icon"><i class="fa-solid fa-square-poll-vertical"></i></div>
+          <span class="portal-nav-label">Natijalar Jurnali</span>
+        </button>
+
+        <button type="button" class="portal-nav-btn nav-coin" id="tch-nav-coins" onclick="switchTeacherTab('coins', this, 'Dars Faolligi & Coinlar', 'fa-coins')">
+          <div class="portal-nav-icon"><i class="fa-solid fa-coins"></i></div>
+          <span class="portal-nav-label">Dars Faolligi & Coinlar</span>
+          <span class="portal-nav-badge">🪙 Yangi</span>
+        </button>
+
+        <button type="button" class="portal-nav-btn" id="tch-nav-analytics" onclick="switchTeacherTab('analytics', this, 'Samaradorlik Tahlili', 'fa-chart-pie')">
+          <div class="portal-nav-icon"><i class="fa-solid fa-chart-pie"></i></div>
+          <span class="portal-nav-label">Samaradorlik Tahlili</span>
+        </button>
+
+        <button type="button" class="portal-nav-btn" id="tch-nav-profile" onclick="switchTeacherTab('profile', this, 'Profil & Avatar', 'fa-user-tie')">
+          <div class="portal-nav-icon"><i class="fa-solid fa-user-tie"></i></div>
+          <span class="portal-nav-label">Profil & Avatar</span>
+        </button>
+      </nav>
+
+      <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255, 255, 255, 0.06); text-align: center;">
+        <span style="font-size: 0.72rem; color: var(--text-muted); display: block;">Diamond School • SmartTest</span>
+      </div>
+    </aside>
+
+    <!-- RIGHT MAIN CONTENT AREA -->
+    <main class="portal-main-area">
+
+<!-- TAB 1: TESTS LIST -->
+<div id="tch-tab-tests" class="panel">
+  <div class="panel-header">
+    <div class="panel-title">
+      <i class="fa-solid fa-folder-open" style="color: var(--primary);"></i> Mening Testlarim Ro'yxati
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="custom-table">
+      <thead>
+        <tr>
+          <th>Test Mavzusi</th>
+          <th>Sinf</th>
+          <th>Fan</th>
+          <th>Holat & Vaqt</th>
+          <th>Dostup (Urinishlar)</th>
+          <th>Savollar</th>
+          <th>Davomiyligi</th>
+          <th>Topshirganlar</th>
+          <th style="text-align: right; min-width: 110px;">Amal</th>
+        </tr>
+      </thead>
+      <tbody id="tch-tests-tbody">
+        <!-- Rendered via JS -->
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- TAB 2: CREATE TEST -->
+<div id="tch-tab-create" class="panel" style="display: none;">
+  <div class="panel-header">
+    <div class="panel-title">
+      <i class="fa-solid fa-circle-question" style="color: var(--primary);"></i> Yangi Test Konstruktori
+    </div>
+  </div>
+  <form id="create-test-form" onsubmit="handleCreateTest(event)">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+      <div class="form-group">
+        <label class="form-label">Test Nomi / Mavzusi *</label>
+        <input type="text" id="test-title" class="form-input" placeholder="Masalan: Kvadrat tenglamalar va Viyet teoremasi" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tegishli Fan (Предмет) *</label>
+        <select id="test-subject" class="form-select" required>
+          {% for s in subjects %}
+            <option value="{{ s }}">{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Test Tili (Язык теста) *</label>
+        <select id="test-language" class="form-select" required>
+          <option value="uz">🇺🇿 O'zbek tili (UZ)</option>
+          <option value="ru">🇷🇺 Русский язык (RU)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mo'ljallangan Sinf *</label>
+        <select id="test-grade" class="form-select" required>
+          <option value="Barchasi">Barcha sinflar uchun</option>
+          {% for c in classes %}
+            <option value="{{ c }}">{{ c }} sinf</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ajratilgan Vaqt (Daqiqada) *</label>
+        <input type="number" id="test-duration" class="form-input" min="1" max="180" value="15" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">
+          <i class="fa-regular fa-clock" style="color: #00b4d8;"></i> Boshlanish Vaqti (O'quvchilarga ochilish)
+        </label>
+        <input type="datetime-local" id="test-start-time" class="form-input">
+        <small style="font-size: 0.74rem; color: var(--text-muted); display: block; margin-top: 3px;">
+          Bo'sh bo'lsa, darhol o'quvchilarga ko'rinadi va ishlanadi
+        </small>
+      </div>
+      <div class="form-group">
+        <label class="form-label">
+          <i class="fa-solid fa-hourglass-end" style="color: #ef4444;"></i> Tugash Vaqti (Muddat / Yopilish)
+        </label>
+        <input type="datetime-local" id="test-end-time" class="form-input">
+        <small style="font-size: 0.74rem; color: var(--text-muted); display: block; margin-top: 3px;">
+          Ixtiyoriy. Shu vaqtdan so'ng qabul yopiladi
+        </small>
+      </div>
+      <div class="form-group">
+        <label class="form-label">
+          <i class="fa-solid fa-arrows-rotate" style="color: #10b981;"></i> Ruxsat Etilgan Urinishlar (Dostup) *
+        </label>
+        <select id="test-max-attempts" class="form-select" required>
+          <option value="1" selected>1 marta (Oddiy test / Nazorat ishi)</option>
+          <option value="2">2 marta topshirishga ruxsat</option>
+          <option value="3">3 marta topshirishga ruxsat</option>
+          <option value="5">5 marta topshirishga ruxsat</option>
+          <option value="0">Cheksiz (Mustaqil mashq rejimi)</option>
+        </select>
+        <small style="font-size: 0.74rem; color: var(--text-muted); display: block; margin-top: 3px;">
+          O'quvchi bu testni necha marta topshira olishi
+        </small>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Qisqacha tavsif (Ixtiyoriy)</label>
+      <textarea id="test-desc" class="form-textarea" rows="2" placeholder="O'quvchilar uchun qo'shimcha tushuntirish..."></textarea>
+    </div>
+
+    <!-- Questions Container -->
+    <div style="margin-top: 1.5rem; margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; background: rgba(2, 132, 199, 0.05); padding: 14px 18px; border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
+      <div>
+        <h3 style="font-size: 1.2rem; font-weight: 800; color: var(--text-main); margin: 0 0 4px 0;">Savollar Ro'yxati</h3>
+        <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0;">Savollarni qo'lda qo'shing yoki tayyor Excel / Word faylidan import qiling</p>
+      </div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+        <!-- Download Samples -->
+        <a href="/static/samples/diamond_test_namunasi.xlsx" download="diamond_test_namunasi.xlsx" class="btn btn-secondary btn-sm" title="Namuna Excel faylini yuklab olish" style="font-size: 0.8rem;">
+          <i class="fa-solid fa-file-excel" style="color: #10b981;"></i> Excel Namuna
+        </a>
+        <a href="/static/samples/diamond_test_namunasi.docx" download="diamond_test_namunasi.docx" class="btn btn-secondary btn-sm" title="Namuna Word faylini yuklab olish" style="font-size: 0.8rem;">
+          <i class="fa-solid fa-file-word" style="color: #0284c7;"></i> Word Namuna
+        </a>
+
+        <!-- Import File Button -->
+        <span class="btn-import-wrap" id="import-wrap-questions-container">
+          <label class="btn btn-success btn-sm" style="cursor: pointer; margin: 0; font-size: 0.82rem; display: inline-flex; align-items: center; gap: 6px;">
+            <i class="fa-solid fa-file-import"></i> Excel / Word dan yuklash
+            <input type="file" accept=".xlsx,.xls,.docx,.doc" style="display: none;" onchange="handleImportQuestions(this, 'questions-container')">
+          </label>
+        </span>
+
+        <button type="button" class="btn btn-diamond-cyan btn-sm" onclick="addQuestionBlock('questions-container')">
+          <i class="fa-solid fa-plus"></i> Yangi Savol Qo'shish
+        </button>
+      </div>
+    </div>
+
+    <div id="questions-container" style="display: flex; flex-direction: column; gap: 1rem;">
+      <!-- Dynamic questions -->
+    </div>
+
+    <div style="margin-top: 1.75rem; display: flex; justify-content: flex-end; gap: 10px;">
+      <button type="button" class="btn btn-secondary" onclick="switchTeacherTab('tests')">Bekor Qilish</button>
+      <button type="submit" class="btn btn-success">
+        <i class="fa-solid fa-floppy-disk"></i> Testni Saqlash va Chop Etish
+      </button>
+    </div>
+  </form>
+</div>
+
+<!-- TAB 3: SUBMISSIONS JOURNAL -->
+<div id="tch-tab-results" class="panel" style="display: none;">
+  <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+    <div class="panel-title">
+      <i class="fa-solid fa-clipboard-check" style="color: var(--success);"></i> O'quvchilar Test Natijalari Jurnali
+    </div>
+    <div>
+      <button class="btn btn-warning btn-sm" onclick="promptTestSelectionForCoinDistribution()" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; font-weight: 850; border: none; border-radius: 9999px; padding: 7px 16px;">
+        <i class="fa-solid fa-trophy"></i> 🏆 Test Natijalari Bo'yicha Coin Taqsimlash
+      </button>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="custom-table">
+      <thead>
+        <tr>
+          <th>O'quvchi F.I.Sh</th>
+          <th>Sinfi</th>
+          <th>Test Nomi</th>
+          <th>To'g'ri / Jami</th>
+          <th>Foiz</th>
+          <th>Sarflangan Vaqt</th>
+          <th>Topshirilgan Sana</th>
+          <th style="text-align: right;">🪙 Rag'batlantirish</th>
+        </tr>
+      </thead>
+      <tbody id="tch-submissions-tbody">
+        <!-- Rendered via JS -->
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- TAB 4: TEACHER ANALYTICS -->
+<div id="tch-tab-analytics" class="panel" style="display: none;">
+  <div class="panel-header" style="margin-bottom: 1.5rem;">
+    <div>
+      <div class="panel-title" style="font-size: 1.3rem; font-weight: 850;">
+        <i class="fa-solid fa-chart-pie" style="color: var(--primary);"></i> O'quvchilar O'zlashtirish Dinamikasi va Natijadorligi
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin: 4px 0 0 0;">
+        Testlar bo'yicha o'rtacha ballar va o'quvchilarning umumiy baho toifalari balansi
+      </p>
+    </div>
+  </div>
+
+  <!-- Dual Visual Charts -->
+  <div class="analytics-charts-grid">
+    <!-- Chart 1: Tests Performance -->
+    <div class="analytics-chart-card">
+      <div class="analytics-chart-header">
+        <h4 class="analytics-chart-title">
+          <i class="fa-solid fa-chart-column" style="color: #00b4d8;"></i> Testlar Natijadorligi (%)
+        </h4>
+        <span class="pill-badge pill-cyan">Bar Grafik</span>
+      </div>
+      <div class="analytics-chart-canvas-wrap">
+        <canvas id="tchTestsChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Chart 2: Grade Categories Donut -->
+    <div class="analytics-chart-card">
+      <div class="analytics-chart-header">
+        <h4 class="analytics-chart-title">
+          <i class="fa-solid fa-chart-pie" style="color: #10b981;"></i> O'quvchilar Baholar Balansi
+        </h4>
+        <span class="pill-badge pill-green">Donut Grafik</span>
+      </div>
+      <div class="analytics-chart-canvas-wrap">
+        <canvas id="tchDonutChart"></canvas>
+      </div>
+      <div class="chart-legend-row">
+        <div class="chart-legend-item"><span class="chart-legend-dot" style="background: #10b981;"></span> A'lo (85-100%)</div>
+        <div class="chart-legend-item"><span class="chart-legend-dot" style="background: #00b4d8;"></span> Yaxshi (70-84%)</div>
+        <div class="chart-legend-item"><span class="chart-legend-dot" style="background: #f59e0b;"></span> Qoniqarli (50-69%)</div>
+        <div class="chart-legend-item"><span class="chart-legend-dot" style="background: #ef4444;"></span> Qayta (&lt;50%)</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top: 1.5rem; margin-bottom: 0.75rem;">
+    <h4 style="font-size: 1.05rem; font-weight: 800; color: var(--text-main); margin: 0;">
+      <i class="fa-solid fa-table-list" style="color: #a855f7;"></i> Testlar Kesimidagi Natijalar Jurnali
+    </h4>
+  </div>
+  <div class="table-responsive">
+    <table class="custom-table">
+      <thead>
+        <tr>
+          <th>Test Mavzusi</th>
+          <th>Sinf</th>
+          <th>Topshirganlar</th>
+          <th>O'rtacha Ball</th>
+          <th>O'zlashtirish Darajasi</th>
+        </tr>
+      </thead>
+      <tbody id="tch-analytics-tbody">
+        <!-- Rendered via JS -->
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- TAB 5: TEACHER PROFILE & AVATAR -->
+<div id="tch-tab-profile" class="panel" style="display: none;">
+  <div class="panel-header">
+    <div class="panel-title">
+      <i class="fa-solid fa-user-gear" style="color: #00b4d8;"></i> O'qituvchi Profili va Suratni Boshqarish
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; align-items: start;">
+    <!-- Profile Card Preview (Diamond School Poster Style) -->
+    <div style="background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: var(--radius-lg); padding: 2rem; text-align: center;">
+      <div class="avatar-wrap-modern" style="width: 120px; height: 120px; margin: 0 auto 1.25rem auto; cursor: pointer;" onclick="document.getElementById('tch-avatar-file-input').click()" title="Suratni almashtirish uchun bosing">
+        <img id="tch-profile-avatar-img" src="" alt="Teacher Avatar" class="avatar-img-modern" onerror="this.src='https://api.dicebear.com/7.x/initials/svg?seed=TC&backgroundColor=0284c7'">
+        <div class="avatar-edit-overlay">
+          <i class="fa-solid fa-camera"></i> Rasm yuklash
+        </div>
+      </div>
+      <input type="file" id="tch-avatar-file-input" accept="image/*" style="display: none;" onchange="previewTeacherAvatar(this)">
+      <small style="display: block; color: var(--text-muted); font-size: 0.78rem; margin-bottom: 1rem;">
+        Asosiy saytdagi posterda ko'rinadigan suratingizni yuklang
+      </small>
+
+      <h2 style="font-size: 1.35rem; font-weight: 800; margin-bottom: 4px;" id="tch-card-name">O'qituvchi Ismi</h2>
+      <span class="badge badge-primary" style="font-size: 0.85rem; padding: 4px 12px; margin-bottom: 1rem;" id="tch-card-subject">Fan Ustozi</span>
+      
+      <p id="tch-card-bio" style="font-size: 0.88rem; color: var(--text-muted); font-style: italic; margin-bottom: 1rem;">
+        "O'quvchilarga chuqur bilim va ishonch bag'ishlaymiz."
+      </p>
+
+      <div style="display: flex; flex-direction: column; gap: 8px; text-align: left; margin-top: 1rem; border-top: 1px solid var(--gray-200); padding-top: 1rem; font-size: 0.9rem;">
+        <div><i class="fa-solid fa-at" style="color: var(--primary); width: 22px;"></i> Login: <code id="tch-card-username">teacher1</code></div>
+        <div><i class="fa-solid fa-phone" style="color: var(--success); width: 22px;"></i> Telefon: <strong id="tch-card-phone">+998 90 000 00 00</strong></div>
+      </div>
+    </div>
+
+    <!-- Edit Form -->
+    <div>
+      <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 1rem; color: var(--text-main);">
+        Pedagogik Ma'lumotlarni Yangilash
+      </h3>
+      <form id="tch-profile-form" onsubmit="handleSaveTeacherProfile(event)">
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label class="form-label">To'liq F.I.Sh *</label>
+          <input type="text" id="tch-prof-fullname" class="form-input" required>
+        </div>
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label class="form-label">O'qitadigan Faningiz *</label>
+          <select id="tch-prof-subject" class="form-select" required>
+            {% for s in subjects %}
+              <option value="{{ s }}">{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label class="form-label">Telefon Raqamingiz</label>
+          <input type="text" id="tch-prof-phone" class="form-input" placeholder="+998 90 123 45 67">
+        </div>
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label class="form-label">Pedagogik Shior / Tajribangiz (Saytda ko'rinadi)</label>
+          <textarea id="tch-prof-bio" class="form-textarea" rows="2" placeholder="Masalan: 8 yillik pedagogik tajriba, fan olimpiadalari mutaxassisi..."></textarea>
+        </div>
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+          <label class="form-label">Yangi Parol (Parolni yangilamoqchi bo'lsangiz kiriting)</label>
+          <input type="password" id="tch-prof-password" class="form-input" placeholder="O'zgartirmaslik uchun bo'sh qoldiring">
+        </div>
+        <div id="tch-prof-msg" style="display: none; padding: 10px; border-radius: 8px; margin-bottom: 1rem; font-size: 0.88rem;"></div>
+        <button type="submit" class="btn btn-primary" id="tch-save-profile-btn" style="width: 100%;">
+          <i class="fa-solid fa-floppy-disk"></i> Ma'lumotlarni Saqlash
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ================= TAB: DARS FAOLLIGI & COINLAR ================= -->
+<div id="tch-tab-coins" class="panel" style="display: none;">
+  <div class="panel-header" style="flex-wrap: wrap; gap: 1rem; border-bottom: 1px solid rgba(245, 158, 11, 0.25); padding-bottom: 1.25rem;">
+    <div>
+      <div class="panel-title" style="color: #f59e0b; font-size: 1.35rem; display: flex; align-items: center; gap: 10px;">
+        <i class="fa-solid fa-coins"></i> Dars Faolligi & O'quvchilarni Rag'batlantirish
+      </div>
+      <p style="font-size: 0.88rem; color: var(--text-muted); margin: 6px 0 0 0;">
+        Testdan tashqari dars jarayonida faol qatnashgan, doskada misol yechgan yoki intizomli o'quvchilarga Diamond Coin bering.
+      </p>
+    </div>
+    <div style="display: flex; gap: 8px; align-items: center;">
+      <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); padding: 8px 14px; font-size: 0.85rem; border-radius: 9999px;">
+        <i class="fa-solid fa-shield-halved"></i> Tahrirlash: Ruxsat etilgan • O'chirish: Taqiqlangan
+      </span>
+    </div>
+  </div>
+
+  <!-- 1. DARS FAOLLIGI UCHUN COIN BERISH (SINF VA O'QUVCHI TANLASH) -->
+  <div style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.05), rgba(15, 23, 42, 0.5)); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 16px; padding: 1.5rem; margin-top: 1.25rem; margin-bottom: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+      <div>
+        <h3 style="font-size: 1.1rem; font-weight: 800; color: var(--text-main); margin: 0; display: flex; align-items: center; gap: 8px;">
+          <i class="fa-solid fa-chalkboard-user" style="color: #f59e0b;"></i> Darsdagi O'quvchilarga Coin Taqdim Qilish
+        </h3>
+        <span style="font-size: 0.82rem; color: var(--text-muted);">Sinfni tanlang va kerakli o'quvchi qarshisidagi tugma orqali darsdagi faolligi uchun coin bering</span>
+      </div>
+      <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <label style="font-size: 0.85rem; font-weight: 700; color: var(--text-muted); white-space: nowrap;">Sinf:</label>
+          <select id="tch-classroom-grade-select" class="form-select" onchange="loadClassroomStudents()" style="min-width: 130px; padding: 6px 12px; font-size: 0.88rem;">
+            <option value="Barchasi">Barcha sinflar</option>
+            {% for c in classes %}
+              <option value="{{ c }}">{{ c }} sinf</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="position: relative;">
+          <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.85rem;"></i>
+          <input type="text" id="tch-classroom-search-input" class="form-input" placeholder="O'quvchi F.I.Sh..." oninput="debounceClassroomSearch()" style="padding-left: 32px; padding-top: 6px; padding-bottom: 6px; font-size: 0.88rem; width: 180px;">
+        </div>
+      </div>
+    </div>
+
+    <!-- O'quvchilar Cards / Grid -->
+    <div id="tch-classroom-students-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; max-height: 420px; overflow-y: auto; padding-right: 4px;">
+      <!-- Dynamically filled with student cards -->
+      <div style="grid-column: 1 / -1; text-align: center; padding: 2rem; color: var(--text-muted);">
+        <i class="fa-solid fa-spinner fa-spin"></i> O'quvchilar ro'yxati yuklanmoqda...
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. BERILGAN COINLAR TARIXI VA TAHRIRLASH JURNALI -->
+  <div style="margin-top: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+      <div>
+        <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--text-main); margin: 0; display: flex; align-items: center; gap: 8px;">
+          <i class="fa-solid fa-clock-rotate-left" style="color: #0284c7;"></i> Mening Bergan Coinlarim Jurnali
+        </h3>
+        <span style="font-size: 0.82rem; color: var(--text-muted);">Siz tomonidan berilgan barcha rag'batlantirishlar (dars faolligi va testlar bo'yicha)</span>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="loadTeacherCoinHistory()" style="font-size: 0.82rem;">
+        <i class="fa-solid fa-arrows-rotate"></i> Yangilash
+      </button>
+    </div>
+
+    <!-- Security Info Banner -->
+    <div style="background: rgba(2, 132, 199, 0.08); border: 1px solid rgba(2, 132, 199, 0.25); border-radius: 10px; padding: 0.75rem 1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 10px; font-size: 0.85rem; color: #38bdf8;">
+      <i class="fa-solid fa-circle-info" style="font-size: 1.1rem;"></i>
+      <div>
+        <strong>Eslatma:</strong> O'qituvchilar o'zlari bergan coin miqdorini va izohini istalgan payt <strong>Tahrirlash (Edit)</strong> qilib to'g'rilashlari mumkin. O'quvchi hisobidagi balans avtomatik qayta hisoblanadi. O'chirish esa taqiqlangan.
+      </div>
+    </div>
+
+    <!-- History Table -->
+    <div class="table-responsive" style="border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden;">
+      <table class="custom-table" style="margin: 0;">
+        <thead>
+          <tr style="background: var(--bg-card);">
+            <th>O'quvchi</th>
+            <th>Sinfi</th>
+            <th>Coin Miqdori</th>
+            <th>Turi</th>
+            <th>Rag'batlantirish Sababi</th>
+            <th>Sana va Vaqt</th>
+            <th style="text-align: right; width: 130px;">Amal</th>
+          </tr>
+        </thead>
+        <tbody id="tch-coin-history-tbody">
+          <!-- Filled dynamically -->
+          <tr>
+            <td colspan="7" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">
+              <i class="fa-solid fa-spinner fa-spin"></i> Tarix yuklanmoqda...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+    </main>
+  </div>
+
+<!-- MODAL: DARS FAOLLIGI UCHUN COIN BERISH (TESTDAN TASHQARI) -->
+<div id="modal-classroom-award-coin" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeClassroomAwardCoinModal()">
+  <div class="modal-content" style="max-width: 500px; padding: 2rem; border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 20px;">
+    <div class="modal-header" style="border-bottom: 1px solid rgba(245, 158, 11, 0.2); padding-bottom: 1rem; margin-bottom: 1.25rem;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(245, 158, 11, 0.2); display: flex; align-items: center; justify-content: center; color: #f59e0b; font-size: 1.4rem;">
+          <i class="fa-solid fa-award"></i>
+        </div>
+        <div>
+          <h3 class="modal-title" style="margin: 0; font-size: 1.25rem; font-weight: 850; color: var(--text-main);">Dars Faolligi Uchun Coin</h3>
+          <span style="font-size: 0.82rem; color: var(--text-muted);">Darsdagi a'lo ishtirokni rag'batlantirish</span>
+        </div>
+      </div>
+      <button class="modal-close-btn" onclick="closeClassroomAwardCoinModal()">&times;</button>
+    </div>
+
+    <form id="form-classroom-award-coin" onsubmit="handleClassroomAwardCoinSubmit(event)">
+      <input type="hidden" id="cls-coin-student-id">
+
+      <!-- Student info chip -->
+      <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 12px; padding: 1rem; margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <img id="cls-coin-student-avatar" src="" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid #f59e0b;">
+          <div>
+            <div style="font-size: 1rem; font-weight: 800; color: var(--text-main);" id="cls-coin-student-name">O'quvchi</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);" id="cls-coin-student-grade">Sinf: 9-A</div>
+          </div>
+        </div>
+        <div style="text-align: right;">
+          <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">Joriy balansi:</span>
+          <span style="font-size: 1.05rem; font-weight: 850; color: #f59e0b;" id="cls-coin-student-balance">0 coin</span>
+        </div>
+      </div>
+
+      <!-- Coin Amount Input & Presets -->
+      <div class="form-group" style="margin-bottom: 1.25rem;">
+        <label class="form-label">Taqdim Etiladigan Coin Miqdori *</label>
+        <div style="position: relative;">
+          <i class="fa-solid fa-coins" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #f59e0b; font-size: 1.1rem;"></i>
+          <input type="number" id="cls-coin-amount-input" class="form-input" style="padding-left: 42px; font-weight: 850; font-size: 1.2rem; color: #f59e0b;" min="1" max="500" value="10" required>
+        </div>
+        <!-- Fast presets -->
+        <div style="display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('cls-coin-amount-input').value = 5" style="border-radius: 9999px; font-size: 0.78rem; padding: 4px 10px;">+5</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('cls-coin-amount-input').value = 10" style="border-radius: 9999px; font-size: 0.78rem; padding: 4px 10px;">+10</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('cls-coin-amount-input').value = 15" style="border-radius: 9999px; font-size: 0.78rem; padding: 4px 10px;">+15</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('cls-coin-amount-input').value = 20" style="border-radius: 9999px; font-size: 0.78rem; padding: 4px 10px;">+20</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('cls-coin-amount-input').value = 50" style="border-radius: 9999px; font-size: 0.78rem; padding: 4px 10px;">+50 🌟</button>
+        </div>
+      </div>
+
+      <!-- Quick Reason Templates -->
+      <div class="form-group" style="margin-bottom: 1.25rem;">
+        <label class="form-label">Darsdagi Faollik Turi / Sababi *</label>
+        <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="selectClassroomReason('Darsda faol qatnashgani va to\'g\'ri javoblari uchun 🌟')" style="text-align: left; font-size: 0.8rem; padding: 6px 10px; border-radius: 8px;">
+            🌟 Darsda faol qatnashgani va to'g'ri javoblari uchun
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="selectClassroomReason('Doskada murakkab misol/masalani a\'lo yechgani uchun ✍️')" style="text-align: left; font-size: 0.8rem; padding: 6px 10px; border-radius: 8px;">
+            ✍️ Doskada murakkab misol/masalani a'lo yechgani uchun
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="selectClassroomReason('Uy vazifasini namunali va ijodiy bajargani uchun 📚')" style="text-align: left; font-size: 0.8rem; padding: 6px 10px; border-radius: 8px;">
+            📚 Uy vazifasini namunali va ijodiy bajargani uchun
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="selectClassroomReason('Darsdagi qizg\'in bahs-munozara/bellashuvda g\'oliblik uchun 🏆')" style="text-align: left; font-size: 0.8rem; padding: 6px 10px; border-radius: 8px;">
+            🏆 Darsdagi qizg'in bahs-munozara/bellashuvda g'oliblik uchun
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="selectClassroomReason('Namunali intizom, xulq-atvor va yordam bergani uchun 💎')" style="text-align: left; font-size: 0.8rem; padding: 6px 10px; border-radius: 8px;">
+            💎 Namunali intizom, xulq-atvor va yordam bergani uchun
+          </button>
+        </div>
+        <input type="text" id="cls-coin-reason-input" class="form-input" placeholder="Yoki o'zingiz sababni yozing..." required value="Darsda faol qatnashgani va to'g'ri javoblari uchun 🌟">
+      </div>
+
+      <div id="cls-coin-error" class="alert alert-danger" style="display: none; margin-bottom: 1rem; font-size: 0.85rem;"></div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn btn-secondary" onclick="closeClassroomAwardCoinModal()">Bekor qilish</button>
+        <button type="submit" id="btn-cls-submit-coin" class="btn btn-warning" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; font-weight: 850; border: none; border-radius: 9999px; padding: 10px 24px;">
+          <i class="fa-solid fa-gift"></i> Coin Berish
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: BERILGAN COINNI TAHRIRLASH (EDIT) -->
+<div id="modal-teacher-edit-coin" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeTeacherEditCoinModal()">
+  <div class="modal-content" style="max-width: 480px; padding: 2rem; border: 1px solid rgba(2, 132, 199, 0.4); border-radius: 20px;">
+    <div class="modal-header" style="border-bottom: 1px solid rgba(2, 132, 199, 0.2); padding-bottom: 1rem; margin-bottom: 1.25rem;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(2, 132, 199, 0.2); display: flex; align-items: center; justify-content: center; color: #38bdf8; font-size: 1.3rem;">
+          <i class="fa-solid fa-pen-to-square"></i>
+        </div>
+        <div>
+          <h3 class="modal-title" style="margin: 0; font-size: 1.25rem; font-weight: 850; color: var(--text-main);">Berilgan Coinni Tahrirlash</h3>
+          <span style="font-size: 0.82rem; color: var(--text-muted);">Miqdor yoki izohni to'g'rilash</span>
+        </div>
+      </div>
+      <button class="modal-close-btn" onclick="closeTeacherEditCoinModal()">&times;</button>
+    </div>
+
+    <form id="form-teacher-edit-coin" onsubmit="handleTeacherEditCoinSubmit(event)">
+      <input type="hidden" id="edit-coin-tx-id">
+
+      <!-- Student Info Banner -->
+      <div style="background: rgba(2, 132, 199, 0.08); border: 1px solid rgba(2, 132, 199, 0.25); border-radius: 12px; padding: 0.9rem 1rem; margin-bottom: 1.25rem;">
+        <div style="font-size: 0.98rem; font-weight: 800; color: var(--text-main);" id="edit-coin-student-name">O'quvchi Ismi</div>
+        <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 3px;" id="edit-coin-old-info">Oldingi miqdor: +10 coin</div>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 1.25rem;">
+        <label class="form-label">Yangi Coin Miqdori *</label>
+        <div style="position: relative;">
+          <i class="fa-solid fa-coins" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #f59e0b; font-size: 1.1rem;"></i>
+          <input type="number" id="edit-coin-amount-input" class="form-input" style="padding-left: 42px; font-weight: 850; font-size: 1.2rem; color: #f59e0b;" min="1" max="500" required>
+        </div>
+        <span style="font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; display: block;">
+          * Miqdor o'zgarganda o'quvchining umumiy balansi avtomatik farqiga qarab yangilanadi.
+        </span>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 1.25rem;">
+        <label class="form-label">Rag'batlantirish Sababi / Izoh *</label>
+        <input type="text" id="edit-coin-reason-input" class="form-input" required>
+      </div>
+
+      <div id="edit-coin-error" class="alert alert-danger" style="display: none; margin-bottom: 1rem; font-size: 0.85rem;"></div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn btn-secondary" onclick="closeTeacherEditCoinModal()">Bekor qilish</button>
+        <button type="submit" id="btn-edit-coin-submit" class="btn btn-primary" style="font-weight: 850; border-radius: 9999px; padding: 10px 22px;">
+          <i class="fa-solid fa-floppy-disk"></i> Saqlash va Yangilash
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<!-- MODAL: TESTNI TAHRIRLASH VA NOMINI YANGILASH -->
+<div id="modal-edit-test" class="modal-overlay" style="display: none;">
+  <div class="modal-content" style="max-width: 750px;">
+    <div class="modal-header">
+      <h3 style="font-size: 1.25rem; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+        <i class="fa-solid fa-pen-to-square" style="color: var(--primary);"></i> Testni Tahrirlash va Nomini Saqlash
+      </h3>
+      <button class="close-btn" onclick="closeEditTestModal()">&times;</button>
+    </div>
+    <form id="form-edit-test" onsubmit="handleSaveEditTest(event)">
+      <input type="hidden" id="edit-test-id">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+        <div class="form-group">
+          <label class="form-label">Test Nomi / Mavzusi *</label>
+          <input type="text" id="edit-test-title" class="form-input" placeholder="Testning yangi yoki to'liq nomi..." required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tegishli Fan (Предмет) *</label>
+          <select id="edit-test-subject" class="form-select" required>
+            {% for s in subjects %}
+              <option value="{{ s }}">{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Test Tili (Язык теста) *</label>
+          <select id="edit-test-language" class="form-select" required>
+            <option value="uz">🇺🇿 O'zbek tili (UZ)</option>
+            <option value="ru">🇷🇺 Русский язык (RU)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Mo'ljallangan Sinf *</label>
+          <select id="edit-test-grade" class="form-select" required>
+            <option value="Barchasi">Barcha sinflar uchun</option>
+            {% for c in classes %}
+              <option value="{{ c }}">{{ c }} sinf</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ajratilgan Vaqt (Daqiqada) *</label>
+          <input type="number" id="edit-test-duration" class="form-input" min="1" max="180" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">
+            <i class="fa-regular fa-clock" style="color: #00b4d8;"></i> Boshlanish Vaqti (O'quvchilarga ochilish)
+          </label>
+          <input type="datetime-local" id="edit-test-start-time" class="form-input">
+          <small style="font-size: 0.74rem; color: var(--text-muted); display: block; margin-top: 3px;">
+            Bo'sh bo'lsa, darhol o'quvchilarga ko'rinadi va ishlanadi
+          </small>
+        </div>
+        <div class="form-group">
+          <label class="form-label">
+            <i class="fa-solid fa-hourglass-end" style="color: #ef4444;"></i> Tugash Vaqti (Muddat / Yopilish)
+          </label>
+          <input type="datetime-local" id="edit-test-end-time" class="form-input">
+          <small style="font-size: 0.74rem; color: var(--text-muted); display: block; margin-top: 3px;">
+            Ixtiyoriy. Shu vaqtdan so'ng qabul to'xtatiladi
+          </small>
+        </div>
+        <div class="form-group">
+          <label class="form-label">
+            <i class="fa-solid fa-arrows-rotate" style="color: #10b981;"></i> Ruxsat Etilgan Urinishlar (Dostup) *
+          </label>
+          <select id="edit-test-max-attempts" class="form-select" required>
+            <option value="1">1 marta (Oddiy test / Nazorat ishi)</option>
+            <option value="2">2 marta topshirishga ruxsat</option>
+            <option value="3">3 marta topshirishga ruxsat</option>
+            <option value="5">5 marta topshirishga ruxsat</option>
+            <option value="0">Cheksiz (Mustaqil mashq rejimi)</option>
+          </select>
+          <small style="font-size: 0.74rem; color: var(--text-muted); display: block; margin-top: 3px;">
+            O'quvchi bu testni necha marta topshira olishi
+          </small>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Qisqacha tavsif (Ixtiyoriy)</label>
+        <textarea id="edit-test-desc" class="form-textarea" rows="2"></textarea>
+      </div>
+
+      <!-- Edit Questions Container -->
+      <div style="margin-top: 1.5rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+        <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--text-main); margin: 0;">Savollar va Variantlar</h3>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+          <a href="/static/samples/diamond_test_namunasi.xlsx" download="diamond_test_namunasi.xlsx" class="btn btn-secondary btn-sm" title="Namuna Excel fayli" style="font-size: 0.8rem;">
+            <i class="fa-solid fa-file-excel" style="color: #10b981;"></i> Excel
+          </a>
+          <a href="/static/samples/diamond_test_namunasi.docx" download="diamond_test_namunasi.docx" class="btn btn-secondary btn-sm" title="Namuna Word fayli" style="font-size: 0.8rem;">
+            <i class="fa-solid fa-file-word" style="color: #0284c7;"></i> Word
+          </a>
+          <span class="btn-import-wrap" id="import-wrap-edit-questions-container">
+            <label class="btn btn-success btn-sm" style="cursor: pointer; margin: 0; font-size: 0.82rem; display: inline-flex; align-items: center; gap: 6px;">
+              <i class="fa-solid fa-file-import"></i> Fayldan yuklash
+              <input type="file" accept=".xlsx,.xls,.docx,.doc" style="display: none;" onchange="handleImportQuestions(this, 'edit-questions-container')">
+            </label>
+          </span>
+          <button type="button" class="btn btn-diamond-cyan btn-sm" onclick="addQuestionBlock('edit-questions-container')">
+            <i class="fa-solid fa-plus"></i> Yangi Savol
+          </button>
+        </div>
+      </div>
+
+      <div id="edit-questions-container" style="display: flex; flex-direction: column; gap: 1rem; max-height: 400px; overflow-y: auto; padding-right: 6px;">
+        <!-- Filled dynamically -->
+      </div>
+
+      <div id="edit-test-error" style="color: var(--danger); font-size: 0.88rem; margin-top: 1rem; display: none;"></div>
+      <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn btn-secondary" onclick="closeEditTestModal()">Bekor qilish</button>
+        <button type="submit" class="btn btn-diamond-cyan">
+          <i class="fa-solid fa-floppy-disk"></i> O'zgarishlarni Saqlash
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- O'QITUVCHI TOMONIDAN COIN BERISH MODALI -->
+<div id="modal-teacher-award-coin" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeTeacherAwardCoinModal()">
+  <div class="modal-content" style="max-width: 460px; padding: 2rem; border: 1px solid rgba(245, 158, 11, 0.4);">
+    <div class="modal-header" style="border-bottom: 1px solid rgba(245, 158, 11, 0.2); padding-bottom: 1rem; margin-bottom: 1.5rem;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="width: 42px; height: 42px; border-radius: 10px; background: rgba(245, 158, 11, 0.2); display: flex; align-items: center; justify-content: center; color: #f59e0b; font-size: 1.3rem;">
+          <i class="fa-solid fa-coins"></i>
+        </div>
+        <div>
+          <h3 class="modal-title" style="margin: 0; font-size: 1.2rem;">O'quvchiga Coin Berish</h3>
+          <span style="font-size: 0.8rem; color: var(--text-muted);" id="tch-coin-student-subtitle">Rag'batlantirish</span>
+        </div>
+      </div>
+      <button class="modal-close-btn" onclick="closeTeacherAwardCoinModal()">&times;</button>
+    </div>
+
+    <form id="form-teacher-award-coin" onsubmit="handleTeacherAwardCoinSubmit(event)">
+      <input type="hidden" id="tch-coin-student-id">
+      <input type="hidden" id="tch-coin-result-id">
+
+      <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 1.2rem;">
+        <div style="font-size: 0.95rem; font-weight: 800; color: var(--text-main);" id="tch-coin-student-name">O'quvchi Ismi</div>
+        <div style="font-size: 0.8rem; color: #f59e0b; margin-top: 3px;" id="tch-coin-test-info">Test natijasi uchun</div>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 1rem;">
+        <label class="form-label">Taqdim Etiladigan Coin Miqdori *</label>
+        <div style="position: relative;">
+          <i class="fa-solid fa-coins" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #f59e0b;"></i>
+          <input type="number" id="tch-coin-amount-input" class="form-input" style="padding-left: 38px; font-weight: 850; font-size: 1.1rem; color: #f59e0b;" min="1" max="500" value="20" required>
+        </div>
+        <!-- Fast presets -->
+        <div style="display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('tch-coin-amount-input').value = 10" style="border-radius: 9999px; font-size: 0.78rem; padding: 4px 10px;">+10 Coin</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('tch-coin-amount-input').value = 20" style="border-radius: 9999px; font-size: 0.78rem; padding: 4px 10px;">+20 Coin</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('tch-coin-amount-input').value = 30" style="border-radius: 9999px; font-size: 0.78rem; padding: 4px 10px;">+30 Coin</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('tch-coin-amount-input').value = 50" style="border-radius: 9999px; font-size: 0.78rem; padding: 4px 10px;">+50 Coin 🌟</button>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 1.5rem;">
+        <label class="form-label">Rag'batlantirish Sababi *</label>
+        <input type="text" id="tch-coin-reason-input" class="form-input" placeholder="Testdagi a'lo natijasi uchun" required>
+      </div>
+
+      <div id="tch-coin-error" class="alert alert-danger" style="display: none; margin-bottom: 1rem; font-size: 0.85rem;"></div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="btn btn-secondary" onclick="closeTeacherAwardCoinModal()">Bekor qilish</button>
+        <button type="submit" id="btn-tch-submit-coin" class="btn btn-warning" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; font-weight: 850; border: none; border-radius: 9999px; padding: 9px 20px;">
+          <i class="fa-solid fa-gift"></i> Coin Berish
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- TEST BO'YICHA TOP O'QUVCHILARGA COIN TAQSIMLASH MODALI -->
+<div id="modal-test-distribute-coins" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeTestDistributeCoinsModal()">
+  <div class="modal-content" style="max-width: 820px; padding: 2rem; border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 20px;">
+    <div class="modal-header" style="border-bottom: 1px solid rgba(245, 158, 11, 0.2); padding-bottom: 1rem; margin-bottom: 1.25rem;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(217, 119, 6, 0.15)); display: flex; align-items: center; justify-content: center; color: #f59e0b; font-size: 1.4rem;">
+          <i class="fa-solid fa-trophy"></i>
+        </div>
+        <div>
+          <h3 class="modal-title" style="margin: 0; font-size: 1.3rem; font-weight: 850; color: var(--text-main);">
+            Test Natijalari Bo'yicha Coin Taqsimlash
+          </h3>
+          <span style="font-size: 0.85rem; color: var(--text-muted);" id="dist-test-subtitle">Yuklanmoqda...</span>
+        </div>
+      </div>
+      <button class="modal-close-btn" onclick="closeTestDistributeCoinsModal()">&times;</button>
+    </div>
+
+    <!-- O'QITUVCHI BELGILAYDIGAN TAQSIMLASH SOZLAMALARI -->
+    <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.28); border-radius: 14px; padding: 1.15rem; margin-bottom: 1.25rem;">
+      <div style="margin-bottom: 0.85rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <div>
+          <strong style="font-size: 0.98rem; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+            <i class="fa-solid fa-sliders" style="color: #f59e0b;"></i> O'qituvchi Taqsimlash Qoidalari (O'rinlar va Coinlar):
+          </strong>
+          <span style="font-size: 0.8rem; color: var(--text-muted);">
+            Testdan nechta o'quvchiga va 1, 2, 3... o'rinlarga qanchadan coin berilishini o'zingiz belgilang:
+          </span>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="setPresetConfig(3, 50, 30, 20, 0)" style="border-radius: 9999px; font-size: 0.78rem; padding: 4px 10px;">Top 3 (50/30/20)</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="setPresetConfig(5, 60, 40, 25, 10)" style="border-radius: 9999px; font-size: 0.78rem; padding: 4px 10px;">Top 5 (60/40/25/10/10)</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="setPresetConfig(10, 50, 35, 20, 10)" style="border-radius: 9999px; font-size: 0.78rem; padding: 4px 10px;">Top 10</button>
+        </div>
+      </div>
+
+      <!-- Settings Row -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; align-items: end;">
+        <div>
+          <label style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">👥 Nechta o'quvchiga:</label>
+          <input type="number" id="dist-cfg-count" class="form-input" min="1" max="100" value="3" oninput="applyCustomPlaceAllocation()" style="padding: 6px 10px; font-weight: 800; font-size: 0.95rem;">
+        </div>
+        <div>
+          <label style="font-size: 0.78rem; font-weight: 700; color: #f59e0b; display: block; margin-bottom: 4px;">🥇 1-o'rin coini:</label>
+          <input type="number" id="dist-cfg-p1" class="form-input" min="0" max="500" value="50" oninput="applyCustomPlaceAllocation()" style="padding: 6px 10px; font-weight: 800; font-size: 0.95rem; color: #f59e0b;">
+        </div>
+        <div>
+          <label style="font-size: 0.78rem; font-weight: 700; color: #cbd5e1; display: block; margin-bottom: 4px;">🥈 2-o'rin coini:</label>
+          <input type="number" id="dist-cfg-p2" class="form-input" min="0" max="500" value="30" oninput="applyCustomPlaceAllocation()" style="padding: 6px 10px; font-weight: 800; font-size: 0.95rem; color: #cbd5e1;">
+        </div>
+        <div>
+          <label style="font-size: 0.78rem; font-weight: 700; color: #d97706; display: block; margin-bottom: 4px;">🥉 3-o'rin coini:</label>
+          <input type="number" id="dist-cfg-p3" class="form-input" min="0" max="500" value="20" oninput="applyCustomPlaceAllocation()" style="padding: 6px 10px; font-weight: 800; font-size: 0.95rem; color: #d97706;">
+        </div>
+        <div>
+          <label style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">🎖️ Keyingi o'rinlar:</label>
+          <input type="number" id="dist-cfg-rest" class="form-input" min="0" max="500" value="10" oninput="applyCustomPlaceAllocation()" style="padding: 6px 10px; font-weight: 800; font-size: 0.95rem;">
+        </div>
+        <div>
+          <button type="button" class="btn btn-warning btn-sm" onclick="applyCustomPlaceAllocation()" style="width: 100%; height: 38px; border-radius: 8px; font-weight: 800; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border: none;">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Taqsimlash
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Participants Table -->
+    <div style="max-height: 360px; overflow-y: auto; margin-bottom: 1.25rem; border: 1px solid var(--border-color); border-radius: 12px;">
+      <table class="custom-table" style="margin: 0; width: 100%;">
+        <thead>
+          <tr style="position: sticky; top: 0; background: var(--bg-card); z-index: 2;">
+            <th style="width: 45px; text-align: center;">O'rin</th>
+            <th>O'quvchi</th>
+            <th>Sinfi</th>
+            <th>To'plagan Ball</th>
+            <th>Vaqti</th>
+            <th style="text-align: right; width: 150px;">🪙 Beriladigan Coin</th>
+          </tr>
+        </thead>
+        <tbody id="dist-participants-tbody">
+          <tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-muted);">Ishtirokchilar yuklanmoqda...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Reason and Actions -->
+    <form id="form-test-distribute-coins" onsubmit="handleTestDistributeCoinsSubmit(event)">
+      <div style="display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: flex-end; margin-bottom: 1rem;">
+        <div class="form-group" style="margin: 0;">
+          <label class="form-label" style="font-weight: 700;">Taqsimlash Sababi / Izoh *</label>
+          <input type="text" id="dist-reason-input" class="form-input" placeholder="Testdagi yuqori natijasi va faol ishtiroki uchun" required>
+        </div>
+        <div style="text-align: right; white-space: nowrap; padding-bottom: 4px;">
+          <div style="font-size: 0.8rem; color: var(--text-muted);">Jami taqsimlanayotgan:</div>
+          <div style="font-size: 1.25rem; font-weight: 900; color: #f59e0b;" id="dist-total-coins-preview">0 Coin</div>
+        </div>
+      </div>
+
+      <div id="dist-error-msg" class="alert alert-danger" style="display: none; margin-bottom: 1rem; font-size: 0.85rem;"></div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border-color); padding-top: 1.25rem;">
+        <button type="button" class="btn btn-secondary" onclick="closeTestDistributeCoinsModal()">Bekor qilish</button>
+        <button type="submit" id="btn-submit-distribute-coins" class="btn btn-warning" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; font-weight: 850; border: none; border-radius: 9999px; padding: 10px 24px;">
+          <i class="fa-solid fa-paper-plane"></i> Coinlarni Taqsimlash va Yuborish
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+</div> <!-- end #teacher-main-dashboard -->
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  let currentTeacher = null;
+  let tchTestsChartInstance = null;
+  let tchDonutChartInstance = null;
+  function toggleTeacherSidebar(show) {
+    const sidebar = document.getElementById('tchSidebar');
+    const backdrop = document.getElementById('tchSidebarBackdrop');
+    if (!sidebar || !backdrop) return;
+
+    const isOpen = (typeof show === 'boolean') ? show : !sidebar.classList.contains('sidebar-open');
+    if (isOpen) {
+      sidebar.classList.add('sidebar-open');
+      backdrop.classList.add('active');
+    } else {
+      sidebar.classList.remove('sidebar-open');
+      backdrop.classList.remove('active');
+    }
+  }
+
+  function switchTeacherTab(name, btn, title, iconClass) {
+    document.getElementById('tch-tab-tests').style.display = (name === 'tests') ? 'block' : 'none';
+    document.getElementById('tch-tab-create').style.display = (name === 'create') ? 'block' : 'none';
+    document.getElementById('tch-tab-results').style.display = (name === 'results') ? 'block' : 'none';
+    document.getElementById('tch-tab-analytics').style.display = (name === 'analytics') ? 'block' : 'none';
+    const profTab = document.getElementById('tch-tab-profile');
+    if (profTab) profTab.style.display = (name === 'profile') ? 'block' : 'none';
+    const coinsTab = document.getElementById('tch-tab-coins');
+    if (coinsTab) coinsTab.style.display = (name === 'coins') ? 'block' : 'none';
+
+    // Sidebar navigation active state
+    document.querySelectorAll('.portal-sidebar-nav .portal-nav-btn').forEach(b => b.classList.remove('active'));
+    if (btn) {
+      btn.classList.add('active');
+    } else {
+      const activeNav = document.getElementById(`tch-nav-${name}`);
+      if (activeNav) activeNav.classList.add('active');
+    }
+
+    // Update Mobile Bar Title
+    const mobileTitle = document.getElementById('tchMobileCurrentTabTitle');
+    if (mobileTitle && title) {
+      mobileTitle.innerHTML = `<i class="fa-solid ${iconClass || 'fa-folder-open'}" style="color: #00b4d8;"></i> ${title}`;
+    }
+
+    // Mobilda menyuni avtomatik yopish
+    toggleTeacherSidebar(false);
+
+    if (name === 'analytics' && teacherStatsCache) {
+      setTimeout(() => {
+        renderTeacherCharts(teacherStatsCache);
+      }, 60);
+    }
+
+    if (name === 'coins') {
+      loadClassroomStudents();
+      loadTeacherCoinHistory();
+    }
+  }
+
+  function previewTeacherAvatar(input) {
+    if (input.files && input.files[0]) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('tch-profile-avatar-img').src = e.target.result;
+      };
+      reader.readAsDataURL(input.files[0]);
+    }
+  }
+
+  async function handleSaveTeacherProfile(e) {
+    e.preventDefault();
+    const msg = document.getElementById('tch-prof-msg');
+    const saveBtn = document.getElementById('tch-save-profile-btn');
+    msg.style.display = 'none';
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saqlanmoqda...';
+
+    const formData = new FormData();
+    formData.append('userId', currentTeacher ? currentTeacher.id : '');
+    formData.append('fullName', document.getElementById('tch-prof-fullname').value.trim());
+    formData.append('subject', document.getElementById('tch-prof-subject').value);
+    formData.append('phone', document.getElementById('tch-prof-phone').value.trim());
+    formData.append('bio', document.getElementById('tch-prof-bio').value.trim());
+
+    const pass = document.getElementById('tch-prof-password').value.trim();
+    if (pass) formData.append('password', pass);
+
+    const file = document.getElementById('tch-avatar-file-input').files[0];
+    if (file) formData.append('avatar', file);
+
+    try {
+      const res = await fetch('/api/profile/update/', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSavedUser(data.user);
+        currentTeacher = data.user;
+        loadTeacherData();
+        msg.textContent = 'Profilingiz va rasmingiz muvaffaqiyatli saqlandi!';
+        msg.style.background = '#dcfce7';
+        msg.style.color = '#15803d';
+        msg.style.display = 'block';
+        document.getElementById('tch-prof-password').value = '';
+      } else {
+        msg.textContent = data.error || 'Saqlashda xatolik yuz berdi!';
+        msg.style.background = '#fee2e2';
+        msg.style.color = '#b91c1c';
+        msg.style.display = 'block';
+      }
+    } catch (err) {
+      msg.textContent = 'Server bilan aloqa uzildi!';
+      msg.style.background = '#fee2e2';
+      msg.style.color = '#b91c1c';
+      msg.style.display = 'block';
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Ma\'lumotlarni Saqlash';
+    }
+  }
+
+
+  let activeMathTargetInput = null;
+
+  window.setActiveMathInput = function(inputEl) {
+    activeMathTargetInput = inputEl;
+  };
+
+  function getCardActiveInput(btn) {
+    const card = btn.closest('.question-builder-card');
+    if (!card) return null;
+    if (activeMathTargetInput && card.contains(activeMathTargetInput)) {
+      return activeMathTargetInput;
+    }
+    return card.querySelector('.qb-question-input');
+  }
+
+  function insertTextAtCursor(input, text) {
+    if (!input) return;
+    input.focus();
+    const start = input.selectionStart !== undefined ? input.selectionStart : input.value.length;
+    const end = input.selectionEnd !== undefined ? input.selectionEnd : input.value.length;
+    const val = input.value;
+    input.value = val.substring(0, start) + text + val.substring(end);
+    const newPos = start + text.length;
+    input.selectionStart = newPos;
+    input.selectionEnd = newPos;
+    updateCardLivePreview(input);
+  }
+
+  window.quickInsertFraction = function(btn) {
+    const input = getCardActiveInput(btn);
+    if (!input) return;
+    const num = prompt("Kasrning SURATINI kiriting (masalan: 5):", "5");
+    if (num === null) return;
+    const den = prompt("Kasrning MAXRAJINI kiriting (masalan: 3):", "3");
+    if (den === null) return;
+    const cleanNum = num.trim() || 'a';
+    const cleanDen = den.trim() || 'b';
+    insertTextAtCursor(input, `\\frac{${cleanNum}}{${cleanDen}}`);
+  };
+
+  window.quickInsertRoot = function(btn) {
+    const input = getCardActiveInput(btn);
+    if (!input) return;
+    const val = prompt("ILDIZ ostidagi ifoda yoki sonni kiriting (masalan: 16 yoki x+1):", "16");
+    if (val === null) return;
+    const cleanVal = val.trim() || 'x';
+    insertTextAtCursor(input, `\\sqrt{${cleanVal}}`);
+  };
+
+  window.quickInsertPower = function(btn) {
+    const input = getCardActiveInput(btn);
+    if (!input) return;
+    const p = prompt("DARAJA ko'rsatkichini kiriting (masalan: 2, 3 yoki n):", "n");
+    if (p === null) return;
+    insertTextAtCursor(input, `^{${p.trim()}}`);
+  };
+
+  window.quickInsertSubscript = function(btn) {
+    const input = getCardActiveInput(btn);
+    if (!input) return;
+    const s = prompt("PASTKI INDEKSni kiriting (masalan: 1, 2 yoki n):", "n");
+    if (s === null) return;
+    insertTextAtCursor(input, `_{${s.trim()}}`);
+  };
+
+  window.quickInsertText = function(btn, str) {
+    const input = getCardActiveInput(btn);
+    if (!input) return;
+    insertTextAtCursor(input, str);
+  };
+
+  window.updateCardLivePreview = function(input) {
+    const card = input.closest('.question-builder-card');
+    if (!card) return;
+
+    if (input.classList.contains('qb-question-input')) {
+      const pBox = card.querySelector('.qb-math-preview-box');
+      if (!pBox) return;
+      const text = input.value.trim();
+      const hasMath = text.includes('/') || text.includes('\\') || text.includes('^') || text.includes('_') || text.includes('√');
+      if (!text || !hasMath) {
+        pBox.style.display = 'none';
+        pBox.innerHTML = '';
+      } else {
+        pBox.style.display = 'block';
+        const formatted = window.formatMathContent ? window.formatMathContent(text) : text;
+        pBox.innerHTML = `<span style="font-size:0.75rem; font-weight:700; color:var(--text-muted); display:block; margin-bottom:4px;"><i class="fa-solid fa-eye"></i> Jonli formula ko'rinishi (O'quvchiga shunday ko'rinadi):</span>${formatted}`;
+      }
+    } else if (input.classList.contains('qb-opt-input')) {
+      const optCard = input.closest('.qb-option-card');
+      if (!optCard) return;
+      let pBox = optCard.querySelector('.qb-opt-math-preview');
+      const text = input.value.trim();
+      const hasMath = text.includes('/') || text.includes('\\') || text.includes('^') || text.includes('_') || text.includes('√');
+      if (!text || !hasMath) {
+        if (pBox) pBox.style.display = 'none';
+      } else {
+        if (pBox) {
+          pBox.style.display = 'inline-block';
+          const formatted = window.formatMathContent ? window.formatMathContent(text) : text;
+          pBox.innerHTML = `<small style="color:var(--text-muted); margin-right:4px;">Ko'rinishi:</small>${formatted}`;
+        }
+      }
+    }
+  };
+
+  function addQuestionBlock(containerId, qData = null) {
+    const container = document.getElementById(containerId);
+    const index = container.children.length + 1;
+    const div = document.createElement('div');
+    div.className = 'question-builder-card';
+
+    const qText = qData ? qData.question : '';
+    const qImg = (qData && (qData.imageUrl || qData.image)) ? (qData.imageUrl || qData.image) : '';
+    const opts = qData ? qData.options : ['', '', '', ''];
+    const correctIdx = qData ? qData.correctIndex : 0;
+    const radioGroupName = `radio-${containerId}-${Date.now()}-${Math.floor(Math.random()*1000)}`;
+
+    div.innerHTML = `
+      <div class="qb-header">
+        <div class="qb-badge">
+          <i class="fa-solid fa-gem"></i>
+          <span class="qb-num-label">#${index} - Savol</span>
+        </div>
+        <button type="button" class="qb-del-btn" title="Savolni o'chirish" onclick="this.closest('.question-builder-card').remove(); reindexQuestions('${containerId}');">
+          <i class="fa-solid fa-trash-can"></i>
+        </button>
+      </div>
+
+      <!-- Quick Math Toolbar -->
+      <div class="math-toolbar">
+        <span class="math-toolbar-title"><i class="fa-solid fa-square-root-variable"></i> Matematik panel:</span>
+        <button type="button" class="math-btn math-btn-primary" onclick="quickInsertFraction(this)" title="Kasr kiritish (\frac{a}{b} yoki 5/3)">
+          <i class="fa-solid fa-divide"></i> Kasr <span style="font-weight:700;">a/b</span>
+        </button>
+        <button type="button" class="math-btn math-btn-primary" onclick="quickInsertRoot(this)" title="Kvadrat ildiz (\sqrt{x})">
+          <span style="font-size:1.05em; font-weight:700;">√</span> Ildiz
+        </button>
+        <button type="button" class="math-btn" onclick="quickInsertText(this, '^2')" title="Kvadrat (daraja 2)">x²</button>
+        <button type="button" class="math-btn" onclick="quickInsertText(this, '^3')" title="Kub (daraja 3)">x³</button>
+        <button type="button" class="math-btn" onclick="quickInsertPower(this)" title="Ixtiyoriy daraja (xⁿ)">xⁿ</button>
+        <button type="button" class="math-btn" onclick="quickInsertSubscript(this)" title="Pastki indeks (xₙ)">xₙ</button>
+        <button type="button" class="math-btn" onclick="quickInsertText(this, ' ± ')" title="Plyus-minus">±</button>
+        <button type="button" class="math-btn" onclick="quickInsertText(this, ' × ')" title="Ko'paytirish">×</button>
+        <button type="button" class="math-btn" onclick="quickInsertText(this, ' ÷ ')" title="Bo'lish">÷</button>
+        <button type="button" class="math-btn" onclick="quickInsertText(this, ' ≠ ')" title="Teng emas">≠</button>
+        <button type="button" class="math-btn" onclick="quickInsertText(this, ' ≤ ')" title="Kichik yoki teng">≤</button>
+        <button type="button" class="math-btn" onclick="quickInsertText(this, ' ≥ ')" title="Katta yoki teng">≥</button>
+        <button type="button" class="math-btn" onclick="quickInsertText(this, ' π ')" title="Pi soni">π</button>
+        <button type="button" class="math-btn" onclick="quickInsertText(this, ' ∞ ')" title="Cheksizlik">∞</button>
+        <button type="button" class="math-btn" onclick="quickInsertText(this, '°')" title="Gradus">°</button>
+      </div>
+
+      <div class="qb-question-input-wrap">
+        <i class="fa-solid fa-circle-question"></i>
+        <input type="text" class="form-input q-text qb-question-input" placeholder="Savol matnini kiriting (masalan: Hisoblang: 5/3 + \sqrt{16})..." value="${qText.replace(/"/g, '&quot;')}" onfocus="window.setActiveMathInput(this)" oninput="updateCardLivePreview(this)" required>
+      </div>
+      <div class="qb-math-preview-box" style="display: none;"></div>
+
+      <!-- Question Image Upload / Preview -->
+      <div class="qb-image-upload-wrap">
+        <input type="hidden" class="q-img-url" value="${qImg}">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+          <label class="btn btn-secondary btn-sm" style="cursor: pointer; margin: 0; font-size: 0.82rem;">
+            <i class="fa-solid fa-image"></i> Savolga rasm biriktirish
+            <input type="file" accept="image/*" style="display: none;" onchange="handleQuestionImageUpload(this)">
+          </label>
+          <span style="font-size: 0.78rem; color: var(--text-muted);">
+            <i class="fa-solid fa-circle-info"></i> Geometriya, fizika, biologiya yoki formulalar rasmlari uchun
+          </span>
+        </div>
+        <div class="qb-image-preview-container" style="${qImg ? 'display: block;' : 'display: none;'} margin-top: 8px;">
+          <img src="${qImg}" alt="Savol rasmi" class="qb-img-preview" style="max-height: 180px; border-radius: 8px; border: 1px solid var(--border-color); object-fit: contain; background: rgba(0,0,0,0.15); display: block; margin-bottom: 6px;">
+          <button type="button" class="btn btn-danger btn-sm qb-img-remove-btn" onclick="removeQuestionImage(this)" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.78rem;">
+            <i class="fa-solid fa-trash-can"></i> Rasmni olib tashlash
+          </button>
+        </div>
+      </div>
+
+      <div class="qb-options-heading">
+        <span><i class="fa-solid fa-list-check" style="color: var(--primary);"></i> 4 ta variant (To'g'ri javobni tanlang):</span>
+        <span style="font-size: 0.76rem; text-transform: none; color: #10b981; font-weight: 700;">
+          <i class="fa-solid fa-circle-check"></i> Belgilangan variant to'g'ri hisoblanadi
+        </span>
+      </div>
+
+      <div class="qb-options-list">
+        ${[0, 1, 2, 3].map(optIdx => `
+          <label class="qb-option-card ${optIdx === correctIdx ? 'is-correct' : ''}">
+            <div class="qb-opt-letter">${String.fromCharCode(65 + optIdx)}</div>
+            <div class="qb-opt-radio-wrap">
+              <input type="radio" name="${radioGroupName}" class="qb-opt-radio" value="${optIdx}" ${optIdx === correctIdx ? 'checked' : ''} onchange="updateCorrectOptionHighlight(this)">
+            </div>
+            <div style="flex: 1; display: flex; flex-direction: column;">
+              <input type="text" class="form-input q-opt-${optIdx} qb-opt-input" placeholder="${String.fromCharCode(65 + optIdx)} varianti matni..." value="${(opts[optIdx] || '').replace(/"/g, '&quot;')}" onfocus="window.setActiveMathInput(this)" oninput="updateCardLivePreview(this)" required>
+              <div class="qb-opt-math-preview" style="display:none; font-size:0.95rem; margin-top:4px; padding:2px 8px; background:rgba(2,132,199,0.06); border-radius:4px; color:var(--text-main);"></div>
+            </div>
+            <span class="qb-correct-tag"><i class="fa-solid fa-check"></i> To'g'ri javob</span>
+          </label>
+        `).join('')}
+      </div>
+    `;
+    container.appendChild(div);
+
+    // Initial trigger for preview if formulas exist
+    const qInp = div.querySelector('.qb-question-input');
+    if (qInp && qInp.value) updateCardLivePreview(qInp);
+    div.querySelectorAll('.qb-opt-input').forEach(optInp => {
+      if (optInp.value) updateCardLivePreview(optInp);
+    });
+  }
+
+  async function handleQuestionImageUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const wrap = input.closest('.qb-image-upload-wrap');
+    const hiddenUrlInput = wrap.querySelector('.q-img-url');
+    const previewContainer = wrap.querySelector('.qb-image-preview-container');
+    const previewImg = previewContainer.querySelector('.qb-img-preview');
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      input.disabled = true;
+      const res = await fetch('/api/teacher/upload-image/', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        hiddenUrlInput.value = data.imageUrl;
+        previewImg.src = data.imageUrl;
+        previewContainer.style.display = 'block';
+      } else {
+        alert(data.error || 'Rasm yuklashda xatolik yuz berdi!');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Rasm yuklashda server xatosi!');
+    } finally {
+      input.disabled = false;
+      input.value = '';
+    }
+  }
+
+  function removeQuestionImage(btn) {
+    const wrap = btn.closest('.qb-image-upload-wrap');
+    wrap.querySelector('.q-img-url').value = '';
+    const previewContainer = wrap.querySelector('.qb-image-preview-container');
+    previewContainer.querySelector('.qb-img-preview').src = '';
+    previewContainer.style.display = 'none';
+  }
+
+  function updateCorrectOptionHighlight(radio) {
+    const list = radio.closest('.qb-options-list');
+    if (!list) return;
+    list.querySelectorAll('.qb-option-card').forEach(card => card.classList.remove('is-correct'));
+    const parentCard = radio.closest('.qb-option-card');
+    if (parentCard) parentCard.classList.add('is-correct');
+  }
+
+  function reindexQuestions(containerId) {
+    const items = document.querySelectorAll(`#${containerId} > .question-builder-card`);
+    items.forEach((item, idx) => {
+      const num = idx + 1;
+      const numSpan = item.querySelector('.qb-num-label');
+      if (numSpan) numSpan.textContent = `#${num} - Savol`;
+      const radios = item.querySelectorAll('input[type="radio"]');
+      radios.forEach(r => r.name = `radio-${containerId}-${num}`);
+    });
+  }
+
+  async function handleImportQuestions(fileInput, containerId) {
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    const wrap = document.getElementById(`import-wrap-${containerId}`) || fileInput.closest('.btn-import-wrap');
+    const origHtml = wrap ? wrap.innerHTML : null;
+    if (wrap) {
+      wrap.innerHTML = `<button type="button" class="btn btn-secondary btn-sm" disabled style="font-size:0.82rem;"><i class="fa-solid fa-spinner fa-spin"></i> Yuklanmoqda...</button>`;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch('/api/teacher/import-questions/', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        const container = document.getElementById(containerId);
+        
+        // If container currently has only 1 blank card, remove it
+        const currentCards = container.querySelectorAll('.question-builder-card');
+        if (currentCards.length === 1) {
+          const firstCard = currentCards[0];
+          const textVal = firstCard.querySelector('.q-text') ? firstCard.querySelector('.q-text').value.trim() : '';
+          const opt0Val = firstCard.querySelector('.q-opt-0') ? firstCard.querySelector('.q-opt-0').value.trim() : '';
+          if (!textVal && !opt0Val) {
+            container.innerHTML = '';
+          }
+        }
+
+        // Append parsed questions
+        data.questions.forEach(q => {
+          addQuestionBlock(containerId, q);
+        });
+        reindexQuestions(containerId);
+
+        alert(`✅ Muvaffaqiyatli! ${data.count} ta savol fayldan yuklandi.`);
+      } else {
+        alert(data.error || 'Faylni o\'qishda xatolik yuz berdi!');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Fayl yuklashda server xatosi yuz berdi!');
+    } finally {
+      if (wrap && origHtml) {
+        wrap.innerHTML = origHtml;
+      }
+      fileInput.value = '';
+    }
+  }
+
+  async function checkTeacherAccess() {
+    let user = getSavedUser();
+
+    // Check with backend session
+    try {
+      const res = await fetch('/api/auth/me/');
+      const data = await res.json();
+      if (data.authenticated && data.user) {
+        user = data.user;
+        setSavedUser(user);
+      } else {
+        user = null;
+        localStorage.removeItem('smarttest_django_user');
+      }
+    } catch (e) {
+      console.warn('Session check failed', e);
+    }
+
+    const gate = document.getElementById('teacher-auth-gate');
+    const mainCont = document.getElementById('teacher-main-dashboard');
+    const warnBox = document.getElementById('teacher-role-warning');
+    const warnTxt = document.getElementById('teacher-role-warning-text');
+
+    if (!user || user.role !== 'teacher') {
+      mainCont.style.display = 'none';
+      gate.style.display = 'block';
+
+      if (user && user.role !== 'teacher') {
+        const roleNames = { 'student': 'o\'quvchi', 'admin': 'administrator' };
+        warnTxt.textContent = `Siz hozirda "${user.fullName}" (${roleNames[user.role] || user.role}) sifatida tizimdasiz. O'qituvchi portaliga faqat o'qituvchi hisobi bilan kirish mumkin.`;
+        warnBox.style.display = 'block';
+      } else {
+        warnBox.style.display = 'none';
+      }
+      return false;
+    }
+
+    gate.style.display = 'none';
+    mainCont.style.display = 'block';
+    return true;
+  }
+
+  async function handleTeacherDirectLogin(e) {
+    e.preventDefault();
+    const err = document.getElementById('teacher-gate-error');
+    err.style.display = 'none';
+
+    const username = document.getElementById('teacher-gate-username').value.trim();
+    const password = document.getElementById('teacher-gate-password').value.trim();
+
+    try {
+      const res = await fetch('/api/auth/login/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, role: 'teacher' })
+      });
+      const data = await res.json();
+
+      if (data.success && data.user) {
+        if (data.user.role !== 'teacher') {
+          err.textContent = 'Ushbu profil o\'qituvchiga tegishli emas!';
+          err.style.display = 'block';
+          return;
+        }
+        setSavedUser(data.user);
+        loadTeacherData();
+      } else {
+        err.textContent = data.error || 'Login yoki parol noto\'g\'ri!';
+        err.style.display = 'block';
+      }
+    } catch (error) {
+      err.textContent = 'Server bilan ulanishda xatolik yuz berdi!';
+      err.style.display = 'block';
+    }
+  }
+
+  async function loadTeacherData() {
+    const isAllowed = await checkTeacherAccess();
+    if (!isAllowed) return;
+
+    const user = getSavedUser();
+    currentTeacher = user;
+    const teacherId = user ? user.id : '';
+
+    if (user) {
+      document.getElementById('t-welcome').textContent = `👨‍🏫 ${user.fullName} (${user.subject || 'O\'qituvchi'})`;
+
+      const userAvatar = user.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(user.fullName || user.username)}&backgroundColor=0284c7`;
+
+      const avatarImg = document.getElementById('tch-profile-avatar-img');
+      if (avatarImg) avatarImg.src = userAvatar;
+
+      const sidebarAvatar = document.getElementById('tch-sidebar-avatar-img');
+      if (sidebarAvatar) sidebarAvatar.src = userAvatar;
+
+      const sidebarName = document.getElementById('tch-sidebar-name');
+      if (sidebarName) sidebarName.textContent = user.fullName || 'O\'qituvchi';
+
+      const sidebarSubject = document.getElementById('tch-sidebar-subject');
+      if (sidebarSubject) sidebarSubject.textContent = user.subject || 'Fan Ustozi';
+
+      document.getElementById('tch-card-name').textContent = user.fullName;
+      document.getElementById('tch-card-subject').textContent = user.subject || 'Fan Ustozi';
+      document.getElementById('tch-card-bio').textContent = user.bio ? `"${user.bio}"` : '"O\'quvchilarga chuqur bilim va ishonch bag\'ishlaymiz."';
+      document.getElementById('tch-card-username').textContent = user.username;
+      document.getElementById('tch-card-phone').textContent = user.phone || 'Kiritilmagan';
+
+      document.getElementById('tch-prof-fullname').value = user.fullName || '';
+      if (user.subject) {
+        document.getElementById('tch-prof-subject').value = user.subject;
+        const testSubj = document.getElementById('test-subject');
+        if (testSubj) testSubj.value = user.subject;
+      }
+      document.getElementById('tch-prof-phone').value = user.phone || '';
+      document.getElementById('tch-prof-bio').value = user.bio || '';
+    }
+
+
+    // Load Tests
+    try {
+      const res = await fetch(`/api/teacher/tests/?teacherId=${teacherId}`);
+      const tests = await res.json();
+      const tbody = document.getElementById('tch-tests-tbody');
+
+      if (!tests.length) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 2rem; color: var(--text-muted);">Siz hali test yaratmadingiz. "+ Yangi Test Yaratish" tugmasini bosing.</td></tr>`;
+      } else {
+        tbody.innerHTML = tests.map(t => {
+          const langBadge = (t.language === 'ru') ? '<span class="badge-lang badge-lang-ru">RU</span>' : '<span class="badge-lang badge-lang-uz">UZ</span>';
+
+          let statusBadge = '';
+          if (t.isUpcoming) {
+            statusBadge = `<span class="badge" style="background: rgba(14, 165, 233, 0.15); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.3); font-weight: 700;"><i class="fa-regular fa-clock"></i> Kutilmoqda<br><small style="font-weight: normal; color: #0369a1;">Boshlanish: ${t.startTime}</small></span>`;
+          } else if (t.isExpired) {
+            statusBadge = `<span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); font-weight: 700;"><i class="fa-solid fa-hourglass-end"></i> Tugagan<br><small style="font-weight: normal; color: #b91c1c;">${t.endTime}</small></span>`;
+          } else {
+            statusBadge = `<span class="badge badge-success"><i class="fa-solid fa-circle-check"></i> Faol</span>`;
+            if (t.endTime) {
+              statusBadge += `<div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 3px;"><i class="fa-regular fa-clock"></i> ${t.endTime} gacha</div>`;
+            }
+          }
+
+          let attemptBadge = '';
+          if (t.maxAttempts === 0) {
+            attemptBadge = `<span class="badge badge-gray"><i class="fa-solid fa-arrows-rotate"></i> Cheksiz</span>`;
+          } else {
+            attemptBadge = `<span class="badge" style="background: rgba(16, 185, 129, 0.12); color: #059669; border: 1px solid rgba(16, 185, 129, 0.25); font-weight: 700;"><i class="fa-solid fa-user-check"></i> ${t.maxAttempts} marta</span>`;
+          }
+
+          return `
+          <tr>
+            <td>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <strong>${t.title}</strong>
+                ${langBadge}
+              </div>
+              <div style="font-size:0.8rem; color:var(--text-muted);">${t.description || ''}</div>
+            </td>
+            <td><span class="badge badge-primary">${t.grade}</span></td>
+            <td><span class="badge badge-secondary">${t.subject || 'Umumiy'}</span></td>
+            <td>${statusBadge}</td>
+            <td>${attemptBadge}</td>
+            <td>${t.questionsCount} ta</td>
+            <td>${t.durationMinutes} daqiqa</td>
+            <td><strong>${t.submissionsCount}</strong> nafar</td>
+            <td style="text-align: right; white-space: nowrap;">
+              <button class="btn btn-warning btn-sm" onclick="openTestDistributeCoinsModal(${t.id}, '${t.title.replace(/'/g, "\\'")}', '${t.grade}', ${t.submissionsCount})" title="Top o'quvchilarga coin taqsimlash" style="border-radius: 9999px; font-weight: 800; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border: none; padding: 4px 10px; margin-right: 4px;">
+                <i class="fa-solid fa-trophy"></i> Coin Taqsimlash
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="openEditTestModal(${t.id})" title="Testni tahrirlash va nomini o'zgartirish" style="margin-right: 4px;">
+                <i class="fa-solid fa-pen-to-square"></i>
+              </button>
+              <button class="btn btn-danger btn-sm" onclick="deleteTest(${t.id}, '${t.title.replace(/'/g, "\\'")}')" title="O'chirish">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </td>
+          </tr>
+        `;}).join('');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    // Load Stats & Analytics
+    try {
+      const res = await fetch(`/api/teacher/stats/?teacherId=${teacherId}`);
+      const stats = await res.json();
+      teacherStatsCache = stats;
+
+      const avg = (stats && stats.avgScore !== undefined) ? stats.avgScore : 0;
+      const pass = (stats && stats.passRate !== undefined) ? stats.passRate : 0;
+      const testsCount = (stats && stats.totalTests !== undefined) ? stats.totalTests : 0;
+      const subsCount = (stats && stats.totalSubmissions !== undefined) ? stats.totalSubmissions : 0;
+
+      document.getElementById('tch-tests-count').textContent = testsCount;
+      document.getElementById('tch-subs-count').textContent = subsCount;
+      document.getElementById('tch-avg-score').textContent = `${avg}%`;
+      document.getElementById('tch-pass-rate').textContent = `${pass}%`;
+
+      // Render Charts
+      renderTeacherCharts(stats);
+
+      // Submissions
+      const subTbody = document.getElementById('tch-submissions-tbody');
+      if (stats.recentSubmissions && stats.recentSubmissions.length) {
+        subTbody.innerHTML = stats.recentSubmissions.map(s => {
+          const mins = Math.floor(s.timeSpent / 60);
+          const secs = s.timeSpent % 60;
+          return `
+            <tr>
+              <td><strong>${s.studentName}</strong></td>
+              <td><span class="badge badge-primary">${s.grade}</span></td>
+              <td>${s.testTitle}</td>
+              <td><strong>${s.correct}</strong> / ${s.total}</td>
+              <td>
+                <span class="badge ${s.score >= 80 ? 'badge-success' : (s.score >= 60 ? 'badge-primary' : 'badge-warning')}">
+                  ${s.score}%
+                </span>
+              </td>
+              <td>${mins}m ${secs}s</td>
+              <td>${s.date}</td>
+              <td style="text-align: right; white-space: nowrap;">
+                <button class="btn btn-warning btn-sm" onclick="openTeacherAwardCoinModal(${s.studentId}, '${s.studentName.replace(/'/g, "\\'")}', '${s.testTitle.replace(/'/g, "\\'")}', ${s.score}, ${s.resultId})" style="border-radius: 9999px; padding: 4px 12px; font-weight: 800; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border: none;" title="O'quvchini rag'batlantirish">
+                  <i class="fa-solid fa-coins"></i> +Coin
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } else {
+        subTbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 2rem; color: var(--text-muted);">Topshirilgan testlar mavjud emas.</td></tr>`;
+      }
+
+      // Breakdown
+      const anTbody = document.getElementById('tch-analytics-tbody');
+      if (stats.testBreakdown && stats.testBreakdown.length) {
+        anTbody.innerHTML = stats.testBreakdown.map(tb => `
+          <tr>
+            <td><strong>${tb.title}</strong></td>
+            <td><span class="badge badge-primary">${tb.grade}</span></td>
+            <td>${tb.submissions} nafar o'quvchi</td>
+            <td><strong>${tb.avgScore}%</strong></td>
+            <td>
+              <div style="display:flex; align-items:center; gap: 8px;">
+                <div class="progress-bar-wrapper" style="width: 140px;">
+                  <div class="progress-bar-fill" style="width: ${tb.avgScore}%;"></div>
+                </div>
+                <span>${tb.avgScore >= 60 ? '✅ Yaxshi' : '⚠️ Past'}</span>
+              </div>
+            </td>
+          </tr>
+        `).join('');
+      } else {
+        anTbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 2rem; color: var(--text-muted);">Tahlil qilish uchun testlar yetarli emas.</td></tr>`;
+      }
+
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function renderTeacherCharts(stats) {
+    if (!stats) return;
+    const isDark = document.body.classList.contains('dark-theme');
+
+    // 1. Tests Performance Bar Chart
+    const tCtx = document.getElementById('tchTestsChart');
+    if (tCtx) {
+      if (tchTestsChartInstance) tchTestsChartInstance.destroy();
+
+      const breakdown = stats.testBreakdown || [];
+      const labels = breakdown.length ? breakdown.map(b => b.title) : ['Kvadrat tenglamalar', 'Viyet teoremasi', 'Hosilalar va integrallar'];
+      const scores = breakdown.length ? breakdown.map(b => b.avgScore) : [85, 92, 78];
+
+      tchTestsChartInstance = new Chart(tCtx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'O\'rtacha Ball (%)',
+            data: scores,
+            backgroundColor: [
+              'rgba(0, 180, 216, 0.85)',
+              'rgba(16, 185, 129, 0.85)',
+              'rgba(168, 85, 247, 0.85)',
+              'rgba(245, 158, 11, 0.85)'
+            ],
+            borderRadius: 8,
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => `O'rtacha natija: ${ctx.parsed.y}%`
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: 100,
+              ticks: {
+                color: isDark ? '#94a3b8' : '#64748b',
+                callback: v => v + '%'
+              },
+              grid: { color: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }
+            },
+            x: {
+              ticks: { color: isDark ? '#94a3b8' : '#64748b' },
+              grid: { display: false }
+            }
+          }
+        }
+      });
+    }
+
+    // 2. Score Categories Donut Chart
+    const dCtx = document.getElementById('tchDonutChart');
+    if (dCtx) {
+      if (tchDonutChartInstance) tchDonutChartInstance.destroy();
+
+      const dist = stats.distribution || { excellent: 10, good: 6, fair: 2, poor: 0 };
+      tchDonutChartInstance = new Chart(dCtx, {
+        type: 'doughnut',
+        data: {
+          labels: ["A'lo (85-100%)", "Yaxshi (70-84%)", "Qoniqarli (50-69%)", "Qayta (<50%)"],
+          datasets: [{
+            data: [dist.excellent || 8, dist.good || 5, dist.fair || 2, dist.poor || 0],
+            backgroundColor: ['#10b981', '#00b4d8', '#f59e0b', '#ef4444'],
+            borderWidth: 2,
+            borderColor: isDark ? '#0b172c' : '#ffffff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '66%',
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: {
+                color: isDark ? '#cbd5e1' : '#334155',
+                boxWidth: 12,
+                padding: 14,
+                font: { weight: '600', size: 12 }
+              }
+            }
+          }
+        }
+      });
+    }
+  }
+
+  // Open Edit Test Modal
+  async function openEditTestModal(testId) {
+    try {
+      const res = await fetch(`/api/teacher/tests/${testId}/`);
+      if (!res.ok) {
+        alert('Test ma\'lumotlarini yuklashda xatolik yuz berdi!');
+        return;
+      }
+      const test = await res.json();
+
+      document.getElementById('edit-test-id').value = test.id;
+      document.getElementById('edit-test-title').value = test.title;
+      if (test.subject) document.getElementById('edit-test-subject').value = test.subject;
+      if (test.language) document.getElementById('edit-test-language').value = test.language;
+      document.getElementById('edit-test-grade').value = test.grade;
+      document.getElementById('edit-test-duration').value = test.durationMinutes;
+      document.getElementById('edit-test-start-time').value = test.startTimeIso || '';
+      document.getElementById('edit-test-end-time').value = test.endTimeIso || '';
+      document.getElementById('edit-test-max-attempts').value = (test.maxAttempts !== undefined) ? test.maxAttempts : 1;
+      document.getElementById('edit-test-desc').value = test.description || '';
+      document.getElementById('edit-test-error').style.display = 'none';
+
+      // Load questions
+      const container = document.getElementById('edit-questions-container');
+      container.innerHTML = '';
+      if (test.questions && test.questions.length) {
+        test.questions.forEach(q => addQuestionBlock('edit-questions-container', q));
+      } else {
+        addQuestionBlock('edit-questions-container');
+      }
+
+      document.getElementById('modal-edit-test').style.display = 'flex';
+    } catch (e) {
+      console.error(e);
+      alert('Xatolik!');
+    }
+  }
+
+  function closeEditTestModal() {
+    document.getElementById('modal-edit-test').style.display = 'none';
+  }
+
+  async function handleSaveEditTest(e) {
+    e.preventDefault();
+    const err = document.getElementById('edit-test-error');
+    err.style.display = 'none';
+
+    const testId = document.getElementById('edit-test-id').value;
+    const title = document.getElementById('edit-test-title').value;
+    const subject = document.getElementById('edit-test-subject').value;
+    const language = document.getElementById('edit-test-language').value;
+    const grade = document.getElementById('edit-test-grade').value;
+    const durationMinutes = Number(document.getElementById('edit-test-duration').value) || 15;
+    const startTime = document.getElementById('edit-test-start-time').value || null;
+    const endTime = document.getElementById('edit-test-end-time').value || null;
+    const maxAttempts = Number(document.getElementById('edit-test-max-attempts').value);
+    const description = document.getElementById('edit-test-desc').value;
+
+    const qBlocks = document.querySelectorAll('#edit-questions-container > div');
+    const questions = [];
+    for (let block of qBlocks) {
+      const qText = block.querySelector('.q-text').value;
+      const imageUrl = block.querySelector('.q-img-url') ? block.querySelector('.q-img-url').value : '';
+      const opt0 = block.querySelector('.q-opt-0').value;
+      const opt1 = block.querySelector('.q-opt-1').value;
+      const opt2 = block.querySelector('.q-opt-2').value;
+      const opt3 = block.querySelector('.q-opt-3').value;
+      const checkedRadio = block.querySelector('input[type="radio"]:checked');
+      const correctIndex = checkedRadio ? Number(checkedRadio.value) : 0;
+
+      questions.push({
+        question: qText,
+        imageUrl: imageUrl,
+        options: [opt0, opt1, opt2, opt3],
+        correctIndex
+      });
+    }
+
+    try {
+      const res = await fetch(`/api/teacher/tests/${testId}/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          grade,
+          subject,
+          language,
+          durationMinutes,
+          startTime,
+          endTime,
+          maxAttempts,
+          description,
+          questions
+        })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        err.textContent = data.error || 'Saqlashda xatolik yuz berdi!';
+        err.style.display = 'block';
+        return;
+      }
+
+      closeEditTestModal();
+      loadTeacherData();
+      alert('Test muvaffaqiyatli saqlandi!');
+    } catch (error) {
+      err.textContent = 'Server bilan aloqa uzildi!';
+      err.style.display = 'block';
+    }
+  }
+
+  async function handleCreateTest(e) {
+    e.preventDefault();
+    const title = document.getElementById('test-title').value;
+    const subject = document.getElementById('test-subject').value;
+    const language = document.getElementById('test-language').value;
+    const grade = document.getElementById('test-grade').value;
+    const durationMinutes = Number(document.getElementById('test-duration').value) || 15;
+    const startTime = document.getElementById('test-start-time').value || null;
+    const endTime = document.getElementById('test-end-time').value || null;
+    const maxAttempts = Number(document.getElementById('test-max-attempts').value);
+    const description = document.getElementById('test-desc').value;
+
+    const qBlocks = document.querySelectorAll('#questions-container > div');
+    if (!qBlocks.length) {
+      alert('Kamida bitta savol qo\'shing!');
+      return;
+    }
+
+    const questions = [];
+    for (let block of qBlocks) {
+      const qText = block.querySelector('.q-text').value;
+      const imageUrl = block.querySelector('.q-img-url') ? block.querySelector('.q-img-url').value : '';
+      const opt0 = block.querySelector('.q-opt-0').value;
+      const opt1 = block.querySelector('.q-opt-1').value;
+      const opt2 = block.querySelector('.q-opt-2').value;
+      const opt3 = block.querySelector('.q-opt-3').value;
+      const checkedRadio = block.querySelector('input[type="radio"]:checked');
+      const correctIndex = checkedRadio ? Number(checkedRadio.value) : 0;
+
+      questions.push({
+        question: qText,
+        imageUrl: imageUrl,
+        options: [opt0, opt1, opt2, opt3],
+        correctIndex
+      });
+    }
+
+    try {
+      const res = await fetch('/api/teacher/tests/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          grade,
+          durationMinutes,
+          startTime,
+          endTime,
+          maxAttempts,
+          description,
+          teacherId: currentTeacher ? currentTeacher.id : null,
+          subject: subject || (currentTeacher ? currentTeacher.subject : 'Umumiy'),
+          language: language || 'uz',
+          questions
+        })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error || 'Test yaratishda xatolik yuz berdi!');
+        return;
+      }
+
+      alert('Yangi test muvaffaqiyatli saqlandi va e\'lon qilindi!');
+      document.getElementById('create-test-form').reset();
+      document.getElementById('questions-container').innerHTML = '';
+      addQuestionBlock('questions-container');
+      addQuestionBlock('questions-container');
+      switchTeacherTab('tests');
+      loadTeacherData();
+    } catch (error) {
+      alert('Server bilan xatolik!');
+    }
+  }
+
+  async function deleteTest(id, title) {
+    if (!confirm(`"${title}" testini butunlay o'chirmoqchimisiz?`)) return;
+    try {
+      const res = await fetch(`/api/teacher/tests/${id}/`, { method: 'DELETE' });
+      if (res.ok) {
+        loadTeacherData();
+      } else {
+        alert('O\'chirishda xatolik!');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  // Teacher Coin Award Handlers
+  function openTeacherAwardCoinModal(studentId, studentName, testTitle, score, resultId) {
+    const modal = document.getElementById('modal-teacher-award-coin');
+    const err = document.getElementById('tch-coin-error');
+    err.style.display = 'none';
+
+    document.getElementById('tch-coin-student-id').value = studentId;
+    document.getElementById('tch-coin-result-id').value = resultId || '';
+    document.getElementById('tch-coin-student-name').textContent = `👨‍🎓 ${studentName}`;
+    document.getElementById('tch-coin-test-info').textContent = `Test: "${testTitle}" • Natijasi: ${score}%`;
+    document.getElementById('tch-coin-student-subtitle').textContent = `O'quvchini yuqori natijasi uchun rag'batlantirish`;
+
+    // Dynamic suggested coins based on score
+    let defaultAmount = 20;
+    if (score >= 90) defaultAmount = 30;
+    if (score === 100) defaultAmount = 50;
+    document.getElementById('tch-coin-amount-input').value = defaultAmount;
+    document.getElementById('tch-coin-reason-input').value = `"${testTitle}" testida ${score}% yuqori natija olganligi uchun 🌟`;
+
+    modal.style.display = 'flex';
+  }
+
+  function closeTeacherAwardCoinModal() {
+    document.getElementById('modal-teacher-award-coin').style.display = 'none';
+  }
+
+  async function handleTeacherAwardCoinSubmit(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-tch-submit-coin');
+    const err = document.getElementById('tch-coin-error');
+    err.style.display = 'none';
+
+    const studentId = document.getElementById('tch-coin-student-id').value;
+    const resultId = document.getElementById('tch-coin-result-id').value;
+    const amount = parseInt(document.getElementById('tch-coin-amount-input').value);
+    const reason = document.getElementById('tch-coin-reason-input').value.trim();
+
+    if (!studentId || !amount) {
+      err.textContent = 'Ma\'lumotlar to\'liq emas!';
+      err.style.display = 'block';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Berilmoqda...';
+
+    try {
+      const teacherUser = getSavedUser();
+      const teacherId = teacherUser ? teacherUser.id : null;
+      const res = await fetch('/api/coins/award/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: parseInt(studentId),
+          resultId: resultId ? parseInt(resultId) : null,
+          amount,
+          reason,
+          teacherId
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        closeTeacherAwardCoinModal();
+        alert(`🎉 ${data.message || 'Coin muvaffaqiyatli berildi!'}`);
+        loadTeacherData();
+      } else {
+        err.textContent = data.error || 'Xatolik yuz berdi!';
+        err.style.display = 'block';
+      }
+    } catch (error) {
+      err.textContent = 'Server bilan ulanishda xatolik!';
+      err.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-gift"></i> Coin Berish';
+    }
+  }
+
+  // ----------------------------------------------------
+  // TEST BO'YICHA TOP O'QUVCHILARGA COIN TAQSIMLASH LOGIKASI
+  // ----------------------------------------------------
+  let currentDistTestId = null;
+  let currentDistParticipants = [];
+
+  async function openTestDistributeCoinsModal(testId, testTitle, grade, submissionsCount) {
+    currentDistTestId = testId;
+    const modal = document.getElementById('modal-test-distribute-coins');
+    const subtitle = document.getElementById('dist-test-subtitle');
+    const tbody = document.getElementById('dist-participants-tbody');
+    const reasonInput = document.getElementById('dist-reason-input');
+    const errBox = document.getElementById('dist-error-msg');
+
+    errBox.style.display = 'none';
+    subtitle.innerHTML = `<strong>${testTitle || 'Test'}</strong> (${grade || ''} sinf) — jami qatnashganlar ro'yxati`;
+    reasonInput.value = `"${testTitle}" testidagi a'lo natijasi va faolligi uchun 🌟`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2.5rem; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> O'quvchilar natijalari yuklanmoqda...</td></tr>`;
+
+    modal.style.display = 'flex';
+
+    try {
+      const res = await fetch(`/api/teacher/tests/${testId}/participants/`);
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--danger);">${data.error || 'Natijalarni yuklab bo\'lmadi'}</td></tr>`;
+        return;
+      }
+
+      currentDistParticipants = data.participants || [];
+      renderDistParticipantsTable();
+      applyCustomPlaceAllocation();
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--danger);">Server bilan ulanishda xatolik yuz berdi!</td></tr>`;
+    }
+  }
+
+  function renderDistParticipantsTable() {
+    const tbody = document.getElementById('dist-participants-tbody');
+    if (!currentDistParticipants.length) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">Ushbu testni hali hech bir o'quvchi topshirmagan.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = currentDistParticipants.map((p, idx) => {
+      let medal = `<span style="font-weight: 700; color: var(--text-muted);">${p.rank}</span>`;
+      if (p.rank === 1) medal = `<span style="font-size: 1.25rem;" title="1-o'rin">🥇</span>`;
+      else if (p.rank === 2) medal = `<span style="font-size: 1.25rem;" title="2-o'rin">🥈</span>`;
+      else if (p.rank === 3) medal = `<span style="font-size: 1.25rem;" title="3-o'rin">🥉</span>`;
+
+      const scoreBadgeClass = p.score >= 80 ? 'badge-success' : (p.score >= 60 ? 'badge-primary' : 'badge-warning');
+
+      return `
+        <tr data-student-id="${p.studentId}" data-result-id="${p.resultId}">
+          <td style="text-align: center;">${medal}</td>
+          <td>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <img src="${p.avatarUrl}" style="width: 28px; height: 28px; border-radius: 50%; object-fit: cover;" alt="">
+              <div>
+                <strong style="color: var(--text-main); font-size: 0.95rem;">${p.fullName}</strong>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">Mavjud: <span style="color: #f59e0b; font-weight: 700;">${p.currentCoins} 🪙</span></div>
+              </div>
+            </div>
+          </td>
+          <td><span class="badge badge-secondary">${p.grade}</span></td>
+          <td>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span class="badge ${scoreBadgeClass}">${p.score}%</span>
+              <span style="font-size: 0.8rem; color: var(--text-muted);">(${p.correctCount}/${p.totalCount})</span>
+            </div>
+          </td>
+          <td style="font-size: 0.85rem; color: var(--text-muted);">${p.timeStr}</td>
+          <td style="text-align: right;">
+            <div style="display: inline-flex; align-items: center; gap: 6px;">
+              <input type="number"
+                     class="form-input dist-coin-input"
+                     data-student-id="${p.studentId}"
+                     data-result-id="${p.resultId}"
+                     min="0" max="500"
+                     value="${p.suggestedAmount || 0}"
+                     oninput="updateDistTotalPreview()"
+                     style="width: 80px; text-align: right; padding: 5px 8px; font-weight: 850; color: #f59e0b;">
+              <span style="font-size: 0.9rem; color: #f59e0b;">🪙</span>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  function setPresetConfig(count, p1, p2, p3, rest) {
+    const countInp = document.getElementById('dist-cfg-count');
+    const p1Inp = document.getElementById('dist-cfg-p1');
+    const p2Inp = document.getElementById('dist-cfg-p2');
+    const p3Inp = document.getElementById('dist-cfg-p3');
+    const restInp = document.getElementById('dist-cfg-rest');
+
+    if (countInp) countInp.value = count;
+    if (p1Inp) p1Inp.value = p1;
+    if (p2Inp) p2Inp.value = p2;
+    if (p3Inp) p3Inp.value = p3;
+    if (restInp) restInp.value = rest;
+
+    applyCustomPlaceAllocation();
+  }
+
+  function applyCustomPlaceAllocation() {
+    const maxStudents = parseInt(document.getElementById('dist-cfg-count')?.value) || 0;
+    const p1Coins = parseInt(document.getElementById('dist-cfg-p1')?.value) || 0;
+    const p2Coins = parseInt(document.getElementById('dist-cfg-p2')?.value) || 0;
+    const p3Coins = parseInt(document.getElementById('dist-cfg-p3')?.value) || 0;
+    const restCoins = parseInt(document.getElementById('dist-cfg-rest')?.value) || 0;
+
+    const inputs = document.querySelectorAll('.dist-coin-input');
+    inputs.forEach((inp, idx) => {
+      const p = currentDistParticipants[idx];
+      if (!p) return;
+
+      const rank = p.rank || (idx + 1);
+
+      if (rank > maxStudents) {
+        inp.value = 0;
+      } else if (rank === 1) {
+        inp.value = p1Coins;
+      } else if (rank === 2) {
+        inp.value = p2Coins;
+      } else if (rank === 3) {
+        inp.value = p3Coins;
+      } else {
+        inp.value = restCoins;
+      }
+    });
+
+    updateDistTotalPreview();
+  }
+
+  function applyDistPreset(preset) {
+    if (preset === 'top3') {
+      setPresetConfig(3, 50, 30, 20, 0);
+    } else if (preset === 'all80') {
+      const inputs = document.querySelectorAll('.dist-coin-input');
+      inputs.forEach((inp, idx) => {
+        const p = currentDistParticipants[idx];
+        if (!p) return;
+        inp.value = (p.score >= 80) ? 25 : 0;
+      });
+      updateDistTotalPreview();
+    } else if (preset === 'allParticipants') {
+      const count = currentDistParticipants.length;
+      setPresetConfig(count, 10, 10, 10, 10);
+    } else if (preset === 'clear') {
+      const inputs = document.querySelectorAll('.dist-coin-input');
+      inputs.forEach(inp => { inp.value = 0; });
+      updateDistTotalPreview();
+    }
+  }
+
+  function updateDistTotalPreview() {
+    const inputs = document.querySelectorAll('.dist-coin-input');
+    let total = 0;
+    let count = 0;
+    inputs.forEach(inp => {
+      const val = parseInt(inp.value) || 0;
+      if (val > 0) {
+        total += val;
+        count++;
+      }
+    });
+
+    const preview = document.getElementById('dist-total-coins-preview');
+    if (preview) {
+      preview.textContent = `${total} Coin (${count} nafar o'quvchiga)`;
+    }
+  }
+
+  function closeTestDistributeCoinsModal() {
+    document.getElementById('modal-test-distribute-coins').style.display = 'none';
+  }
+
+  async function handleTestDistributeCoinsSubmit(e) {
+    e.preventDefault();
+    if (!currentDistTestId) return;
+
+    const btn = document.getElementById('btn-submit-distribute-coins');
+    const errBox = document.getElementById('dist-error-msg');
+    errBox.style.display = 'none';
+
+    const reason = (document.getElementById('dist-reason-input').value || '').trim() || 'Test natijalari rag\'bati';
+    const inputs = document.querySelectorAll('.dist-coin-input');
+    const distributions = [];
+
+    inputs.forEach(inp => {
+      const amount = parseInt(inp.value) || 0;
+      if (amount > 0) {
+        distributions.push({
+          studentId: parseInt(inp.dataset.studentId),
+          resultId: inp.dataset.resultId ? parseInt(inp.dataset.resultId) : null,
+          amount: amount,
+          reason: reason
+        });
+      }
+    });
+
+    if (!distributions.length) {
+      errBox.textContent = 'Kamida bitta o\'quvchiga noldan katta coin miqdori belgilang!';
+      errBox.style.display = 'block';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Taqsimlanmoqda...';
+
+    try {
+      const teacherUser = getSavedUser();
+      const teacherId = teacherUser ? teacherUser.id : null;
+      const res = await fetch(`/api/teacher/tests/${currentDistTestId}/distribute-coins/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ distributions, teacherId })
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        errBox.textContent = data.error || 'Taqsimlashda xatolik yuz berdi!';
+        errBox.style.display = 'block';
+        return;
+      }
+
+      closeTestDistributeCoinsModal();
+      alert(`🎉 ${data.message}`);
+      loadTeacherData();
+    } catch (err) {
+      errBox.textContent = 'Server bilan ulanishda xatolik yuz berdi!';
+      errBox.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Coinlarni Taqsimlash va Yuborish';
+    }
+  }
+
+  // Jurnal qismidan test tanlab taqsimlash
+  async function promptTestSelectionForCoinDistribution() {
+    const user = getSavedUser();
+    const teacherId = user ? user.id : '';
+    try {
+      const res = await fetch(`/api/teacher/tests/?teacherId=${teacherId}`);
+      const tests = await res.json();
+      if (!tests || !tests.length) {
+        alert("Sizda hali yaratilgan testlar mavjud emas!");
+        return;
+      }
+
+      if (tests.length === 1) {
+        openTestDistributeCoinsModal(tests[0].id, tests[0].title, tests[0].grade, tests[0].submissionsCount);
+        return;
+      }
+
+      const options = tests.map((t, idx) => `${idx + 1}. ${t.title} (${t.grade} sinf, ${t.submissionsCount} topshirgan)`).join('\n');
+      const pick = prompt(`Qaysi test bo'yicha coin taqsimlamoqchisiz?\nRaqamini tanlang (1-${tests.length}):\n\n${options}`, "1");
+      if (!pick) return;
+      const num = parseInt(pick) - 1;
+      if (num >= 0 && num < tests.length) {
+        const t = tests[num];
+        openTestDistributeCoinsModal(t.id, t.title, t.grade, t.submissionsCount);
+      } else {
+        alert("Noto'g'ri raqam tanlandi!");
+      }
+    } catch (err) {
+      alert("Testlar ro'yxatini yuklashda xatolik!");
+    }
+  }
+
+  // ====================================================
+  // DARS FAOLLIGI UCHUN COIN BERISH VA TAHRIRLASH LOGIKASI
+  // ====================================================
+  let classroomSearchTimer = null;
+
+  function debounceClassroomSearch() {
+    clearTimeout(classroomSearchTimer);
+    classroomSearchTimer = setTimeout(() => {
+      loadClassroomStudents();
+    }, 300);
+  }
+
+  function selectClassroomReason(str) {
+    const input = document.getElementById('cls-coin-reason-input');
+    if (input) input.value = str;
+  }
+
+  async function loadClassroomStudents() {
+    const grid = document.getElementById('tch-classroom-students-grid');
+    if (!grid) return;
+
+    const gradeSelect = document.getElementById('tch-classroom-grade-select');
+    const searchInput = document.getElementById('tch-classroom-search-input');
+    const grade = gradeSelect ? gradeSelect.value : 'Barchasi';
+    const search = searchInput ? searchInput.value.trim() : '';
+
+    grid.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 2.5rem; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> O'quvchilar ro'yxati yuklanmoqda...</div>`;
+
+    try {
+      const res = await fetch(`/api/teacher/class-students/?grade=${encodeURIComponent(grade)}&search=${encodeURIComponent(search)}`);
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        grid.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 2rem; color: var(--danger);">${data.error || 'O\'quvchilarni yuklab bo\'lmadi'}</div>`;
+        return;
+      }
+
+      const students = data.students || [];
+      if (!students.length) {
+        grid.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 2.5rem; color: var(--text-muted);"><i class="fa-solid fa-user-slash" style="font-size: 2rem; margin-bottom: 8px; display: block; opacity: 0.5;"></i> Ushbu qidiruv/sinf bo'yicha o'quvchilar topilmadi.</div>`;
+        return;
+      }
+
+      grid.innerHTML = students.map(s => {
+        const safeName = s.fullName.replace(/'/g, "\\'");
+        const safeAvatar = s.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(s.fullName)}`;
+        return `
+          <div style="background: var(--bg-card); border: 1px solid rgba(245, 158, 11, 0.22); border-radius: 14px; padding: 1rem; display: flex; flex-direction: column; justify-content: space-between; gap: 12px; transition: all 0.2s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.06);">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <img src="${safeAvatar}" style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(245, 158, 11, 0.4); flex-shrink: 0;">
+              <div style="overflow: hidden;">
+                <div style="font-weight: 800; font-size: 0.95rem; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${s.fullName}">${s.fullName}</div>
+                <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; margin-top: 2px;">
+                  <span class="badge badge-primary" style="font-size: 0.72rem; padding: 2px 6px;">${s.grade}</span>
+                  <span>@${s.username}</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px dashed rgba(245, 158, 11, 0.2); padding-top: 10px;">
+              <div style="display: flex; align-items: center; gap: 5px;">
+                <i class="fa-solid fa-coins" style="color: #f59e0b; font-size: 0.95rem;"></i>
+                <span style="font-weight: 850; font-size: 1rem; color: #f59e0b;">${s.coins}</span>
+                <span style="font-size: 0.75rem; color: var(--text-muted);">coin</span>
+              </div>
+              <button class="btn btn-warning btn-sm" onclick="openClassroomAwardCoinModal(${s.id}, '${safeName}', '${s.grade}', ${s.coins}, '${safeAvatar}')" style="background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; font-weight: 800; border: none; border-radius: 9999px; padding: 5px 14px; font-size: 0.8rem;" title="Darsdagi faolligi uchun coin berish">
+                <i class="fa-solid fa-plus"></i> Coin Berish
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } catch (e) {
+      grid.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 2rem; color: var(--danger);">Server bilan ulanishda xatolik yuz berdi!</div>`;
+    }
+  }
+
+  function openClassroomAwardCoinModal(studentId, fullName, grade, coins, avatarUrl) {
+    const modal = document.getElementById('modal-classroom-award-coin');
+    const err = document.getElementById('cls-coin-error');
+    err.style.display = 'none';
+
+    document.getElementById('cls-coin-student-id').value = studentId;
+    document.getElementById('cls-coin-student-name').textContent = fullName;
+    document.getElementById('cls-coin-student-grade').textContent = `Sinfi: ${grade}`;
+    document.getElementById('cls-coin-student-balance').textContent = `${coins} coin`;
+    document.getElementById('cls-coin-student-avatar').src = avatarUrl;
+
+    document.getElementById('cls-coin-amount-input').value = 10;
+    document.getElementById('cls-coin-reason-input').value = "Darsda faol qatnashgani va to'g'ri javoblari uchun 🌟";
+
+    modal.style.display = 'flex';
+  }
+
+  function closeClassroomAwardCoinModal() {
+    document.getElementById('modal-classroom-award-coin').style.display = 'none';
+  }
+
+  async function handleClassroomAwardCoinSubmit(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-cls-submit-coin');
+    const err = document.getElementById('cls-coin-error');
+    err.style.display = 'none';
+
+    const studentId = document.getElementById('cls-coin-student-id').value;
+    const amount = parseInt(document.getElementById('cls-coin-amount-input').value);
+    const reason = document.getElementById('cls-coin-reason-input').value.trim();
+
+    if (!studentId || !amount) {
+      err.textContent = 'O\'quvchi va coin miqdorini kiriting!';
+      err.style.display = 'block';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Berilmoqda...';
+
+    try {
+      const teacherUser = getSavedUser();
+      const teacherId = teacherUser ? teacherUser.id : null;
+      const res = await fetch('/api/coins/award/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: parseInt(studentId),
+          resultId: null, // Dars jarayonidagi coin (testga bog'liq emas!)
+          amount: amount,
+          reason: reason,
+          teacherId: teacherId
+        })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        closeClassroomAwardCoinModal();
+        alert(`🎉 ${data.message || 'Coin muvaffaqiyatli berildi!'}`);
+        loadClassroomStudents();
+        loadTeacherCoinHistory();
+      } else {
+        err.textContent = data.error || 'Xatolik yuz berdi!';
+        err.style.display = 'block';
+      }
+    } catch (error) {
+      err.textContent = 'Server bilan ulanishda xatolik yuz berdi!';
+      err.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-gift"></i> Coin Berish';
+    }
+  }
+
+  // --- BERILGAN COINLAR TARIXI VA TAHRIRLASH ---
+  let teacherCoinHistoryCache = [];
+
+  async function loadTeacherCoinHistory() {
+    const tbody = document.getElementById('tch-coin-history-tbody');
+    if (!tbody) return;
+
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 2.5rem; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> Berilgan coinlar tarixi yuklanmoqda...</td></tr>`;
+
+    try {
+      const teacherUser = getSavedUser();
+      const teacherId = teacherUser ? teacherUser.id : '';
+      const res = await fetch(`/api/teacher/coins/history/?teacherId=${teacherId}`);
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--danger);">${data.error || 'Tarixni yuklab bo\'lmadi'}</td></tr>`;
+        return;
+      }
+
+      teacherCoinHistoryCache = data.history || [];
+      if (!teacherCoinHistoryCache.length) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">Siz hali o'quvchilarga coin bermagansiz. Yuqoridagi ro'yxatdan o'quvchini tanlab darsdagi faolligi uchun coin bering.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = teacherCoinHistoryCache.map(tx => {
+        const safeStudentName = tx.studentName.replace(/'/g, "\\'");
+        const safeReason = (tx.reason || '').replace(/'/g, "\\'");
+        const categoryBadge = tx.isClassroom 
+          ? `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">Darsdagi faollik 📚</span>`
+          : `<span class="badge" style="background: rgba(2, 132, 199, 0.15); color: #38bdf8; border: 1px solid rgba(2, 132, 199, 0.3);" title="${tx.testTitle || ''}">Test natijasi 📝</span>`;
+
+        return `
+          <tr>
+            <td>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <img src="${tx.avatarUrl || 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(tx.studentName)}" style="width: 28px; height: 28px; border-radius: 50%; object-fit: cover;">
+                <strong>${tx.studentName}</strong>
+              </div>
+            </td>
+            <td><span class="badge badge-primary">${tx.grade}</span></td>
+            <td>
+              <span style="font-weight: 850; color: #f59e0b; font-size: 0.98rem; display: flex; align-items: center; gap: 4px;">
+                <i class="fa-solid fa-coins"></i> +${tx.amount}
+              </span>
+            </td>
+            <td>${categoryBadge}</td>
+            <td style="max-width: 260px;">
+              <span style="font-size: 0.88rem; color: var(--text-main);">${tx.reason}</span>
+            </td>
+            <td style="font-size: 0.82rem; color: var(--text-muted);">${tx.date}</td>
+            <td style="text-align: right; white-space: nowrap;">
+              <button class="btn btn-secondary btn-sm" onclick="openTeacherEditCoinModal(${tx.id}, '${safeStudentName}', ${tx.amount}, '${safeReason}')" style="border-radius: 9999px; padding: 4px 12px; font-weight: 700; color: #38bdf8; border-color: rgba(56, 189, 248, 0.3);" title="Ushbu rag'batlantirishni tahrirlash">
+                <i class="fa-solid fa-pen-to-square"></i> Tahrirlash
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--danger);">Server bilan aloqa uzildi!</td></tr>`;
+    }
+  }
+
+  function openTeacherEditCoinModal(txId, studentName, amount, reason) {
+    const modal = document.getElementById('modal-teacher-edit-coin');
+    const err = document.getElementById('edit-coin-error');
+    err.style.display = 'none';
+
+    document.getElementById('edit-coin-tx-id').value = txId;
+    document.getElementById('edit-coin-student-name').textContent = `👨‍🎓 ${studentName}`;
+    document.getElementById('edit-coin-old-info').textContent = `Hozirgi belgilangan miqdor: +${amount} coin`;
+    document.getElementById('edit-coin-amount-input').value = amount;
+    document.getElementById('edit-coin-reason-input').value = reason;
+
+    modal.style.display = 'flex';
+  }
+
+  function closeTeacherEditCoinModal() {
+    document.getElementById('modal-teacher-edit-coin').style.display = 'none';
+  }
+
+  async function handleTeacherEditCoinSubmit(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-edit-coin-submit');
+    const err = document.getElementById('edit-coin-error');
+    err.style.display = 'none';
+
+    const txId = document.getElementById('edit-coin-tx-id').value;
+    const amount = parseInt(document.getElementById('edit-coin-amount-input').value);
+    const reason = document.getElementById('edit-coin-reason-input').value.trim();
+
+    if (!txId || !amount || !reason) {
+      err.textContent = 'Miqdor va sabab to\'liq kiritilishi shart!';
+      err.style.display = 'block';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saqlanmoqda...';
+
+    try {
+      const teacherUser = getSavedUser();
+      const teacherId = teacherUser ? teacherUser.id : null;
+      const res = await fetch(`/api/teacher/coins/${txId}/edit/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, reason, teacherId })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        closeTeacherEditCoinModal();
+        alert(`✅ ${data.message || 'Coin muvaffaqiyatli tahrirlandi!'}`);
+        loadTeacherCoinHistory();
+        loadClassroomStudents();
+      } else {
+        err.textContent = data.error || 'Tahrirlashda xatolik yuz berdi!';
+        err.style.display = 'block';
+      }
+    } catch (error) {
+      err.textContent = 'Server bilan ulanishda xatolik yuz berdi!';
+      err.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Saqlash va Yangilash';
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    addQuestionBlock('questions-container');
+    addQuestionBlock('questions-container');
+    loadTeacherData();
+  });
+</script>
+{% endblock %}

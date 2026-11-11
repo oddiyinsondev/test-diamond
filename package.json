@@ -1,0 +1,17 @@
+{
+  "name": "maktab-test-tizimi",
+  "version": "2.0.0",
+  "description": "Diamond School - React frontend va Django backend bilan to'liq online test platformasi",
+  "main": "server.js",
+  "scripts": {
+    "dev": "npm run dev --prefix frontend",
+    "build": "npm run build --prefix frontend",
+    "react:dev": "npm run dev --prefix frontend",
+    "react:build": "npm run build --prefix frontend",
+    "start": "python manage.py runserver 127.0.0.1:8000"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}

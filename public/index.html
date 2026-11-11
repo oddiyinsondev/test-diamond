@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartTest - Maktab va O'quv Markazi Test Tizimi</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+  <!-- Top Navigation -->
+  <header class="navbar">
+    <a href="#" class="brand" onclick="app.navigateHome()">
+      <div class="brand-icon">
+        <i class="fa-solid fa-graduation-cap"></i>
+      </div>
+      <div class="brand-text">Smart<span>Test</span></div>
+    </a>
+    <div class="nav-actions">
+      <div id="user-badge" class="user-badge" style="display: none;">
+        <div class="user-avatar" id="nav-avatar">U</div>
+        <div class="user-info">
+          <span class="user-name" id="nav-username">Foydalanuvchi</span>
+          <span class="user-role-tag" id="nav-role">Rol</span>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="app.logout()" title="Tizimdan chiqish" style="margin-left: 8px;">
+          <i class="fa-solid fa-right-from-bracket"></i> Chiqish
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="container">
+
+    <!-- 1. LOGIN VIEW -->
+    <section id="login-view" class="login-wrapper">
+      <div class="login-card">
+        <div class="login-header">
+          <div class="logo-badge">
+            <i class="fa-solid fa-clipboard-check"></i>
+          </div>
+          <h2>Tizimga Kirish</h2>
+          <p>Test va Baholash Platformasiga xush kelibsiz</p>
+        </div>
+
+        <form id="login-form" onsubmit="app.handleLogin(event)">
+          <div class="form-group">
+            <label class="form-label" for="login-username">Foydalanuvchi logini</label>
+            <input type="text" id="login-username" class="form-input" placeholder="Masalan: admin yoki teacher..." required autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="login-password">Parol</label>
+            <input type="password" id="login-password" class="form-input" placeholder="Parolingizni kiriting..." required autocomplete="current-password">
+          </div>
+          <div id="login-error" style="color: var(--danger); font-size: 0.88rem; margin-bottom: 1rem; display: none;"></div>
+          <button type="submit" class="btn btn-primary" style="width: 100%;">
+            <i class="fa-solid fa-arrow-right-to-bracket"></i> Kirish
+          </button>
+        </form>
+
+        <div class="quick-logins">
+          <div class="quick-logins-title">Tezkor namunaviy kirish:</div>
+          <div class="quick-btn-grid">
+            <button class="quick-btn" onclick="app.quickLogin('admin', '123')">
+              👑 Admin<br><small style="color:var(--text-muted)">admin / 123</small>
+            </button>
+            <button class="quick-btn" onclick="app.quickLogin('anvar_muallim', '123')">
+              👨‍🏫 O'qituvchi<br><small style="color:var(--text-muted)">anvar / 123</small>
+            </button>
+            <button class="quick-btn" onclick="app.quickLogin('jasur_9a', '123')">
+              🎓 O'quvchi<br><small style="color:var(--text-muted)">jasur / 123</small>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. ADMIN DASHBOARD -->
+    <section id="admin-view" style="display: none;">
+      <div class="dashboard-header">
+        <div class="dashboard-title">
+          <h1>👑 Boshqaruv Paneli (Admin)</h1>
+          <p>O'qituvchilar, o'quvchilar, umumiy testlar va natijalar monitoringi</p>
+        </div>
+        <div>
+          <button class="btn btn-primary" onclick="app.openNewUserModal()">
+            <i class="fa-solid fa-user-plus"></i> Yangi Akkaunt Ochish
+          </button>
+        </div>
+      </div>
+
+      <!-- Admin Stats Grid -->
+      <div class="stats-grid" id="admin-stats-cards">
+        <div class="stat-card">
+          <div class="stat-icon purple"><i class="fa-solid fa-users"></i></div>
+          <div class="stat-info">
+            <span class="stat-number" id="adm-students-count">0</span>
+            <span class="stat-label">Jami O'quvchilar</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon blue"><i class="fa-solid fa-chalkboard-user"></i></div>
+          <div class="stat-info">
+            <span class="stat-number" id="adm-teachers-count">0</span>
+            <span class="stat-label">Jami O'qituvchilar</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon amber"><i class="fa-solid fa-file-lines"></i></div>
+          <div class="stat-info">
+            <span class="stat-number" id="adm-tests-count">0</span>
+            <span class="stat-label">Yaratilgan Testlar</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green"><i class="fa-solid fa-chart-line"></i></div>
+          <div class="stat-info">
+            <span class="stat-number" id="adm-avg-score">0%</span>
+            <span class="stat-label">O'rtacha O'zlashtirish</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Tabs -->
+      <div class="nav-tabs">
+        <button class="tab-btn active" onclick="app.switchAdminTab('users', this)">
+          <i class="fa-solid fa-id-card"></i> Foydalanuvchilar Akkauntlari
+        </button>
+        <button class="tab-btn" onclick="app.switchAdminTab('teachers-stats', this)">
+          <i class="fa-solid fa-chart-pie"></i> O'qituvchilar Statistikasi
+        </button>
+        <button class="tab-btn" onclick="app.switchAdminTab('grades-stats', this)">
+          <i class="fa-solid fa-school"></i> Sinflar Bo'yicha Natijalar
+        </button>
+      </div>
+
+      <!-- Tab 1: Users Management -->
+      <div id="admin-tab-users" class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <i class="fa-solid fa-list-check"></i> Foydalanuvchilar Ro'yxati
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <select id="admin-user-filter" class="form-select" style="width: auto; padding: 6px 12px; font-size: 0.88rem;" onchange="app.renderAdminUsers()">
+              <option value="all">Barcha rollar</option>
+              <option value="teacher">Faqat O'qituvchilar</option>
+              <option value="student">Faqat O'quvchilar</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th>F.I.Sh</th>
+                <th>Login</th>
+                <th>Roli</th>
+                <th>Sinf / Fan</th>
+                <th>Yaratilgan sana</th>
+                <th style="text-align: right;">Amallar</th>
+              </tr>
+            </thead>
+            <tbody id="admin-users-table-body">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab 2: Teachers Performance Stats -->
+      <div id="admin-tab-teachers-stats" class="panel" style="display: none;">
+        <div class="panel-header">
+          <div class="panel-title">
+            <i class="fa-solid fa-award"></i> O'qituvchilarning O'rgatish va Natijalar Ko'rsatkichlari
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th>O'qituvchi</th>
+                <th>Fani</th>
+                <th>Yaratgan testlari</th>
+                <th>Topshirganlar soni</th>
+                <th>O'rtacha o'zlashtirish</th>
+                <th>Reyting darajasi</th>
+              </tr>
+            </thead>
+            <tbody id="admin-teachers-stats-table-body">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab 3: Grades Stats -->
+      <div id="admin-tab-grades-stats" class="panel" style="display: none;">
+        <div class="panel-header">
+          <div class="panel-title">
+            <i class="fa-solid fa-chart-column"></i> Sinflar Kesimidagi O'zlashtirish Tahlili
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th>Sinf</th>
+                <th>O'quvchilar soni</th>
+                <th>Topshirilgan testlar</th>
+                <th>O'rtacha ko'rsatkich (%)</th>
+                <th>Holat</th>
+              </tr>
+            </thead>
+            <tbody id="admin-grades-table-body">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. TEACHER DASHBOARD -->
+    <section id="teacher-view" style="display: none;">
+      <div class="dashboard-header">
+        <div class="dashboard-title">
+          <h1 id="teacher-greeting">👨‍🏫 O'qituvchi Paneli</h1>
+          <p>Testlar tuzish, o'quvchilar natijalarini kuzatish va ta'lim samaradorligini tahlil qilish</p>
+        </div>
+        <div>
+          <button class="btn btn-primary" onclick="app.switchTeacherTab('create', document.getElementById('btn-tab-create-test'))">
+            <i class="fa-solid fa-plus-circle"></i> Yangi Test Yaratish
+          </button>
+        </div>
+      </div>
+
+      <!-- Teacher Stats Grid -->
+      <div class="stats-grid" id="teacher-stats-cards">
+        <div class="stat-card">
+          <div class="stat-icon blue"><i class="fa-solid fa-book-bookmark"></i></div>
+          <div class="stat-info">
+            <span class="stat-number" id="tch-total-tests">0</span>
+            <span class="stat-label">Mening Testlarim</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon purple"><i class="fa-solid fa-user-check"></i></div>
+          <div class="stat-info">
+            <span class="stat-number" id="tch-total-submissions">0</span>
+            <span class="stat-label">Jami Topshirishlar</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green"><i class="fa-solid fa-bullseye"></i></div>
+          <div class="stat-info">
+            <span class="stat-number" id="tch-avg-score">0%</span>
+            <span class="stat-label">O'rtacha Ball</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon amber"><i class="fa-solid fa-trophy"></i></div>
+          <div class="stat-info">
+            <span class="stat-number" id="tch-pass-rate">0%</span>
+            <span class="stat-label">Muvaffaqiyat (≥60%)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Teacher Tabs -->
+      <div class="nav-tabs">
+        <button class="tab-btn active" onclick="app.switchTeacherTab('my-tests', this)">
+          <i class="fa-solid fa-layer-group"></i> Mening Testlarim
+        </button>
+        <button class="tab-btn" id="btn-tab-create-test" onclick="app.switchTeacherTab('create', this)">
+          <i class="fa-solid fa-pen-to-square"></i> Test Yaratish
+        </button>
+        <button class="tab-btn" onclick="app.switchTeacherTab('results', this)">
+          <i class="fa-solid fa-square-poll-vertical"></i> O'quvchilar Natijalari
+        </button>
+        <button class="tab-btn" onclick="app.switchTeacherTab('analytics', this)">
+          <i class="fa-solid fa-chart-line"></i> Samaradorlik Statistikasi
+        </button>
+      </div>
+
+      <!-- Tab 1: My Tests List -->
+      <div id="teacher-tab-my-tests" class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <i class="fa-solid fa-folder-open"></i> Yaratilgan Testlar
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th>Test Mavzusi</th>
+                <th>Sinf</th>
+                <th>Fan</th>
+                <th>Savollar</th>
+                <th>Vaqt</th>
+                <th>Sana</th>
+                <th style="text-align: right;">Amallar</th>
+              </tr>
+            </thead>
+            <tbody id="teacher-tests-table-body">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab 2: Create Test -->
+      <div id="teacher-tab-create" class="panel" style="display: none;">
+        <div class="panel-header">
+          <div class="panel-title">
+            <i class="fa-solid fa-circle-question"></i> Yangi Test Konstruktori
+          </div>
+        </div>
+        <form id="create-test-form" onsubmit="app.handleCreateTest(event)">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+            <div class="form-group">
+              <label class="form-label">Test Nomi / Mavzusi *</label>
+              <input type="text" id="new-test-title" class="form-input" placeholder="Masalan: Kvadrat tenglamalar nazorati" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Mo'ljallangan Sinf *</label>
+              <select id="new-test-grade" class="form-select" required>
+                <!-- populated by meta -->
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Ajratilgan Vaqt (Daqiqada) *</label>
+              <input type="number" id="new-test-duration" class="form-input" min="1" max="180" value="15" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tavsif (Ixtiyoriy)</label>
+            <textarea id="new-test-desc" class="form-textarea" rows="2" placeholder="O'quvchilar uchun qo'shimcha ko'rsatma yoki qisqacha ma'lumot..."></textarea>
+          </div>
+
+          <!-- Questions Container -->
+          <div style="margin-top: 2rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between;">
+            <h3 style="font-size: 1.2rem; font-weight: 700;">Savollar Ro'yxati</h3>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="app.addQuestionToForm()">
+              <i class="fa-solid fa-plus"></i> Savol Qo'shish
+            </button>
+          </div>
+
+          <div id="form-questions-list" style="display: flex; flex-direction: column; gap: 1.25rem;">
+            <!-- Questions rendered here -->
+          </div>
+
+          <div style="margin-top: 2rem; display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" class="btn btn-secondary" onclick="app.switchTeacherTab('my-tests')">Bekor Qilish</button>
+            <button type="submit" class="btn btn-success">
+              <i class="fa-solid fa-floppy-disk"></i> Testni Saqlash va Chop Etish
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Tab 3: Student Results -->
+      <div id="teacher-tab-results" class="panel" style="display: none;">
+        <div class="panel-header">
+          <div class="panel-title">
+            <i class="fa-solid fa-square-poll-vertical"></i> O'quvchilarning Test Natijalari Jurnali
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th>O'quvchi</th>
+                <th>Sinfi</th>
+                <th>Test Nomi</th>
+                <th>To'g'ri / Jami</th>
+                <th>Foiz</th>
+                <th>Vaqti</th>
+                <th>Topshirilgan Sana</th>
+              </tr>
+            </thead>
+            <tbody id="teacher-results-table-body">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab 4: Teacher Analytics -->
+      <div id="teacher-tab-analytics" class="panel" style="display: none;">
+        <div class="panel-header">
+          <div class="panel-title">
+            <i class="fa-solid fa-chart-pie"></i> Testlar Bo'yicha Tahlil va Samaradorlik
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th>Test Nomi</th>
+                <th>Sinf</th>
+                <th>Topshirganlar</th>
+                <th>O'rtacha Ball</th>
+                <th>O'zlashtirish Progressi</th>
+              </tr>
+            </thead>
+            <tbody id="teacher-analytics-table-body">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. STUDENT DASHBOARD -->
+    <section id="student-view" style="display: none;">
+      <div class="dashboard-header">
+        <div class="dashboard-title">
+          <h1 id="student-greeting">🎓 O'quvchi Xonasi</h1>
+          <p>O'qituvchilar tayyorlagan testlarni yeching va sinfingizdagi o'rningizni ko'ring</p>
+        </div>
+        <div>
+          <span class="badge badge-primary" style="font-size: 0.95rem; padding: 8px 16px;">
+            <i class="fa-solid fa-users-rectangle"></i> Sinf: <span id="student-grade-badge">9-A</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Student Tabs -->
+      <div class="nav-tabs">
+        <button class="tab-btn active" onclick="app.switchStudentTab('tests', this)">
+          <i class="fa-solid fa-list-check"></i> Mavjud Testlar
+        </button>
+        <button class="tab-btn" onclick="app.switchStudentTab('leaderboard', this)">
+          <i class="fa-solid fa-trophy"></i> 🏆 Sinfim Reytingi
+        </button>
+        <button class="tab-btn" onclick="app.switchStudentTab('my-results', this)">
+          <i class="fa-solid fa-clock-rotate-left"></i> Mening Natijalarim
+        </button>
+      </div>
+
+      <!-- Tab 1: Available Tests -->
+      <div id="student-tab-tests">
+        <div id="student-tests-grid" class="test-grid">
+          <!-- Rendered via JS -->
+        </div>
+      </div>
+
+      <!-- Tab 2: Class Leaderboard -->
+      <div id="student-tab-leaderboard" class="panel" style="display: none;">
+        <div class="panel-header">
+          <div class="panel-title">
+            <i class="fa-solid fa-medal"></i> <span id="leaderboard-title">9-A Sinf Reyting Jadvali</span>
+          </div>
+          <span style="font-size: 0.85rem; color: var(--text-muted)">
+            Barcha topshirilgan testlar bo'yicha hisoblangan
+          </span>
+        </div>
+        <div class="table-responsive">
+          <table class="custom-table leaderboard-table">
+            <thead>
+              <tr>
+                <th style="width: 70px;">O'rni</th>
+                <th>O'quvchi (F.I.Sh)</th>
+                <th>Topshirgan testlari</th>
+                <th>To'g'ri javoblari</th>
+                <th>O'rtacha Ball</th>
+                <th>Umumiy Ball</th>
+              </tr>
+            </thead>
+            <tbody id="student-leaderboard-table-body">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab 3: My Results History -->
+      <div id="student-tab-my-results" class="panel" style="display: none;">
+        <div class="panel-header">
+          <div class="panel-title">
+            <i class="fa-solid fa-clipboard-user"></i> Shaxsiy Natijalar Tarixi
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th>Test Nomi</th>
+                <th>Fan</th>
+                <th>To'g'ri Javoblar</th>
+                <th>Ball (Foiz)</th>
+                <th>Sarflangan Vaqt</th>
+                <th>Topshirilgan Sana</th>
+              </tr>
+            </thead>
+            <tbody id="student-results-table-body">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. TEST TAKING VIEW (INTERACTIVE TEST RUNNER) -->
+    <section id="test-runner-view" style="display: none;">
+      <div class="test-taking-container">
+        <!-- Floating Header with Timer -->
+        <div class="test-header-bar">
+          <div>
+            <h2 id="runner-test-title" style="font-size: 1.25rem; font-weight: 800;">Matematika Testi</h2>
+            <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 2px;">
+              <span id="runner-test-meta">Savollar: 5 ta • Ajratilgan vaqt: 15 daqiqa</span>
+            </div>
+          </div>
+          <div class="timer-box" id="runner-timer-box">
+            <i class="fa-regular fa-clock"></i>
+            <span id="runner-timer">15:00</span>
+          </div>
+        </div>
+
+        <!-- Question Body -->
+        <div id="runner-questions-container">
+          <!-- Rendered via JS -->
+        </div>
+
+        <!-- Action buttons -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem; margin-bottom: 3rem;">
+          <button class="btn btn-secondary" onclick="app.cancelTestTaking()">
+            <i class="fa-solid fa-arrow-left"></i> Testdan Chiqish
+          </button>
+          <button class="btn btn-success" onclick="app.submitTestTaking()">
+            <i class="fa-solid fa-check-double"></i> Testni Yakunlash va Topshirish
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. TEST RESULT VIEW (DETAILED REVIEW) -->
+    <section id="test-result-view" style="display: none;">
+      <div class="test-taking-container">
+        <div class="panel" style="text-align: center; padding: 3rem 2rem;">
+          <div id="result-icon-container" style="font-size: 3.5rem; margin-bottom: 1rem;">
+            🏆
+          </div>
+          <h2 id="result-headline" style="font-size: 2rem; font-weight: 800; margin-bottom: 0.5rem;">Ajoyib Natija!</h2>
+          <p id="result-subtext" style="color: var(--text-muted); margin-bottom: 1.5rem;">Siz testni muvaffaqiyatli yakunladingiz.</p>
+
+          <div style="display: inline-flex; align-items: center; gap: 2rem; background: var(--gray-50); border: 1px solid var(--gray-200); padding: 1.25rem 2.5rem; border-radius: var(--radius-lg); margin-bottom: 2rem;">
+            <div>
+              <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">To'g'ri javoblar</div>
+              <div id="result-correct-ratio" style="font-size: 1.8rem; font-weight: 800; color: var(--primary);">4 / 5</div>
+            </div>
+            <div style="width: 1px; height: 40px; background: var(--gray-300);"></div>
+            <div>
+              <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Umumiy Ball</div>
+              <div id="result-score-percent" style="font-size: 1.8rem; font-weight: 800; color: var(--success);">80%</div>
+            </div>
+            <div style="width: 1px; height: 40px; background: var(--gray-300);"></div>
+            <div>
+              <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Sarflangan vaqt</div>
+              <div id="result-time-spent" style="font-size: 1.8rem; font-weight: 800; color: var(--dark);">3m 20s</div>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: center; gap: 12px; margin-bottom: 2.5rem;">
+            <button class="btn btn-primary" onclick="app.viewClassLeaderboardFromResults()">
+              <i class="fa-solid fa-trophy"></i> Sinf Reytingini Ko'rish
+            </button>
+            <button class="btn btn-secondary" onclick="app.navigateHome()">
+              <i class="fa-solid fa-house"></i> Bosh Sahifaga Qaytish
+            </button>
+          </div>
+
+          <div style="text-align: left;">
+            <h3 style="font-size: 1.3rem; font-weight: 700; margin-bottom: 1rem; border-bottom: 1px solid var(--gray-200); padding-bottom: 0.5rem;">
+              Savollar Tahlili va To'g'ri Javoblar
+            </h3>
+            <div id="result-questions-breakdown" style="display: flex; flex-direction: column; gap: 1rem;">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL: ADD / EDIT USER (FOR ADMIN) -->
+  <div id="user-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="user-modal-title">Yangi Foydalanuvchi Ochish</h3>
+        <button class="close-btn" onclick="app.closeUserModal()">&times;</button>
+      </div>
+      <form id="user-modal-form" onsubmit="app.handleSaveUser(event)">
+        <input type="hidden" id="edit-user-id">
+        <div class="form-group">
+          <label class="form-label">To'liq F.I.Sh *</label>
+          <input type="text" id="modal-user-fullname" class="form-input" placeholder="Masalan: Sardor Komilov" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Foydalanuvchi logini *</label>
+          <input type="text" id="modal-user-username" class="form-input" placeholder="Masalan: sardor_9a" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Parol *</label>
+          <input type="password" id="modal-user-password" class="form-input" placeholder="Parol kiriting..." required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Roli *</label>
+          <select id="modal-user-role" class="form-select" onchange="app.handleRoleChangeInModal(this.value)" required>
+            <option value="student">🎓 O'quvchi (Student)</option>
+            <option value="teacher">👨‍🏫 O'qituvchi (Teacher)</option>
+          </select>
+        </div>
+        <div class="form-group" id="group-modal-grade">
+          <label class="form-label">O'quvchi Sinfi *</label>
+          <select id="modal-user-grade" class="form-select">
+            <!-- populated by meta -->
+          </select>
+        </div>
+        <div class="form-group" id="group-modal-subject" style="display: none;">
+          <label class="form-label">O'qitadigan Fani *</label>
+          <select id="modal-user-subject" class="form-select">
+            <!-- populated by meta -->
+          </select>
+        </div>
+        <div id="modal-user-error" style="color: var(--danger); font-size: 0.88rem; margin-bottom: 1rem; display: none;"></div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-secondary" onclick="app.closeUserModal()">Bekor qilish</button>
+          <button type="submit" class="btn btn-primary">Saqlash</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

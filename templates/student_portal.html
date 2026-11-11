@@ -1,0 +1,1318 @@
+{% extends 'base.html' %}
+
+{% block title %}O'quvchi Portali - Diamond School{% endblock %}
+
+{% block portal_badge %}
+  <span class="portal-tag" style="background: rgba(0, 180, 216, 0.15); color: #00b4d8; border: 1px solid rgba(0, 180, 216, 0.3);">🎓 O'quvchi Portali</span>
+{% endblock %}
+
+{% block content %}
+<!-- 🔒 ROLE ISOLATION: STUDENT GATE IF NOT LOGGED IN AS STUDENT -->
+<div id="student-auth-gate" style="display: none;">
+  <div class="portal-login-gate">
+    <div style="width: 70px; height: 70px; border-radius: 50%; background: rgba(16, 185, 129, 0.15); border: 2px solid #10b981; display: flex; align-items: center; justify-content: center; font-size: 2rem; color: #10b981; margin: 0 auto 1.5rem auto; box-shadow: 0 0 25px rgba(16, 185, 129, 0.35);">
+      <i class="fa-solid fa-user-graduate"></i>
+    </div>
+    <div class="diamond-pill-badge" style="margin-bottom: 1rem;">
+      <i class="fa-solid fa-graduation-cap"></i> O'quvchi Kabineti
+    </div>
+    <h2 style="font-size: 1.6rem; font-weight: 850; margin-bottom: 0.5rem; color: var(--text-main);">
+      O'quvchi Tizimiga Kirish
+    </h2>
+    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.75rem;">
+      Testlarni topshirish, shaxsiy statistika va reytingni kuzatish uchun profilingizga kiring.
+    </p>
+
+    <div id="student-role-warning" class="alert alert-warning" style="display: none; margin-bottom: 1.25rem; text-align: left; font-size: 0.88rem;">
+      <i class="fa-solid fa-triangle-exclamation"></i> <span id="student-role-warning-text"></span>
+      <div style="margin-top: 8px;">
+        <button class="btn btn-secondary btn-sm" onclick="globalLogout()">Boshqa hisob bilan kirish</button>
+      </div>
+    </div>
+
+    <form id="student-login-form" onsubmit="handleStudentDirectLogin(event)">
+      <div class="form-group" style="text-align: left; margin-bottom: 1rem;">
+        <label class="form-label">O'quvchi Logini:</label>
+        <div style="position: relative;">
+          <i class="fa-solid fa-user" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+          <input type="text" id="student-gate-username" class="form-input" style="padding-left: 38px;" placeholder="behruz_9a" required>
+        </div>
+      </div>
+      <div class="form-group" style="text-align: left; margin-bottom: 1.5rem;">
+        <label class="form-label">Parol:</label>
+        <div style="position: relative;">
+          <i class="fa-solid fa-key" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+          <input type="password" id="student-gate-password" class="form-input" style="padding-left: 38px;" placeholder="••••••••" required>
+        </div>
+      </div>
+      <div id="student-gate-error" class="alert alert-danger" style="display: none; margin-bottom: 1rem; font-size: 0.88rem;"></div>
+      <button type="submit" class="btn btn-success" style="width: 100%; justify-content: center; padding: 13px 20px; font-size: 1rem; border-radius: 9999px;">
+        <i class="fa-solid fa-right-to-bracket"></i> O'quvchi Kabinetiga Kirish
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Standard Student View Container -->
+<div id="student-main-container" style="display: none;">
+  <div class="dashboard-header">
+    <div class="dashboard-title">
+      <h1 style="font-size: 1.7rem; font-weight: 800;" id="std-welcome">🎓 Xush kelibsiz!</h1>
+      <p style="color: var(--text-muted); font-size: 0.9rem;">O'qituvchilaringiz tuzgan testlarni topshiring, o'sish dinamikangizni tahlil qiling va reytingda yetakchi bo'ling</p>
+    </div>
+    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+      <span class="pill-badge pill-amber" style="font-size: 0.95rem; padding: 7px 14px; font-weight: 850; background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 9999px;">
+        <i class="fa-solid fa-coins"></i> <span id="std-coin-badge">0</span> Coins
+      </span>
+      <span class="badge badge-primary" style="font-size: 0.95rem; padding: 8px 16px;">
+        <i class="fa-solid fa-users"></i> Sinf: <span id="std-grade-badge">9-A</span>
+      </span>
+      <button class="btn btn-secondary btn-sm" onclick="switchStudentTab('profile', document.getElementById('tab-btn-profile'))">
+        <i class="fa-solid fa-user-pen"></i> Profilim
+      </button>
+    </div>
+  </div>
+
+  <!-- Mobile Sidebar Toggle Bar (Kichik ekranlarda) -->
+  <div class="mobile-sidebar-toggle-bar">
+    <button type="button" class="mobile-toggle-btn" onclick="toggleStudentSidebar(true)">
+      <i class="fa-solid fa-bars"></i> Menyu
+    </button>
+    <div class="mobile-current-tab-pill" id="stdMobileCurrentTabTitle">
+      <i class="fa-solid fa-list-check" style="color: #00b4d8;"></i> Mavjud Testlar
+    </div>
+  </div>
+
+  <!-- Mobile Backdrop Overlay -->
+  <div class="portal-sidebar-backdrop" id="stdSidebarBackdrop" onclick="toggleStudentSidebar(false)"></div>
+
+  <!-- Two-Column Portal Layout -->
+  <div class="portal-app-layout">
+    <!-- LEFT SIDEBAR -->
+    <aside class="portal-sidebar" id="stdSidebar">
+      <button type="button" class="portal-sidebar-close-btn" onclick="toggleStudentSidebar(false)">&times;</button>
+
+      <!-- Mini Profile Info in Sidebar -->
+      <div class="portal-sidebar-userbox">
+        <img id="std-sidebar-avatar-img" src="https://api.dicebear.com/7.x/initials/svg?seed=Student" width="44" height="44" style="width: 44px !important; height: 44px !important; min-width: 44px !important; max-width: 44px !important; border-radius: 12px; object-fit: cover; display: block;" class="portal-sidebar-avatar" alt="Avatar">
+        <div class="portal-sidebar-info">
+          <div class="portal-sidebar-name" id="std-sidebar-name">O'quvchi</div>
+          <div class="portal-sidebar-role">
+            <i class="fa-solid fa-graduation-cap" style="color: #00b4d8;"></i>
+            <span id="std-sidebar-grade">9-A sinf</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="portal-sidebar-nav-title">O'QUVCHI MENYUSI</div>
+      <nav class="portal-sidebar-nav">
+        <button type="button" class="portal-nav-btn active" id="std-nav-tests" onclick="switchStudentTab('tests', this, 'Mavjud Testlar', 'fa-list-check')">
+          <div class="portal-nav-icon"><i class="fa-solid fa-list-check"></i></div>
+          <span class="portal-nav-label">Mavjud Testlar</span>
+        </button>
+
+        <button type="button" class="portal-nav-btn nav-coin" id="std-nav-leaderboard" onclick="switchStudentTab('leaderboard', this, 'Sinfim Reytingi', 'fa-trophy')">
+          <div class="portal-nav-icon"><i class="fa-solid fa-trophy"></i></div>
+          <span class="portal-nav-label">Sinfim Reytingi</span>
+          <span class="portal-nav-badge">🏆 TOP</span>
+        </button>
+
+        <button type="button" class="portal-nav-btn" id="std-nav-analytics" onclick="switchStudentTab('analytics', this, 'Natijalarim & Grafik', 'fa-chart-line')">
+          <div class="portal-nav-icon"><i class="fa-solid fa-chart-line"></i></div>
+          <span class="portal-nav-label">Natijalarim & Grafik</span>
+        </button>
+
+        <button type="button" class="portal-nav-btn" id="std-nav-profile" onclick="switchStudentTab('profile', this, 'Mening Profilim', 'fa-user-gear')">
+          <div class="portal-nav-icon"><i class="fa-solid fa-user-gear"></i></div>
+          <span class="portal-nav-label">Mening Profilim</span>
+        </button>
+      </nav>
+
+      <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255, 255, 255, 0.06); text-align: center;">
+        <span style="font-size: 0.72rem; color: var(--text-muted); display: block;">Diamond School • SmartTest</span>
+      </div>
+    </aside>
+
+    <!-- RIGHT MAIN CONTENT AREA -->
+    <main class="portal-main-area">
+      <!-- 4 Student Quick Stats Cards (Aniq ko'rsatkichlar) -->
+      <div class="admin-kpi-grid animate-fade-up" style="margin-bottom: 1.75rem;">
+        <div class="admin-kpi-card">
+          <div class="admin-kpi-icon kpi-amber">
+            <i class="fa-solid fa-trophy"></i>
+          </div>
+          <div>
+            <div class="admin-kpi-val" id="std-kpi-rank">1-o'rin</div>
+            <div class="admin-kpi-label">Sinfdagi O'rni</div>
+            <div style="font-size: 0.75rem; color: #f59e0b; font-weight: 700; margin-top: 3px;">
+              <i class="fa-solid fa-crown"></i> Yetakchi o'quvchi
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-kpi-card">
+          <div class="admin-kpi-icon kpi-blue">
+            <i class="fa-solid fa-file-signature"></i>
+          </div>
+          <div>
+            <div class="admin-kpi-val" id="std-kpi-tests">0</div>
+            <div class="admin-kpi-label">Topshirilgan Testlar</div>
+            <div style="font-size: 0.75rem; color: #00b4d8; font-weight: 700; margin-top: 3px;">
+              <i class="fa-solid fa-circle-check"></i> To'liq yakunlangan
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-kpi-card">
+          <div class="admin-kpi-icon kpi-green">
+            <i class="fa-solid fa-bullseye"></i>
+          </div>
+          <div>
+            <div class="admin-kpi-val" id="std-kpi-avg">0%</div>
+            <div class="admin-kpi-label">O'rtacha Natija</div>
+            <div style="font-size: 0.75rem; color: #10b981; font-weight: 700; margin-top: 3px;">
+              <i class="fa-solid fa-star"></i> O'zlashtirish darajasi
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-kpi-card shimmer-card" style="border-color: rgba(245, 158, 11, 0.4);">
+          <div class="admin-kpi-icon kpi-amber">
+            <i class="fa-solid fa-coins"></i>
+          </div>
+          <div>
+            <div class="admin-kpi-val" id="std-kpi-coins" style="color: #f59e0b;">0</div>
+            <div class="admin-kpi-label">Diamond Coins</div>
+            <div style="font-size: 0.75rem; color: #f59e0b; font-weight: 700; margin-top: 3px;">
+              <i class="fa-solid fa-gem"></i> Rag'batlantirish balansi
+            </div>
+          </div>
+        </div>
+      </div>
+
+  <!-- TAB 1: TESTS GRID -->
+  <div id="std-tab-tests">
+    <!-- Filter Bar -->
+    <div style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; background: var(--bg-card); padding: 12px 18px; border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <span style="font-weight: 700; font-size: 0.88rem; color: var(--text-muted);"><i class="fa-solid fa-filter"></i> Fan:</span>
+        <select id="filter-test-subject" class="form-select" style="width: auto; padding: 6px 14px; font-size: 0.88rem;" onchange="applyStudentTestFilters()">
+          <option value="all">Barcha Fanlar</option>
+          {% for s in subjects %}
+            <option value="{{ s }}">{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <span style="font-weight: 700; font-size: 0.88rem; color: var(--text-muted);"><i class="fa-solid fa-globe"></i> Til:</span>
+        <div class="lang-toggle-wrap" style="padding: 2px;">
+          <button type="button" class="lang-btn active" id="filter-lang-all" onclick="setStudentLangFilter('all')">Barchasi</button>
+          <button type="button" class="lang-btn" id="filter-lang-uz" onclick="setStudentLangFilter('uz')">🇺🇿 UZ</button>
+          <button type="button" class="lang-btn" id="filter-lang-ru" onclick="setStudentLangFilter('ru')">🇷🇺 RU</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="student-tests-grid" class="test-grid">
+      <!-- Dynamic test cards -->
+    </div>
+  </div>
+
+  <!-- TAB 2: LEADERBOARD -->
+  <div id="std-tab-leaderboard" class="panel" style="display: none;">
+    <div class="panel-header">
+      <div class="panel-title">
+        <i class="fa-solid fa-medal" style="color: var(--accent);"></i> <span id="leaderboard-heading">Sinf Reyting Jadvali</span>
+      </div>
+      <small style="color: var(--text-muted);">
+        Barcha test natijalari asosida hisoblangan
+      </small>
+    </div>
+    <div class="table-responsive">
+      <table class="custom-table leaderboard-table">
+        <thead>
+          <tr>
+            <th style="width: 70px;">O'rni</th>
+            <th>O'quvchi (F.I.Sh)</th>
+            <th>Topshirgan testlari</th>
+            <th>To'g'ri javoblari</th>
+            <th>O'rtacha Ball</th>
+            <th>Umumiy Ball</th>
+            <th>🪙 Diamond Coins</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboard-tbody">
+          <!-- Rendered via JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB 3: DIAGONAL / TIMELINE CHARTS & RESULTS -->
+  <div id="std-tab-analytics" class="panel" style="display: none;">
+    <div class="panel-header" style="margin-bottom: 1.5rem;">
+      <div>
+        <div class="panel-title" style="font-size: 1.3rem; font-weight: 850;">
+          <i class="fa-solid fa-arrow-trend-up" style="color: var(--primary);"></i> Shaxsiy O'sish Dinamikasi va Fanlar Tahlili
+        </div>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin: 4px 0 0 0;">
+          Har bir topshirilgan test o'quvchining bilim darajasi o'sishini diagonal grafikda ko'rsatib boradi
+        </p>
+      </div>
+    </div>
+
+    <!-- Charts Grid (Diagonal Line Chart + Subject Bar Chart) -->
+    <div class="analytics-charts-grid">
+      <div class="analytics-chart-card">
+        <div class="analytics-chart-header">
+          <h4 class="analytics-chart-title">
+            <i class="fa-solid fa-arrow-trend-up" style="color: #00b4d8;"></i> Ballarning O'zgarish Dinamikasi (Diagonal Grafik)
+          </h4>
+          <span class="pill-badge pill-cyan">O'sish Chizig'i</span>
+        </div>
+        <div class="analytics-chart-canvas-wrap">
+          <canvas id="studentTimelineChart"></canvas>
+        </div>
+      </div>
+
+      <div class="analytics-chart-card">
+        <div class="analytics-chart-header">
+          <h4 class="analytics-chart-title">
+            <i class="fa-solid fa-chart-column" style="color: #10b981;"></i> Fanlar Bo'yicha O'zlashtirish Ko'rsatkichi (%)
+          </h4>
+          <span class="pill-badge pill-green">Fanlar Tahlili</span>
+        </div>
+        <div class="analytics-chart-canvas-wrap">
+          <canvas id="studentSubjectChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table of Previous Submissions -->
+    <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 1rem;">
+      <i class="fa-solid fa-clock-rotate-left"></i> Barcha Topshirilgan Testlar Tarixi
+    </h3>
+    <div class="table-responsive">
+      <table class="custom-table">
+        <thead>
+          <tr>
+            <th>Test Nomi</th>
+            <th>Fan</th>
+            <th>To'g'ri Javoblar</th>
+            <th>Ball (Foiz)</th>
+            <th>Sarflangan Vaqt</th>
+            <th>Topshirilgan Sana</th>
+          </tr>
+        </thead>
+        <tbody id="student-results-tbody">
+          <!-- Rendered via JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB 4: STUDENT PROFILE & EDIT -->
+  <div id="std-tab-profile" class="panel" style="display: none;">
+    <div class="panel-header">
+      <div class="panel-title">
+        <i class="fa-solid fa-user-gear" style="color: #00b4d8;"></i> Shaxsiy Profilim va Avatar Rasmni Yangilash
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; align-items: start;">
+      <!-- Profile Card Info -->
+      <div style="background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: var(--radius-lg); padding: 2rem; text-align: center;">
+        <div class="avatar-wrap-modern" style="width: 110px; height: 110px; margin: 0 auto 1.25rem auto; cursor: pointer;" onclick="document.getElementById('std-avatar-file-input').click()" title="Suratni o'zgartirish uchun bosing">
+          <img id="std-profile-avatar-img" src="" alt="Avatar" class="avatar-img-modern" onerror="this.src='https://api.dicebear.com/7.x/initials/svg?seed=ST&backgroundColor=0284c7'">
+          <div class="avatar-edit-overlay">
+            <i class="fa-solid fa-camera"></i> Suratni yuklash
+          </div>
+        </div>
+        <input type="file" id="std-avatar-file-input" accept="image/*" style="display: none;" onchange="previewStudentAvatar(this)">
+        <small style="display: block; color: var(--text-muted); font-size: 0.78rem; margin-bottom: 1rem;">
+          Suratni yuklash uchun avatar ustiga bosing
+        </small>
+
+        <h2 style="font-size: 1.35rem; font-weight: 800; margin-bottom: 4px;" id="profile-card-name">Jasur Aliyev</h2>
+        <span class="badge badge-success" style="font-size: 0.85rem; padding: 4px 12px; margin-bottom: 1rem;" id="profile-card-grade">9-A Sinf O'quvchisi</span>
+        
+        <p id="profile-card-bio" style="font-size: 0.88rem; color: var(--text-muted); font-style: italic; margin-bottom: 1rem;">
+          "Bilim - kuchdir!"
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 8px; text-align: left; margin-top: 1rem; border-top: 1px solid var(--gray-200); padding-top: 1rem; font-size: 0.9rem;">
+          <div><i class="fa-solid fa-at" style="color: var(--primary); width: 22px;"></i> Login: <code id="profile-card-username">student1</code></div>
+          <div><i class="fa-solid fa-phone" style="color: var(--success); width: 22px;"></i> Telefon: <strong id="profile-card-phone">+998 90 123 45 67</strong></div>
+          <div><i class="fa-solid fa-school" style="color: var(--secondary); width: 22px;"></i> Sinfi: <strong id="profile-card-grade-text">9-A</strong></div>
+        </div>
+      </div>
+
+      <!-- Edit Form -->
+      <div>
+        <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 1rem; color: var(--text-main);">
+          Ma'lumotlarni Yangilash va Parolni O'zgartirish
+        </h3>
+        <form id="student-profile-form" onsubmit="handleSaveStudentProfile(event)">
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label class="form-label">To'liq F.I.Sh *</label>
+            <input type="text" id="prof-fullname" class="form-input" required>
+          </div>
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label class="form-label">Telefon Raqamingiz (yoki ota-ona telefoni)</label>
+            <input type="text" id="prof-phone" class="form-input" placeholder="+998 90 123 45 67">
+          </div>
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label class="form-label">Qisqacha Bio / Shioringiz</label>
+            <textarea id="prof-student-bio" class="form-textarea" rows="2" placeholder="Masalan: Maqsadim - IT va matematika olimpiadasi g'olibi bo'lish"></textarea>
+          </div>
+          <div class="form-group" style="margin-bottom: 1.25rem;">
+            <label class="form-label">Yangi Parol (Parolni yangilamoqchi bo'lsangiz kiriting)</label>
+            <input type="password" id="prof-new-password" class="form-input" placeholder="O'zgartirmaslik uchun bo'sh qoldiring">
+            <small style="color: var(--text-muted); font-size: 0.78rem;">Parolingizni esdan chiqarmaslik uchun esda qolarli parol qo'ying.</small>
+          </div>
+          <div id="prof-msg" style="display: none; padding: 10px; border-radius: 8px; margin-bottom: 1rem; font-size: 0.88rem;"></div>
+          <button type="submit" class="btn btn-primary" id="prof-student-save-btn" style="width: 100%;">
+            <i class="fa-solid fa-floppy-disk"></i> O'zgarishlarni Saqlash
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+    </main>
+  </div>
+
+
+<!-- INTERACTIVE TEST TAKING CONTAINER (HIDDEN INITIALLY) -->
+<div id="student-taking-container" style="display: none; max-width: 800px; margin: 0 auto;">
+  <div class="test-header-bar">
+    <div>
+      <h2 id="active-test-title" style="font-size: 1.25rem; font-weight: 800;">Test Nomi</h2>
+      <div style="font-size: 0.82rem; color: var(--text-muted);" id="active-test-meta">
+        Matematika • 5 ta savol
+      </div>
+    </div>
+    <div class="timer-box" id="test-timer-box">
+      <i class="fa-regular fa-clock"></i>
+      <span id="test-timer-digits">15:00</span>
+    </div>
+  </div>
+
+  <div id="active-questions-list" style="display: flex; flex-direction: column; gap: 1.25rem;">
+    <!-- Active questions rendered here -->
+  </div>
+
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem; margin-bottom: 3rem; flex-wrap: wrap; gap: 10px;">
+    <button class="btn btn-secondary" onclick="cancelTestTaking()">
+      <i class="fa-solid fa-arrow-left"></i> Chiqish
+    </button>
+    <button class="btn btn-success" onclick="submitTestTaking()">
+      <i class="fa-solid fa-check-double"></i> Testni Yakunlash va Topshirish
+    </button>
+  </div>
+</div>
+
+<!-- TEST RESULT REVIEW CONTAINER (HIDDEN INITIALLY) -->
+<div id="student-result-container" style="display: none; max-width: 800px; margin: 0 auto;">
+  <div class="panel" style="text-align: center; padding: 2.5rem 1.5rem;">
+    <div id="res-icon" style="font-size: 3rem; margin-bottom: 0.5rem;">🏆</div>
+    <h2 id="res-title" style="font-size: 1.75rem; font-weight: 800; margin-bottom: 0.4rem;">Ajoyib Natija!</h2>
+    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">Test natijangiz muvaffaqiyatli qabul qilindi.</p>
+
+    <!-- Score cards -->
+    <div style="display: flex; justify-content: center; gap: 1.5rem; background: var(--card-bg); border: 1px solid var(--glass-border); padding: 1.25rem; border-radius: var(--radius-lg); margin-bottom: 1.75rem; flex-wrap: wrap;">
+      <div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">To'g'ri javoblar</div>
+        <div id="res-ratio" style="font-size: 1.6rem; font-weight: 800; color: var(--primary);">4 / 5</div>
+      </div>
+      <div style="width: 1px; height: 35px; background: var(--gray-300);"></div>
+      <div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Umumiy Ball</div>
+        <div id="res-percent" style="font-size: 1.6rem; font-weight: 800; color: var(--success);">80%</div>
+      </div>
+      <div style="width: 1px; height: 35px; background: var(--gray-300);"></div>
+      <div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Sarflangan vaqt</div>
+        <div id="res-time" style="font-size: 1.6rem; font-weight: 800; color: var(--dark);">2m 45s</div>
+      </div>
+    </div>
+
+    <!-- 🪙 Diamond Coin Mukofoti Banneri -->
+    <div id="res-coin-reward-banner" style="display: none; background: linear-gradient(135deg, rgba(245, 158, 11, 0.16) 0%, rgba(217, 119, 6, 0.08) 100%); border: 1.5px solid rgba(245, 158, 11, 0.45); border-radius: 14px; padding: 1.1rem 1.6rem; margin-bottom: 1.5rem; align-items: center; justify-content: center; gap: 15px; box-shadow: 0 4px 18px rgba(245, 158, 11, 0.18);">
+      <div style="font-size: 2.2rem; line-height: 1;">🪙</div>
+      <div style="text-align: left;">
+        <div style="font-size: 1.15rem; font-weight: 850; color: #f59e0b;">
+          🎉 Tabriklaymiz! Sizga +<span id="res-earned-coins">0</span> Diamond Coin taqdim etildi!
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 2px;">
+          Testdagi faol ishtirokingiz va a'lo natijangiz uchun rag'batlantirildingiz • Jami balansingiz: <strong id="res-total-coins" style="color: #f59e0b; font-weight: 850;">0</strong> Coin
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 2rem;">
+      <button class="btn btn-primary" onclick="goToLeaderboardFromResults()">
+        <i class="fa-solid fa-trophy"></i> Sinf Reytingini Ko'rish
+      </button>
+      <button class="btn btn-secondary" onclick="backToStudentDashboard()">
+        <i class="fa-solid fa-house"></i> Bosh Sahifaga Qaytish
+      </button>
+    </div>
+
+    <!-- Breakdown -->
+    <div style="text-align: left;">
+      <h3 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem; border-bottom: 1px solid var(--gray-200); padding-bottom: 0.5rem;">
+        Savollar Tahlili va To'g'ri Javoblar
+      </h3>
+      <div id="res-breakdown-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
+        <!-- Breakdown items -->
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  let currentStudent = null;
+  let activeTestId = null;
+  let testAnswers = {};
+  let timerInterval = null;
+  let remainingSecs = 0;
+  let totalSecs = 0;
+
+  let currentSubjectFilter = 'all';
+  let currentLangFilter = 'all';
+
+  // Chart instances
+  let timelineChartInstance = null;
+  let subjectChartInstance = null;
+
+  function applyStudentTestFilters() {
+    currentSubjectFilter = document.getElementById('filter-test-subject').value;
+    loadStudentTests();
+  }
+
+  function setStudentLangFilter(lang) {
+    currentLangFilter = lang;
+    ['all', 'uz', 'ru'].forEach(l => {
+      const btn = document.getElementById(`filter-lang-${l}`);
+      if (btn) btn.classList.toggle('active', l === lang);
+    });
+    loadStudentTests();
+  }
+
+  async function loadStudentTests() {
+    const user = currentStudent || getSavedUser();
+    const studentId = user ? user.id : '';
+    const grade = user ? (user.grade || '9-A') : '9-A';
+    const grid = document.getElementById('student-tests-grid');
+    if (!grid) return;
+
+    try {
+      let url = `/api/student/tests/?studentId=${studentId}&grade=${encodeURIComponent(grade)}`;
+      if (currentSubjectFilter && currentSubjectFilter !== 'all') {
+        url += `&subject=${encodeURIComponent(currentSubjectFilter)}`;
+      }
+      if (currentLangFilter && currentLangFilter !== 'all') {
+        url += `&lang=${encodeURIComponent(currentLangFilter)}`;
+      }
+
+      const res = await fetch(url);
+      const tests = await res.json();
+
+      if (!tests.length) {
+        grid.innerHTML = `<div class="panel" style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 3rem;">Hozirda topshirish uchun faol testlar topilmadi.</div>`;
+      } else {
+        grid.innerHTML = tests.map(t => {
+          const isDone = t.completed;
+          const langBadge = (t.language === 'ru') ? '<span class="badge-lang badge-lang-ru">RU</span>' : '<span class="badge-lang badge-lang-uz">UZ</span>';
+
+          // Vaqt indikatori
+          let timeNoticeHtml = '';
+          if (t.isUpcoming) {
+            timeNoticeHtml = `
+              <div style="display: flex; align-items: center; gap: 6px; background: rgba(14, 165, 233, 0.12); color: #0284c7; padding: 6px 12px; border-radius: 8px; font-size: 0.82rem; font-weight: 700; border: 1px solid rgba(14, 165, 233, 0.25); margin-bottom: 10px;">
+                <i class="fa-regular fa-clock"></i> <span>Boshlanish vaqti: ${t.startTime}</span>
+              </div>`;
+          } else if (t.isExpired) {
+            timeNoticeHtml = `
+              <div style="display: flex; align-items: center; gap: 6px; background: rgba(239, 68, 68, 0.12); color: #dc2626; padding: 6px 12px; border-radius: 8px; font-size: 0.82rem; font-weight: 700; border: 1px solid rgba(239, 68, 68, 0.25); margin-bottom: 10px;">
+                <i class="fa-solid fa-hourglass-end"></i> <span>Muddati tugagan (${t.endTime})</span>
+              </div>`;
+          } else if (t.endTime) {
+            timeNoticeHtml = `
+              <div style="display: flex; align-items: center; gap: 6px; background: rgba(245, 158, 11, 0.1); color: #d97706; padding: 5px 10px; border-radius: 8px; font-size: 0.78rem; font-weight: 600; border: 1px solid rgba(245, 158, 11, 0.2); margin-bottom: 10px;">
+                <i class="fa-regular fa-calendar-xmark"></i> <span>Muddati: ${t.endTime} gacha</span>
+              </div>`;
+          }
+
+          // Urinishlar (Dostup) ko'rsatkichi
+          let attemptInfoHtml = '';
+          if (t.maxAttempts === 0) {
+            attemptInfoHtml = `<span style="font-size: 0.8rem; color: var(--text-muted);"><i class="fa-solid fa-arrows-rotate"></i> Cheksiz urinish</span>`;
+          } else if (!t.hasAttempts) {
+            attemptInfoHtml = `<span style="font-size: 0.8rem; color: #dc2626; font-weight: 700;"><i class="fa-solid fa-lock"></i> Urinishlar: ${t.attemptsCount}/${t.maxAttempts} (Limit tugagan)</span>`;
+          } else {
+            attemptInfoHtml = `<span style="font-size: 0.8rem; color: #059669; font-weight: 700;"><i class="fa-solid fa-unlock"></i> Urinishlar: ${t.attemptsCount}/${t.maxAttempts} (Qolgan: ${t.attemptsLeft} ta)</span>`;
+          }
+
+          // Tugma boshqaruvi
+          let actionBtn = '';
+          if (t.isUpcoming) {
+            actionBtn = `<button class="btn btn-secondary btn-sm" disabled style="opacity: 0.65; cursor: not-allowed;"><i class="fa-regular fa-clock"></i> Hali boshlanmagan</button>`;
+          } else if (t.isExpired) {
+            actionBtn = `<button class="btn btn-secondary btn-sm" disabled style="opacity: 0.65; cursor: not-allowed;"><i class="fa-solid fa-ban"></i> Vaqt tugagan</button>`;
+          } else if (!t.hasAttempts) {
+            actionBtn = `<button class="btn btn-secondary btn-sm" disabled style="opacity: 0.8; cursor: not-allowed; background: rgba(239, 68, 68, 0.1); color: #dc2626; border-color: rgba(239, 68, 68, 0.3); font-weight: 700;"><i class="fa-solid fa-lock"></i> Urinishlar tugadi</button>`;
+          } else if (isDone) {
+            actionBtn = `
+              <button class="btn btn-secondary btn-sm" onclick="startTestTaking(${t.id})">
+                <i class="fa-solid fa-rotate-right"></i> Qayta topshirish
+              </button>`;
+          } else {
+            actionBtn = `
+              <button class="btn btn-primary btn-sm" onclick="startTestTaking(${t.id})">
+                <i class="fa-solid fa-play"></i> Testni Boshlash
+              </button>`;
+          }
+
+          return `
+            <div class="test-card">
+              <div>
+                <div style="display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; align-items: center;">
+                  <span class="badge badge-primary">${t.subject}</span>
+                  ${langBadge}
+                  <span class="badge badge-gray">${t.grade}</span>
+                  ${isDone ? `<span class="badge badge-success"><i class="fa-solid fa-check"></i> ${t.userScore}%</span>` : ''}
+                </div>
+                ${timeNoticeHtml}
+                <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 6px;">${t.title}</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px;">${t.description || 'Test haqida batafsil ma\'lumot berilmagan.'}</p>
+                <div style="font-size: 0.82rem; color: var(--gray-600); display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
+                  <span><i class="fa-solid fa-user-tie"></i> ${t.teacherName}</span>
+                  <span><i class="fa-solid fa-circle-question"></i> ${t.questionCount} ta savol</span>
+                  <span><i class="fa-regular fa-clock"></i> ${t.durationMinutes} daq</span>
+                </div>
+              </div>
+              <div style="border-top: 1px solid var(--gray-200); padding-top: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                <div>
+                  ${isDone ? `
+                    <div style="font-size: 0.82rem; color: var(--success); font-weight: 700; margin-bottom: 2px;">
+                      Oxirgi natija: ${t.userCorrect}/${t.questionCount} (${t.userScore}%)
+                    </div>
+                  ` : ''}
+                  <div>${attemptInfoHtml}</div>
+                </div>
+                <div>
+                  ${actionBtn}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    } catch (e) {
+      console.error(e);
+      grid.innerHTML = `<div class="panel" style="grid-column: 1/-1; text-align: center; color: var(--danger); padding: 2rem;">Testlarni yuklashda xatolik yuz berdi.</div>`;
+    }
+  }
+
+  function toggleStudentSidebar(show) {
+    const sidebar = document.getElementById('stdSidebar');
+    const backdrop = document.getElementById('stdSidebarBackdrop');
+    if (!sidebar || !backdrop) return;
+
+    const isOpen = (typeof show === 'boolean') ? show : !sidebar.classList.contains('sidebar-open');
+    if (isOpen) {
+      sidebar.classList.add('sidebar-open');
+      backdrop.classList.add('active');
+    } else {
+      sidebar.classList.remove('sidebar-open');
+      backdrop.classList.remove('active');
+    }
+  }
+
+  function switchStudentTab(name, btn, title, iconClass) {
+    document.getElementById('std-tab-tests').style.display = (name === 'tests') ? 'block' : 'none';
+    document.getElementById('std-tab-leaderboard').style.display = (name === 'leaderboard') ? 'block' : 'none';
+    document.getElementById('std-tab-analytics').style.display = (name === 'analytics') ? 'block' : 'none';
+    document.getElementById('std-tab-profile').style.display = (name === 'profile') ? 'block' : 'none';
+
+    // Sidebar active state
+    document.querySelectorAll('.portal-sidebar-nav .portal-nav-btn').forEach(b => b.classList.remove('active'));
+    if (btn) {
+      btn.classList.add('active');
+    } else {
+      const activeNav = document.getElementById(`std-nav-${name}`);
+      if (activeNav) activeNav.classList.add('active');
+    }
+
+    // Update Mobile Bar Title
+    const mobileTitle = document.getElementById('stdMobileCurrentTabTitle');
+    if (mobileTitle && title) {
+      mobileTitle.innerHTML = `<i class="fa-solid ${iconClass || 'fa-folder'}" style="color: #00b4d8;"></i> ${title}`;
+    }
+
+    // Mobilda menyuni avtomatik yopish
+    toggleStudentSidebar(false);
+
+    if (name === 'analytics') {
+      loadStudentCharts();
+    }
+  }
+
+  async function checkStudentAccess() {
+    let user = getSavedUser();
+
+    // Check with backend session
+    try {
+      const res = await fetch('/api/auth/me/');
+      const data = await res.json();
+      if (data.authenticated && data.user) {
+        user = data.user;
+        setSavedUser(user);
+      } else {
+        user = null;
+        localStorage.removeItem('smarttest_django_user');
+      }
+    } catch (e) {
+      console.warn('Session check failed', e);
+    }
+
+    const gate = document.getElementById('student-auth-gate');
+    const mainCont = document.getElementById('student-main-container');
+    const warnBox = document.getElementById('student-role-warning');
+    const warnTxt = document.getElementById('student-role-warning-text');
+
+    if (!user || user.role !== 'student') {
+      mainCont.style.display = 'none';
+      gate.style.display = 'block';
+
+      if (user && user.role !== 'student') {
+        const roleNames = { 'teacher': 'o\'qituvchi', 'admin': 'administrator' };
+        warnTxt.textContent = `Siz hozirda "${user.fullName}" (${roleNames[user.role] || user.role}) sifatida tizimdasiz. O'quvchi portaliga faqat o'quvchi hisobi bilan kirish mumkin.`;
+        warnBox.style.display = 'block';
+      } else {
+        warnBox.style.display = 'none';
+      }
+      return false;
+    }
+
+    gate.style.display = 'none';
+    mainCont.style.display = 'block';
+    return true;
+  }
+
+  async function handleStudentDirectLogin(e) {
+    e.preventDefault();
+    const err = document.getElementById('student-gate-error');
+    err.style.display = 'none';
+
+    const username = document.getElementById('student-gate-username').value.trim();
+    const password = document.getElementById('student-gate-password').value.trim();
+
+    try {
+      const res = await fetch('/api/auth/login/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, role: 'student' })
+      });
+      const data = await res.json();
+
+      if (data.success && data.user) {
+        if (data.user.role !== 'student') {
+          err.textContent = 'Ushbu profil o\'quvchi hisobi emas!';
+          err.style.display = 'block';
+          return;
+        }
+        setSavedUser(data.user);
+        loadStudentData();
+      } else {
+        err.textContent = data.error || 'Login yoki parol noto\'g\'ri!';
+        err.style.display = 'block';
+      }
+    } catch (error) {
+      err.textContent = 'Server bilan ulanishda xatolik yuz berdi!';
+      err.style.display = 'block';
+    }
+  }
+
+  async function loadStudentData() {
+    const isAllowed = await checkStudentAccess();
+    if (!isAllowed) return;
+
+    const user = getSavedUser();
+    currentStudent = user;
+
+    if (user) {
+      document.getElementById('std-welcome').textContent = `🎓 Xush kelibsiz, ${user.fullName}!`;
+      document.getElementById('std-grade-badge').textContent = user.grade || '9-A';
+      document.getElementById('leaderboard-heading').textContent = `${user.grade || '9-A'} Sinf Reyting Jadvali`;
+
+      // Fill Profile Tab Data
+      const stdAvatarUrl = user.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(user.fullName || user.username)}`;
+
+      const avatarImg = document.getElementById('std-profile-avatar-img');
+      if (avatarImg) avatarImg.src = stdAvatarUrl;
+
+      const sidebarAvatar = document.getElementById('std-sidebar-avatar-img');
+      if (sidebarAvatar) sidebarAvatar.src = stdAvatarUrl;
+
+      const sidebarName = document.getElementById('std-sidebar-name');
+      if (sidebarName) sidebarName.textContent = user.fullName || 'O\'quvchi';
+
+      const sidebarGrade = document.getElementById('std-sidebar-grade');
+      if (sidebarGrade) sidebarGrade.textContent = `${user.grade || '9-A'} sinf`;
+
+      document.getElementById('profile-card-name').textContent = user.fullName;
+      document.getElementById('profile-card-grade').textContent = `${user.grade || '9-A'} Sinf O'quvchisi`;
+      document.getElementById('profile-card-username').textContent = user.username;
+      document.getElementById('profile-card-phone').textContent = user.phone || 'Kiritilmagan';
+      document.getElementById('profile-card-grade-text').textContent = user.grade || '9-A';
+      document.getElementById('profile-card-bio').textContent = user.bio ? `"${user.bio}"` : '"Bilim - kuchdir!"';
+
+      document.getElementById('prof-fullname').value = user.fullName;
+      document.getElementById('prof-phone').value = user.phone || '';
+      document.getElementById('prof-student-bio').value = user.bio || '';
+
+      const coinBadge = document.getElementById('std-coin-badge');
+      const kpiCoins = document.getElementById('std-kpi-coins');
+      if (coinBadge) coinBadge.textContent = user.coins || 0;
+      if (kpiCoins) kpiCoins.textContent = user.coins || 0;
+    }
+
+    const studentId = user ? user.id : '';
+    const grade = user ? (user.grade || '9-A') : '9-A';
+
+    // 1. Load Available Tests
+    await loadStudentTests();
+
+    // 2. Load Leaderboard
+    try {
+      const res = await fetch(`/api/student/leaderboard/?grade=${encodeURIComponent(grade)}`);
+      const data = await res.json();
+      const tbody = document.getElementById('leaderboard-tbody');
+
+      if (!data.leaderboard || !data.leaderboard.length) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 2rem; color: var(--text-muted);">Sinf o'quvchilari topilmadi.</td></tr>`;
+      } else {
+        tbody.innerHTML = data.leaderboard.map(item => {
+          const isMe = currentStudent && (item.studentId === currentStudent.id);
+          let rankBadge = `<span class="rank-badge rank-other">${item.rank}</span>`;
+          if (item.rank === 1) rankBadge = `<span class="rank-badge rank-1" title="1-o'rin">🥇 1</span>`;
+          else if (item.rank === 2) rankBadge = `<span class="rank-badge rank-2" title="2-o'rin">🥈 2</span>`;
+          else if (item.rank === 3) rankBadge = `<span class="rank-badge rank-3" title="3-o'rin">🥉 3</span>`;
+
+          return `
+            <tr class="${isMe ? 'highlight-row' : ''}">
+              <td>${rankBadge}</td>
+              <td>
+                <strong>${item.fullName}</strong>
+                ${isMe ? ' <span class="badge badge-primary" style="font-size:0.75rem;">Siz</span>' : ''}
+                <div style="font-size:0.75rem; color:var(--text-muted);">@${item.username}</div>
+              </td>
+              <td>${item.testsCompleted} ta test</td>
+              <td><strong>${item.totalCorrect}</strong> ta to'g'ri</td>
+              <td>${item.avgScore}%</td>
+              <td><strong style="color:var(--primary); font-size: 1.05rem;">${item.totalScore} ball</strong></td>
+              <td>
+                <span class="pill-badge pill-amber" style="font-weight: 850; font-size: 0.85rem; padding: 4px 10px;">
+                  <i class="fa-solid fa-coins"></i> ${item.coins || 0}
+                </span>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    // 3. Load My Results History
+    try {
+      const res = await fetch(`/api/student/results/?studentId=${studentId}`);
+      const results = await res.json();
+      const tbody = document.getElementById('student-results-tbody');
+
+      if (!results.length) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 2rem; color: var(--text-muted);">Siz hali birorta ham test topshirmadingiz.</td></tr>`;
+      } else {
+        tbody.innerHTML = results.map(r => {
+          const mins = Math.floor(r.timeSpent / 60);
+          const secs = r.timeSpent % 60;
+          return `
+            <tr>
+              <td><strong>${r.testTitle}</strong></td>
+              <td><span class="badge badge-primary">${r.subject}</span></td>
+              <td><strong>${r.correct}</strong> / ${r.total}</td>
+              <td>
+                <span class="badge ${r.score >= 80 ? 'badge-success' : (r.score >= 60 ? 'badge-primary' : 'badge-warning')}">
+                  ${r.score}%
+                </span>
+              </td>
+              <td>${mins}m ${secs}s</td>
+              <td>${r.date}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    // 4. Load Student KPIs
+    try {
+      const res = await fetch(`/api/student/analytics/?studentId=${studentId}`);
+      const data = await res.json();
+      if (data && data.kpis) {
+        const elRank = document.getElementById('std-kpi-rank');
+        const elTests = document.getElementById('std-kpi-tests');
+        const elAvg = document.getElementById('std-kpi-avg');
+        const elXp = document.getElementById('std-kpi-xp');
+        if (elRank) elRank.textContent = `${data.kpis.rank}-o'rin`;
+        if (elTests) elTests.textContent = data.kpis.totalTests;
+        if (elAvg) elAvg.textContent = `${data.kpis.avgScore}%`;
+        if (elXp) elXp.textContent = `${data.kpis.xp} XP`;
+      }
+    } catch (e) {
+      console.error('KPI fetch failed:', e);
+    }
+  }
+
+  // Load Charts (Diagonal timeline + Subject bars)
+  async function loadStudentCharts() {
+    const studentId = currentStudent ? currentStudent.id : '';
+    try {
+      const res = await fetch(`/api/student/analytics/?studentId=${studentId}`);
+      const data = await res.json();
+
+      const isDark = document.body.classList.contains('dark-theme');
+      const textColor = isDark ? '#94a3b8' : '#64748b';
+      const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
+
+      // 1. Diagonal Line Chart (Timeline of scores)
+      const lineCtx = document.getElementById('studentTimelineChart');
+      if (lineCtx && data.timeline) {
+        if (timelineChartInstance) timelineChartInstance.destroy();
+        const labels = data.timeline.labels && data.timeline.labels.length ? data.timeline.labels : ['1-test', '2-test', '3-test'];
+        const scores = data.timeline.scores && data.timeline.scores.length ? data.timeline.scores : [70, 85, 95];
+
+        timelineChartInstance = new Chart(lineCtx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Natija (%)',
+              data: scores,
+              borderColor: '#00b4d8',
+              backgroundColor: 'rgba(0, 180, 216, 0.15)',
+              tension: 0.38,
+              fill: true,
+              pointBackgroundColor: '#0077b6',
+              pointBorderColor: '#ffffff',
+              pointBorderWidth: 2,
+              pointRadius: 6,
+              pointHoverRadius: 9
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                padding: 10,
+                callbacks: {
+                  label: ctx => `To'plangan ball: ${ctx.parsed.y}%`
+                }
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 100,
+                grid: { color: gridColor },
+                ticks: { color: textColor, callback: v => v + '%' }
+              },
+              x: {
+                grid: { display: false },
+                ticks: { color: textColor }
+              }
+            }
+          }
+        });
+      }
+
+      // 2. Bar Chart by Subjects
+      const subCtx = document.getElementById('studentSubjectChart');
+      if (subCtx && data.subjects) {
+        if (subjectChartInstance) subjectChartInstance.destroy();
+        const subLabels = data.subjects.labels && data.subjects.labels.length ? data.subjects.labels : ['Matematika', 'Fizika', 'Informatika', 'Ingliz tili'];
+        const subScores = data.subjects.scores && data.subjects.scores.length ? data.subjects.scores : [88, 75, 92, 80];
+
+        subjectChartInstance = new Chart(subCtx, {
+          type: 'bar',
+          data: {
+            labels: subLabels,
+            datasets: [{
+              label: 'O\'rtacha Ball (%)',
+              data: subScores,
+              backgroundColor: [
+                'rgba(0, 180, 216, 0.75)',
+                'rgba(16, 185, 129, 0.75)',
+                'rgba(245, 158, 11, 0.75)',
+                'rgba(139, 92, 246, 0.75)',
+                'rgba(236, 72, 153, 0.75)'
+              ],
+              borderColor: ['#00b4d8', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'],
+              borderWidth: 2,
+              borderRadius: 8
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                padding: 10,
+                callbacks: {
+                  label: ctx => `O'rtacha ko'rsatkich: ${ctx.parsed.y}%`
+                }
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 100,
+                grid: { color: gridColor },
+                ticks: { color: textColor, callback: v => v + '%' }
+              },
+              x: {
+                grid: { display: false },
+                ticks: { color: textColor }
+              }
+            }
+          }
+        });
+      }
+
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function previewStudentAvatar(input) {
+    if (input.files && input.files[0]) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('std-profile-avatar-img').src = e.target.result;
+      };
+      reader.readAsDataURL(input.files[0]);
+    }
+  }
+
+  // Profile Save
+  async function handleSaveStudentProfile(e) {
+    e.preventDefault();
+    const msg = document.getElementById('prof-msg');
+    const saveBtn = document.getElementById('prof-student-save-btn');
+    msg.style.display = 'none';
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saqlanmoqda...';
+
+    const fullName = document.getElementById('prof-fullname').value;
+    const phone = document.getElementById('prof-phone').value;
+    const bio = document.getElementById('prof-student-bio').value;
+    const newPassword = document.getElementById('prof-new-password').value;
+
+    const formData = new FormData();
+    formData.append('userId', currentStudent ? currentStudent.id : '');
+    formData.append('fullName', fullName);
+    formData.append('phone', phone);
+    formData.append('bio', bio);
+    if (newPassword) formData.append('password', newPassword);
+
+    const avatarFile = document.getElementById('std-avatar-file-input').files[0];
+    if (avatarFile) {
+      formData.append('avatar', avatarFile);
+    }
+
+    try {
+      const res = await fetch('/api/profile/update/', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        msg.textContent = data.error || 'Profilni yangilashda xatolik yuz berdi!';
+        msg.style.background = '#fee2e2';
+        msg.style.color = '#b91c1c';
+        msg.style.display = 'block';
+        return;
+      }
+
+      setSavedUser(data.user);
+      currentStudent = data.user;
+      loadStudentData();
+
+      msg.textContent = 'Profilingiz va rasmingiz muvaffaqiyatli yangilandi!';
+      msg.style.background = '#dcfce7';
+      msg.style.color = '#15803d';
+      msg.style.display = 'block';
+      document.getElementById('prof-new-password').value = '';
+    } catch (error) {
+      msg.textContent = 'Server bilan aloqa uzildi!';
+      msg.style.background = '#fee2e2';
+      msg.style.color = '#b91c1c';
+      msg.style.display = 'block';
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> O\'zgarishlarni Saqlash';
+    }
+  }
+
+
+  // TEST RUNNER LOGIC
+  async function startTestTaking(testId) {
+    try {
+      const user = currentStudent || getSavedUser();
+      const studentId = user ? user.id : '';
+      const res = await fetch(`/api/student/tests/${testId}/?studentId=${studentId}`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.error || 'Testni ochishda xatolik yuz berdi!');
+        return;
+      }
+
+      const test = await res.json();
+      activeTestId = test.id;
+      testAnswers = {};
+
+      document.getElementById('active-test-title').textContent = test.title;
+      const langBadge = (test.language === 'ru') ? '<span class="badge-lang badge-lang-ru">RU</span>' : '<span class="badge-lang badge-lang-uz">UZ</span>';
+      const attemptsNotice = (test.maxAttempts > 0) ? ` • Ruxsat: ${test.maxAttempts} marta` : ' • Ruxsat: Cheksiz';
+      document.getElementById('active-test-meta').innerHTML = `${test.subject} • ${langBadge} • ${test.questions.length} ta savol • O'qituvchi: ${test.teacherName}${attemptsNotice}`;
+
+      // Setup Timer
+      remainingSecs = (test.durationMinutes || 15) * 60;
+      totalSecs = remainingSecs;
+      updateTimerUI();
+
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        remainingSecs--;
+        updateTimerUI();
+        if (remainingSecs <= 0) {
+          clearInterval(timerInterval);
+          alert('Vaqt tugadi! Javoblaringiz topshirilmoqda.');
+          submitTestTaking(true);
+        }
+      }, 1000);
+
+      // Render Questions
+      const list = document.getElementById('active-questions-list');
+      list.innerHTML = test.questions.map((q, idx) => `
+        <div class="panel" style="padding: 1.5rem;" id="q-card-${q.id}">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div style="font-size: 0.82rem; font-weight: 700; color: var(--primary); text-transform: uppercase;">
+              Savol #${idx + 1} / ${test.questions.length}
+            </div>
+            ${q.imageUrl ? '<span class="badge badge-secondary" style="font-size: 0.75rem;"><i class="fa-solid fa-image"></i> Rasmli savol</span>' : ''}
+          </div>
+          <div style="font-size: 1.15rem; font-weight: 700; margin-bottom: 1rem; line-height: 1.55;">
+            ${window.formatMathContent ? window.formatMathContent(q.question) : q.question}
+          </div>
+
+          ${q.imageUrl ? `
+            <div class="question-img-banner">
+              <img src="${q.imageUrl}" alt="Savol rasmi">
+            </div>
+          ` : ''}
+
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            ${q.options.map(opt => `
+              <label class="option-item" id="opt-label-${q.id}-${opt.id}" onclick="selectTestOption(${q.id}, ${opt.id})">
+                <input type="radio" name="radio-q-${q.id}" value="${opt.id}" style="margin-right: 12px; width: 18px; height: 18px; accent-color: var(--primary);">
+                <span style="font-size: 1.05rem; line-height: 1.5;">${window.formatMathContent ? window.formatMathContent(opt.text) : opt.text}</span>
+              </label>
+            `).join('')}
+          </div>
+        </div>
+      `).join('');
+
+      document.getElementById('student-main-container').style.display = 'none';
+      document.getElementById('student-result-container').style.display = 'none';
+      document.getElementById('student-taking-container').style.display = 'block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e) {
+      console.error(e);
+      alert('Testni boshlashda xatolik!');
+    }
+  }
+
+  function selectTestOption(qId, optId) {
+    testAnswers[qId] = optId;
+    const card = document.getElementById(`q-card-${qId}`);
+    if (card) {
+      card.querySelectorAll('.option-item').forEach(el => el.classList.remove('selected'));
+      const activeLabel = document.getElementById(`opt-label-${qId}-${optId}`);
+      if (activeLabel) {
+        activeLabel.classList.add('selected');
+        const radio = activeLabel.querySelector('input[type="radio"]');
+        if (radio) radio.checked = true;
+      }
+    }
+  }
+
+  function updateTimerUI() {
+    const mins = Math.floor(remainingSecs / 60);
+    const secs = remainingSecs % 60;
+    const formatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    const el = document.getElementById('test-timer-digits');
+    if (el) el.textContent = formatted;
+  }
+
+  function cancelTestTaking() {
+    if (confirm('Testdan chiqmoqchimisiz? Kiritilgan javoblaringiz saqlanmaydi.')) {
+      if (timerInterval) clearInterval(timerInterval);
+      backToStudentDashboard();
+    }
+  }
+
+  async function submitTestTaking(force = false) {
+    if (!force && !confirm('Testni yakunlashga ishonchingiz komilmi?')) return;
+    if (timerInterval) clearInterval(timerInterval);
+
+    const timeSpentSeconds = totalSecs - remainingSecs;
+    const studentId = currentStudent ? currentStudent.id : null;
+
+    try {
+      const res = await fetch(`/api/student/tests/${activeTestId}/submit/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId,
+          answers: testAnswers,
+          timeSpentSeconds
+        })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error || 'Natijani topshirishda xatolik yuz berdi!');
+        backToStudentDashboard();
+        return;
+      }
+
+      renderTestResultsScreen(data);
+    } catch (e) {
+      console.error(e);
+      alert('Natijani yuborishda server bilan xatolik!');
+      backToStudentDashboard();
+    }
+  }
+
+  function renderTestResultsScreen(data) {
+    document.getElementById('student-taking-container').style.display = 'none';
+
+    document.getElementById('res-ratio').textContent = `${data.correctAnswers} / ${data.totalQuestions}`;
+    document.getElementById('res-percent').textContent = `${data.scorePercentage}%`;
+
+    const mins = Math.floor(data.timeSpentSeconds / 60);
+    const secs = data.timeSpentSeconds % 60;
+    document.getElementById('res-time').textContent = `${mins}m ${secs}s`;
+
+    const icon = document.getElementById('res-icon');
+    const title = document.getElementById('res-title');
+    if (data.scorePercentage >= 80) {
+      icon.textContent = '🌟';
+      title.textContent = 'A\'lo Natija!';
+    } else if (data.scorePercentage >= 60) {
+      icon.textContent = '👍';
+      title.textContent = 'Yaxshi Natija!';
+    } else {
+      icon.textContent = '💡';
+      title.textContent = 'Qoniqarli';
+    }
+
+    // Celebratory Coin Reward Banner
+    const coinBanner = document.getElementById('res-coin-reward-banner');
+    if (data.earnedCoins) {
+      document.getElementById('res-earned-coins').textContent = data.earnedCoins;
+      document.getElementById('res-total-coins').textContent = data.totalCoins || 0;
+      if (coinBanner) coinBanner.style.display = 'flex';
+
+      const coinBadge = document.getElementById('std-coin-badge');
+      const kpiCoins = document.getElementById('std-kpi-coins');
+      if (coinBadge) coinBadge.textContent = data.totalCoins || 0;
+      if (kpiCoins) kpiCoins.textContent = data.totalCoins || 0;
+      if (currentStudent) currentStudent.coins = data.totalCoins;
+    } else if (coinBanner) {
+      coinBanner.style.display = 'none';
+    }
+
+    // Breakdown
+    const bList = document.getElementById('res-breakdown-list');
+    bList.innerHTML = data.breakdown.map((item, idx) => `
+      <div style="background: ${item.isCorrect ? '#f0fdf4' : '#fef2f2'}; border: 1.5px solid ${item.isCorrect ? '#bbf7d0' : '#fecaca'}; border-radius: var(--radius-md); padding: 1rem;">
+        <div style="font-weight: 700; color: ${item.isCorrect ? 'var(--success)' : 'var(--danger)'}; margin-bottom: 4px;">
+          <i class="fa-solid ${item.isCorrect ? 'fa-circle-check' : 'fa-circle-xmark'}"></i> #${idx + 1} - Savol: ${item.isCorrect ? 'To\'g\'ri' : 'Noto\'g\'ri'}
+        </div>
+        <div style="font-weight: 600; margin-bottom: 6px; font-size: 1.05rem;">
+          ${window.formatMathContent ? window.formatMathContent(item.questionText) : item.questionText}
+        </div>
+        ${item.imageUrl ? `
+          <div style="margin: 8px 0;">
+            <img src="${item.imageUrl}" alt="Savol rasmi" style="max-height: 160px; border-radius: 6px; border: 1px solid var(--border-color); object-fit: contain; background: rgba(0,0,0,0.1);">
+          </div>
+        ` : ''}
+        <div style="font-size: 0.95rem; margin-top: 4px;">
+          Sizning javobingiz: <strong style="color: ${item.isCorrect ? 'var(--success)' : 'var(--danger)'};">${window.formatMathContent ? window.formatMathContent(item.selectedText) : item.selectedText}</strong>
+        </div>
+        ${!item.isCorrect ? `
+          <div style="font-size: 0.95rem; color: var(--success); margin-top: 2px;">
+            To'g'ri javob: <strong>${window.formatMathContent ? window.formatMathContent(item.correctText) : item.correctText}</strong>
+          </div>
+        ` : ''}
+      </div>
+    `).join('');
+
+    document.getElementById('student-result-container').style.display = 'block';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function backToStudentDashboard() {
+    document.getElementById('student-taking-container').style.display = 'none';
+    document.getElementById('student-result-container').style.display = 'none';
+    document.getElementById('student-main-container').style.display = 'block';
+    loadStudentData();
+  }
+
+  function goToLeaderboardFromResults() {
+    backToStudentDashboard();
+    const tabs = document.querySelectorAll('#student-main-container .tab-btn');
+    if (tabs[1]) switchStudentTab('leaderboard', tabs[1]);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const subParam = urlParams.get('subject');
+    if (subParam) {
+      currentSubjectFilter = subParam;
+      const sel = document.getElementById('filter-test-subject');
+      if (sel) sel.value = subParam;
+    }
+    const langParam = urlParams.get('lang');
+    if (langParam) {
+      setStudentLangFilter(langParam);
+    }
+    loadStudentData();
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,358 @@
+{
+  "classes": [
+    "5-A",
+    "6-A",
+    "7-A",
+    "8-A",
+    "9-A",
+    "9-B",
+    "10-A",
+    "10-B",
+    "11-A",
+    "11-B"
+  ],
+  "subjects": [
+    "Matematika",
+    "Fizika",
+    "Informatika",
+    "Ingliz tili",
+    "Biologiya",
+    "Kimyo",
+    "Tarix",
+    "Ona tili va Adabiyot"
+  ],
+  "users": [
+    {
+      "id": "u-admin-1",
+      "username": "admin",
+      "password": "123",
+      "fullName": "Bosh Administrator",
+      "role": "admin",
+      "createdAt": "2026-10-26T08:04:50.056Z"
+    },
+    {
+      "id": "u-teacher-1",
+      "username": "anvar_muallim",
+      "password": "123",
+      "fullName": "Anvar Qosimov",
+      "role": "teacher",
+      "subject": "Matematika",
+      "createdAt": "2026-10-26T08:04:50.056Z"
+    },
+    {
+      "id": "u-teacher-2",
+      "username": "dilnoza_ustoz",
+      "password": "123",
+      "fullName": "Dilnoza Karimova",
+      "role": "teacher",
+      "subject": "Informatika",
+      "createdAt": "2026-10-26T08:04:50.056Z"
+    },
+    {
+      "id": "u-student-1",
+      "username": "jasur_9a",
+      "password": "123",
+      "fullName": "Jasur Aliyev",
+      "role": "student",
+      "grade": "9-A",
+      "createdAt": "2026-10-26T08:04:50.056Z"
+    },
+    {
+      "id": "u-student-2",
+      "username": "madina_9a",
+      "password": "123",
+      "fullName": "Madina Rustamova",
+      "role": "student",
+      "grade": "9-A",
+      "createdAt": "2026-10-26T08:04:50.056Z"
+    },
+    {
+      "id": "u-student-3",
+      "username": "bobur_9a",
+      "password": "123",
+      "fullName": "Bobur Saidov",
+      "role": "student",
+      "grade": "9-A",
+      "createdAt": "2026-10-26T08:04:50.056Z"
+    },
+    {
+      "id": "u-student-4",
+      "username": "aziza_10a",
+      "password": "123",
+      "fullName": "Aziza Rahimova",
+      "role": "student",
+      "grade": "10-A",
+      "createdAt": "2026-10-26T08:04:50.056Z"
+    }
+  ],
+  "tests": [
+    {
+      "id": "t-math-1",
+      "title": "Kvadrat tenglamalar va funksiyalar",
+      "description": "9-A sinf o'quvchilari uchun algebra fanidan oraliq nazorat testi",
+      "teacherId": "u-teacher-1",
+      "teacherName": "Anvar Qosimov",
+      "subject": "Matematika",
+      "grade": "9-A",
+      "durationMinutes": 15,
+      "createdAt": "2026-10-24T08:04:50.056Z",
+      "questions": [
+        {
+          "id": "q1",
+          "question": "x² - 5x + 6 = 0 tenglamaning ildizlarini toping.",
+          "options": [
+            "x₁ = 2, x₂ = 3",
+            "x₁ = -2, x₂ = -3",
+            "x₁ = 1, x₂ = 6",
+            "x₁ = -1, x₂ = 6"
+          ],
+          "correctIndex": 0
+        },
+        {
+          "id": "q2",
+          "question": "Agar diskriminant D > 0 bo'lsa, kvadrat tenglama nechta haqiqiy ildizga ega?",
+          "options": [
+            "Ildizga ega emas",
+            "1 ta ildizga ega",
+            "2 ta turli ildizga ega",
+            "Cheksiz ko'p"
+          ],
+          "correctIndex": 2
+        },
+        {
+          "id": "q3",
+          "question": "y = 2x + 4 chiziqli funksiya grafigining OY o'qi bilan kesishish nuqtasi qaysi?",
+          "options": [
+            "(0, 2)",
+            "(0, 4)",
+            "(4, 0)",
+            "(-2, 0)"
+          ],
+          "correctIndex": 1
+        },
+        {
+          "id": "q4",
+          "question": "Viyet teoremasiga ko'ra x² + px + q = 0 tenglamada ildizlar yig'indisi nimaga teng?",
+          "options": [
+            "q",
+            "-p",
+            "p",
+            "-q"
+          ],
+          "correctIndex": 1
+        },
+        {
+          "id": "q5",
+          "question": "3x² = 27 tenglamaning yechimlarini toping.",
+          "options": [
+            "x = ±3",
+            "x = 3",
+            "x = 9",
+            "x = ±9"
+          ],
+          "correctIndex": 0
+        }
+      ]
+    },
+    {
+      "id": "t-cs-1",
+      "title": "Python dasturlash asoslari va algoritmlar",
+      "description": "Informatika fanidan amaliy bilimlar testi",
+      "teacherId": "u-teacher-2",
+      "teacherName": "Dilnoza Karimova",
+      "subject": "Informatika",
+      "grade": "9-A",
+      "durationMinutes": 10,
+      "createdAt": "2026-10-25T08:04:50.056Z",
+      "questions": [
+        {
+          "id": "cq1",
+          "question": "Python tilida ekranga ma'lumot chiqarish uchun qaysi funksiya ishlatiladi?",
+          "options": [
+            "echo()",
+            "System.out.println()",
+            "print()",
+            "console.log()"
+          ],
+          "correctIndex": 2
+        },
+        {
+          "id": "cq2",
+          "question": "Quyidagilardan qaysi biri o'zgarmas (immutable) ma'lumot turi hisoblanadi?",
+          "options": [
+            "list",
+            "tuple",
+            "dict",
+            "set"
+          ],
+          "correctIndex": 1
+        },
+        {
+          "id": "cq3",
+          "question": "len(\"Salom Dunyo\") ifodasi qanday natija qaytaradi?",
+          "options": [
+            "10",
+            "11",
+            "12",
+            "9"
+          ],
+          "correctIndex": 1
+        },
+        {
+          "id": "cq4",
+          "question": "Python-da bir qatorda izoh (comment) qoldirish uchun qaysi belgi ishlatiladi?",
+          "options": [
+            "//",
+            "/*",
+            "#",
+            "<!--"
+          ],
+          "correctIndex": 2
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "id": "res-1",
+      "testId": "t-math-1",
+      "testTitle": "Kvadrat tenglamalar va funksiyalar",
+      "studentId": "u-student-1",
+      "studentName": "Jasur Aliyev",
+      "grade": "9-A",
+      "teacherId": "u-teacher-1",
+      "subject": "Matematika",
+      "totalQuestions": 5,
+      "correctAnswers": 5,
+      "scorePercentage": 100,
+      "answers": [
+        {
+          "questionId": "q1",
+          "selectedIndex": 0,
+          "correctIndex": 0,
+          "isCorrect": true
+        },
+        {
+          "questionId": "q2",
+          "selectedIndex": 2,
+          "correctIndex": 2,
+          "isCorrect": true
+        },
+        {
+          "questionId": "q3",
+          "selectedIndex": 1,
+          "correctIndex": 1,
+          "isCorrect": true
+        },
+        {
+          "questionId": "q4",
+          "selectedIndex": 1,
+          "correctIndex": 1,
+          "isCorrect": true
+        },
+        {
+          "questionId": "q5",
+          "selectedIndex": 0,
+          "correctIndex": 0,
+          "isCorrect": true
+        }
+      ],
+      "timeSpentSeconds": 240,
+      "submittedAt": "2026-10-24T20:04:50.056Z"
+    },
+    {
+      "id": "res-2",
+      "testId": "t-math-1",
+      "testTitle": "Kvadrat tenglamalar va funksiyalar",
+      "studentId": "u-student-2",
+      "studentName": "Madina Rustamova",
+      "grade": "9-A",
+      "teacherId": "u-teacher-1",
+      "subject": "Matematika",
+      "totalQuestions": 5,
+      "correctAnswers": 4,
+      "scorePercentage": 80,
+      "answers": [
+        {
+          "questionId": "q1",
+          "selectedIndex": 0,
+          "correctIndex": 0,
+          "isCorrect": true
+        },
+        {
+          "questionId": "q2",
+          "selectedIndex": 2,
+          "correctIndex": 2,
+          "isCorrect": true
+        },
+        {
+          "questionId": "q3",
+          "selectedIndex": 1,
+          "correctIndex": 1,
+          "isCorrect": true
+        },
+        {
+          "questionId": "q4",
+          "selectedIndex": 2,
+          "correctIndex": 1,
+          "isCorrect": false
+        },
+        {
+          "questionId": "q5",
+          "selectedIndex": 0,
+          "correctIndex": 0,
+          "isCorrect": true
+        }
+      ],
+      "timeSpentSeconds": 310,
+      "submittedAt": "2026-10-25T03:16:50.056Z"
+    },
+    {
+      "id": "res-3",
+      "testId": "t-math-1",
+      "testTitle": "Kvadrat tenglamalar va funksiyalar",
+      "studentId": "u-student-3",
+      "studentName": "Bobur Saidov",
+      "grade": "9-A",
+      "teacherId": "u-teacher-1",
+      "subject": "Matematika",
+      "totalQuestions": 5,
+      "correctAnswers": 3,
+      "scorePercentage": 60,
+      "answers": [
+        {
+          "questionId": "q1",
+          "selectedIndex": 0,
+          "correctIndex": 0,
+          "isCorrect": true
+        },
+        {
+          "questionId": "q2",
+          "selectedIndex": 1,
+          "correctIndex": 2,
+          "isCorrect": false
+        },
+        {
+          "questionId": "q3",
+          "selectedIndex": 1,
+          "correctIndex": 1,
+          "isCorrect": true
+        },
+        {
+          "questionId": "q4",
+          "selectedIndex": 0,
+          "correctIndex": 1,
+          "isCorrect": false
+        },
+        {
+          "questionId": "q5",
+          "selectedIndex": 0,
+          "correctIndex": 0,
+          "isCorrect": true
+        }
+      ],
+      "timeSpentSeconds": 410,
+      "submittedAt": "2026-10-25T05:40:50.056Z"
+    }
+  ]
+}
