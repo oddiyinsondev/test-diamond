@@ -25,7 +25,25 @@ SECRET_KEY = 'django-insecure-vw)nh+rf5fyv29#eg8u10t_!wymuj)ln8(*ujg#n+x%7r&f9=x
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*']
+MAIN_DOMAIN = 'app.diamondschool.uz'
+PORTAL_DOMAINS = {
+    'admin': 'admin.diamondschool.uz',
+    'teacher': 'teacher.diamondschool.uz',
+    'student': 'student.diamondschool.uz',
+}
+# DNS va SSL sertifikatlar ulangach, app.diamondschool.uz/admin-panel/ kabi yo'llarni
+# subdomenga yo'naltirish uchun True qiling.
+REDIRECT_MAIN_PORTAL_PATHS_TO_SUBDOMAINS = False
+
+ALLOWED_HOSTS = [
+    'app.diamondschool.uz',
+    'admin.diamondschool.uz',
+    'teacher.diamondschool.uz',
+    'student.diamondschool.uz',
+    '89.39.94.194',
+    '127.0.0.1',
+    'localhost',
+]
 
 
 # Application definition
@@ -54,14 +72,41 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
-CSRF_TRUSTED_ORIGINS = [
+CORS_ALLOWED_ORIGINS = [
+    'https://app.diamondschool.uz',
+    'https://admin.diamondschool.uz',
+    'https://teacher.diamondschool.uz',
+    'https://student.diamondschool.uz',
+    'https://diamondschool.uz',
+    'http://admin.diamondschool.uz',
+    'http://teacher.diamondschool.uz',
+    'http://student.diamondschool.uz',
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     'http://localhost:8000',
     'http://127.0.0.1:8000',
 ]
+CSRF_TRUSTED_ORIGINS = [
+    'https://app.diamondschool.uz',
+    'https://admin.diamondschool.uz',
+    'https://teacher.diamondschool.uz',
+    'https://student.diamondschool.uz',
+    'http://admin.diamondschool.uz',
+    'http://teacher.diamondschool.uz',
+    'http://student.diamondschool.uz',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+]
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
 
 ROOT_URLCONF = 'test_system.urls'
 
@@ -131,6 +176,7 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

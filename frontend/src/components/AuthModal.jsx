@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useNavigate } from 'react-router-dom';
+import { getPortalLinkTarget } from '../utils/portalHost';
 
 export default function AuthModal() {
   const { authModalOpen, closeAuthModal, authInitialRole, login, tr } = useAuth();
@@ -43,12 +44,11 @@ export default function AuthModal() {
         'success'
       );
 
-      if (loggedUser.role === 'admin') {
-        navigate('/admin-panel');
-      } else if (loggedUser.role === 'teacher') {
-        navigate('/teacher');
+      const target = getPortalLinkTarget(loggedUser.role);
+      if (target.internal) {
+        navigate(target.to);
       } else {
-        navigate('/student');
+        window.location.assign(target.href);
       }
     } catch (err) {
       setErrorMsg(

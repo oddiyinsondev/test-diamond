@@ -3,6 +3,12 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { localizeSubject } from '../i18n/portalUtils';
 import {
+  resolvePortalMode,
+  getMainHomeTarget,
+  getMainSectionHref,
+  getPortalLinkTarget,
+} from '../utils/portalHost';
+import {
   ShieldCheck,
   Presentation as ChalkboardTeacher,
   GraduationCap,
@@ -10,57 +16,82 @@ import {
   LogOut,
 } from 'lucide-react';
 
+function PortalNavItem({ target, className, style, title, children }) {
+  if (target.internal) {
+    return (
+      <Link to={target.to} className={className} style={style} title={title}>
+        {children}
+      </Link>
+    );
+  }
+  return (
+    <a href={target.href} className={className} style={style} title={title}>
+      {children}
+    </a>
+  );
+}
+
 export default function Navbar() {
   const { user, logout, language, tr, switchLanguage, openProfileModal } = useAuth();
   const location = useLocation();
+  const portalMode = resolvePortalMode();
+
+  const homeTarget = getMainHomeTarget({ portalMode });
+  const isMainHomeActive = portalMode === 'main' && location.pathname === '/';
+  const isOnAdminPortal =
+    portalMode === 'admin' || (portalMode === 'main' && location.pathname.startsWith('/admin-panel'));
+  const adminHomeTarget = getPortalLinkTarget('admin', '', { portalMode });
+  const adminTestsTarget = getPortalLinkTarget('admin', '?tab=tests', { portalMode });
+  const teacherPortalTarget = getPortalLinkTarget('teacher', '', { portalMode });
+  const studentPortalTarget = getPortalLinkTarget('student', '', { portalMode });
 
   return (
     <header className="navbar">
       <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-        <Link to="/" className="diamond-brand-lockup">
+        <PortalNavItem target={homeTarget} className="diamond-brand-lockup">
           <img src="/static/img/diamond_icon.png" alt="Diamond School" className="diamond-brand-gem" />
           <div className="diamond-brand-names">
             <span className="brand-title">DIAMOND</span>
             <span className="brand-subtitle">SCHOOL</span>
           </div>
-        </Link>
+        </PortalNavItem>
       </div>
 
       {/* Center Nav Links */}
       <nav className="navbar-center-nav">
-        <Link
-          to="/"
-          className={`nav-link-item ${location.pathname === '/' ? 'active-nav-section' : ''}`}
+        <PortalNavItem
+          target={homeTarget}
+          className={`nav-link-item ${isMainHomeActive ? 'active-nav-section' : ''}`}
         >
           {tr('BOSH SAHIFA', 'ГЛАВНАЯ')}
-        </Link>
-        <a href="/#teachers-section" className="nav-link-item">
+        </PortalNavItem>
+        <a href={getMainSectionHref('#teachers-section', { portalMode })} className="nav-link-item">
           {tr('USTOZLAR', 'УЧИТЕЛЯ')}
         </a>
-        <a href="/#talented-section" className="nav-link-item">
+        <a href={getMainSectionHref('#talented-section', { portalMode })} className="nav-link-item">
           {tr('IQTIDORLILAR', 'ТАЛАНТЫ')}
         </a>
-        <a href="/#contact-section" className="nav-link-item">
+        <a href={getMainSectionHref('#contact-section', { portalMode })} className="nav-link-item">
           {tr("BOG'LANISH", 'КОНТАКТЫ')}
         </a>
 
         {/* If Admin, show direct nav link to Admin Panel & Tests */}
         {user?.role === 'admin' && (
           <>
-            <Link
-              to="/admin-panel/"
-              className={`nav-link-item ${location.pathname.startsWith('/admin-panel') && !location.search.includes('tab=tests') ? 'active-nav-section' : ''}`}
+            <PortalNavItem
+              target={adminHomeTarget}
+              className={`nav-link-item ${isOnAdminPortal && !location.search.includes('tab=tests') ? 'active-nav-section' : ''}`}
               style={{ color: '#f59e0b', fontWeight: 800 }}
             >
               👑 {tr('ADMIN PANELI', 'АДМИН')}
-            </Link>
-            <Link
-              to="/admin-panel/?tab=tests"
-              className={`nav-link-item ${location.pathname.startsWith('/admin-panel') && location.search.includes('tab=tests') ? 'active-nav-section' : ''}`}
+            </PortalNavItem>
+            <PortalNavItem
+              target={adminTestsTarget}
+              className={`nav-link-item ${isOnAdminPortal && location.search.includes('tab=tests') ? 'active-nav-section' : ''}`}
               style={{ color: '#38bdf8', fontWeight: 800 }}
             >
               📋 {tr('TESTLAR', 'ТЕСТЫ')}
-            </Link>
+            </PortalNavItem>
           </>
         )}
       </nav>
@@ -71,8 +102,8 @@ export default function Navbar() {
         {user && (
           <div className="flex items-center gap-2">
             {user.role === 'admin' && (
-              <Link
-                to="/admin-panel/"
+              <PortalNavItem
+                target={adminHomeTarget}
                 className="navbar-user-chip"
                 title={tr("Admin Paneliga o'tish", 'Перейти в панель администратора')}
               >
@@ -83,12 +114,12 @@ export default function Navbar() {
                   <span className="text-xs font-bold text-white">{tr('Boshqaruv', 'Управление')}</span>
                   <span className="text-[10px] text-amber-400 font-bold">{tr('Admin', 'Админ')}</span>
                 </div>
-              </Link>
+              </PortalNavItem>
             )}
 
             {user.role === 'teacher' && (
-              <Link
-                to="/teacher/"
+              <PortalNavItem
+                target={teacherPortalTarget}
                 className="navbar-user-chip"
                 title={tr("O'qituvchi Portaliga o'tish", 'Перейти на портал учителя')}
               >
@@ -105,12 +136,12 @@ export default function Navbar() {
                     {user.subject ? localizeSubject(user.subject, language) : tr("O'qituvchi", 'Учитель')}
                   </span>
                 </div>
-              </Link>
+              </PortalNavItem>
             )}
 
             {user.role === 'student' && (
-              <Link
-                to="/student/"
+              <PortalNavItem
+                target={studentPortalTarget}
                 className="navbar-user-chip"
                 title={tr("O'quvchi Kabinetiga o'tish", 'Перейти в кабинет ученика')}
               >
@@ -127,7 +158,7 @@ export default function Navbar() {
                     💎 {user.coins || 0} {tr('Coins', 'коинов')}
                   </span>
                 </div>
-              </Link>
+              </PortalNavItem>
             )}
 
             <button

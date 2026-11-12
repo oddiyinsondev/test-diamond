@@ -1,8 +1,10 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
+import { getMainSectionHref, resolvePortalMode } from '../utils/portalHost';
 
 export default function Footer() {
   const { tr } = useAuth();
+  const portalMode = resolvePortalMode();
 
   return (
     <footer className="footer-clean-wrap">
@@ -30,10 +32,10 @@ export default function Footer() {
           <div className="footer-col">
             <h4>{tr("Bo'limlar", 'Навигация')}</h4>
             <ul>
-              <li><a href="/#hero-section">{tr('Bosh sahifa', 'Главная')}</a></li>
-              <li><a href="/#teachers-section">{tr('Bizning ustozlar', 'Учителя')}</a></li>
-              <li><a href="/#talented-section">{tr("Iqtidorli o'quvchilar", 'Таланты')}</a></li>
-              <li><a href="/#contact-section">{tr('Qabulga yozilish', 'Контакты')}</a></li>
+              <li><a href={getMainSectionHref('#hero-section', { portalMode })}>{tr('Bosh sahifa', 'Главная')}</a></li>
+              <li><a href={getMainSectionHref('#teachers-section', { portalMode })}>{tr('Bizning ustozlar', 'Учителя')}</a></li>
+              <li><a href={getMainSectionHref('#talented-section', { portalMode })}>{tr("Iqtidorli o'quvchilar", 'Таланты')}</a></li>
+              <li><a href={getMainSectionHref('#contact-section', { portalMode })}>{tr('Qabulga yozilish', 'Контакты')}</a></li>
             </ul>
           </div>
 
@@ -41,10 +43,10 @@ export default function Footer() {
           <div className="footer-col">
             <h4>{tr("Ta'lim yo'nalishlari", 'Направления')}</h4>
             <ul>
-              <li><a href="/#why-section">{tr('Aniq fanlar va Matematika', 'Точные науки и математика')}</a></li>
-              <li><a href="/#why-section">{tr('IT & Zamonaviy dasturlash', 'IT и современное программирование')}</a></li>
-              <li><a href="/#why-section">{tr('Xorijiy tillar (IELTS & SAT)', 'Иностранные языки (IELTS и SAT)')}</a></li>
-              <li><a href="/#talented-section">{tr('Olimpiada va tanlovlar', 'Олимпиады и конкурсы')}</a></li>
+              <li><a href={getMainSectionHref('#why-section', { portalMode })}>{tr('Aniq fanlar va Matematika', 'Точные науки и математика')}</a></li>
+              <li><a href={getMainSectionHref('#why-section', { portalMode })}>{tr('IT & Zamonaviy dasturlash', 'IT и современное программирование')}</a></li>
+              <li><a href={getMainSectionHref('#why-section', { portalMode })}>{tr('Xorijiy tillar (IELTS & SAT)', 'Иностранные языки (IELTS и SAT)')}</a></li>
+              <li><a href={getMainSectionHref('#talented-section', { portalMode })}>{tr('Olimpiada va tanlovlar', 'Олимпиады и конкурсы')}</a></li>
             </ul>
           </div>
 
@@ -53,7 +55,7 @@ export default function Footer() {
             <h4>{tr("Bog'lanish", 'Контакты')}</h4>
             <div style={{ fontSize: '0.86rem', color: '#CBD5E1', marginBottom: '8px' }}>
               <i className="fa-solid fa-phone-volume" style={{ color: '#29B7E1', marginRight: '8px' }}></i>
-              <a href="/#contact-section" style={{ color: '#29B7E1', textDecoration: 'none', fontWeight: 700 }}>
+              <a href={getMainSectionHref('#contact-section', { portalMode })} style={{ color: '#29B7E1', textDecoration: 'none', fontWeight: 700 }}>
                 {tr("Qayta qo'ng'iroq buyurtma qilish", 'Заказать обратный звонок (15 мин)')}
               </a>
             </div>

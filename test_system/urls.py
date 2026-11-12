@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, re_path
 from core import views
 
 from django.views.generic import RedirectView
@@ -20,10 +20,10 @@ urlpatterns = [
     path('teacher/<path:extra>', views.teacher_view),
     path('student/', views.student_view, name='student_portal'),
     path('student/<path:extra>', views.student_view),
-    path('teachers/', RedirectView.as_view(url='/#teachers-section', permanent=False)),
-    path('talented/', RedirectView.as_view(url='/#talented-section', permanent=False)),
-    path('iqtidorlilar/', RedirectView.as_view(url='/#talented-section', permanent=False)),
-    path('contact/', RedirectView.as_view(url='/#contact-section', permanent=False)),
+    path('teachers/', views.section_redirect_view, {'section': 'teachers-section'}),
+    path('talented/', views.section_redirect_view, {'section': 'talented-section'}),
+    path('iqtidorlilar/', views.section_redirect_view, {'section': 'talented-section'}),
+    path('contact/', views.section_redirect_view, {'section': 'contact-section'}),
 
     # 2. AUTH & COMMON APIS
     path('api/auth/login/', views.api_login, name='api_login'),
@@ -89,4 +89,8 @@ from django.conf.urls.static import static
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+urlpatterns += [
+    re_path(r'^(?!api/|static/|media/|django-admin/|admin/).*$', views.spa_fallback_view, name='spa_fallback'),
+]
 

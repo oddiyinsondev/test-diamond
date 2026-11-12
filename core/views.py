@@ -6,12 +6,13 @@ from django.conf import settings
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.shortcuts import render, redirect
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse, HttpResponse, Http404
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.db import transaction
 from django.db.models import Avg, Count, Sum, Max, Min, Q
 from django.utils import timezone
+from django.utils.cache import patch_vary_headers
 from django.utils.dateparse import parse_datetime
 from datetime import datetime, time, timedelta
 
@@ -625,23 +626,112 @@ def serialize_user_payload(user):
         'hasCustomAvatar': bool(user.avatar),
     }
 
-# ----------------- PAGE VIEWS (ALOHIDA URL-LAR) -----------------
+# ----------------- PAGE VIEWS (ALOHIDA URL-LAR VA SUBDOMENLAR) -----------------
+
+def _extract_request_host(request):
+    try:
+        raw_host = request.get_host() or ''
+    except Exception:
+        raw_host = request.META.get('HTTP_HOST', '') or ''
+    return raw_host.split(':')[0].strip().lower()
+
+
+def _resolve_portal_mode(request):
+    host = _extract_request_host(request)
+    portal_domains = getattr(settings, 'PORTAL_DOMAINS', {
+        'admin': 'admin.diamondschool.uz',
+        'teacher': 'teacher.diamondschool.uz',
+        'student': 'student.diamondschool.uz',
+    })
+    for mode, domain in portal_domains.items():
+        if host == domain.lower() or host == f'{mode}.localhost':
+            return mode
+    return 'main'
+
+
+def _build_root_redirect_with_query(request):
+    qs = request.META.get('QUERY_STRING', '')
+    return redirect(f'/?{qs}' if qs else '/')
+
+
+def _render_spa_for_request(request):
+    portal_mode = _resolve_portal_mode(request)
+    scheme = 'https' if request.is_secure() else 'http'
+    main_domain = getattr(settings, 'MAIN_DOMAIN', 'app.diamondschool.uz')
+    portal_domains = getattr(settings, 'PORTAL_DOMAINS', {
+        'admin': 'admin.diamondschool.uz',
+        'teacher': 'teacher.diamondschool.uz',
+        'student': 'student.diamondschool.uz',
+    })
+    spa_config = {
+        'portalMode': portal_mode,
+        'mainSiteUrl': f'{scheme}://{main_domain}',
+        'portalUrls': {k: f'{scheme}://{v}' for k, v in portal_domains.items()},
+    }
+    response = render(request, 'react_app.html', {'spa_config': spa_config})
+    patch_vary_headers(response, ('Host',))
+    return response
+
+
+def _handle_portal_entry(request, target_portal):
+    portal_mode = _resolve_portal_mode(request)
+
+    # Subdomenda (admin./teacher./student.) tegishli portal URL'i kelsa, toza / ga yo'naltiramiz
+    if portal_mode != 'main':
+        if portal_mode == target_portal:
+            return _build_root_redirect_with_query(request)
+        return redirect('/')
+
+    # Asosiy domenda (app.diamondschool.uz) redirect yoqilgan bo'lsa tegishli subdomenga yo'naltirish
+    if getattr(settings, 'REDIRECT_MAIN_PORTAL_PATHS_TO_SUBDOMAINS', False):
+        host = _extract_request_host(request)
+        if host == getattr(settings, 'MAIN_DOMAIN', 'app.diamondschool.uz').lower():
+            target_domain = getattr(settings, 'PORTAL_DOMAINS', {}).get(target_portal)
+            if target_domain:
+                scheme = 'https' if request.is_secure() else 'http'
+                qs = request.META.get('QUERY_STRING', '')
+                suffix = f'/?{qs}' if qs else '/'
+                return redirect(f'{scheme}://{target_domain}{suffix}')
+
+    return _render_spa_for_request(request)
+
 
 def home_view(request, extra=''):
-    """React SPA view - Bosh Sahifa"""
-    return render(request, 'react_app.html')
+    """React SPA view - Host ga qarab Bosh sahifa yoki tegishli Portal"""
+    return _render_spa_for_request(request)
+
 
 def admin_view(request, extra=''):
     """React SPA view - Admin Panel"""
-    return render(request, 'react_app.html')
+    return _handle_portal_entry(request, 'admin')
+
 
 def teacher_view(request, extra=''):
     """React SPA view - O'qituvchi Portali"""
-    return render(request, 'react_app.html')
+    return _handle_portal_entry(request, 'teacher')
+
 
 def student_view(request, extra=''):
     """React SPA view - O'quvchi Portali"""
-    return render(request, 'react_app.html')
+    return _handle_portal_entry(request, 'student')
+
+
+def section_redirect_view(request, section=''):
+    """Asosiy sayt bo'limlariga (#teachers-section va h.k.) yo'naltirish"""
+    portal_mode = _resolve_portal_mode(request)
+    anchor = f'#{section}' if section else ''
+    if portal_mode == 'main':
+        return redirect(f'/{anchor}')
+    scheme = 'https' if request.is_secure() else 'http'
+    main_domain = getattr(settings, 'MAIN_DOMAIN', 'app.diamondschool.uz')
+    return redirect(f'{scheme}://{main_domain}/{anchor}')
+
+
+def spa_fallback_view(request, extra=''):
+    """Subdomenlarda sahifani yangilaganda (refresh) 404 bermasligi uchun SPA fallback"""
+    if _resolve_portal_mode(request) == 'main':
+        raise Http404('Page not found')
+    return _render_spa_for_request(request)
 
 
 # ----------------- AUTH & META APIS -----------------

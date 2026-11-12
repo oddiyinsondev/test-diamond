@@ -900,3 +900,89 @@ class AdminCoinAndRankingTests(TestCase):
         self.assertEqual(buckets['teacher_lesson']['coins'], 3)
         self.assertEqual(buckets['admin_students']['coins'], 8)
         self.assertEqual(buckets['admin_class']['coins'], 30)
+
+
+class SubdomainRoutingTests(TestCase):
+    def test_root_routes_render_expected_portal_mode_by_host(self):
+        import json as py_json
+        import re as py_re
+
+        cli = Client()
+        cases = [
+            ('app.diamondschool.uz', 'main'),
+            ('admin.diamondschool.uz', 'admin'),
+            ('teacher.diamondschool.uz', 'teacher'),
+            ('student.diamondschool.uz', 'student'),
+            ('127.0.0.1', 'main'),
+        ]
+        for host, expected_mode in cases:
+            resp = cli.get('/', HTTP_HOST=host)
+            self.assertEqual(resp.status_code, 200, f'Unexpected status for {host}')
+            vary_tokens = [v.strip().lower() for v in (resp.headers.get('Vary') or '').split(',') if v.strip()]
+            self.assertIn('host', vary_tokens)
+            match = py_re.search(
+                r'<script id="diamond-spa-config" type="application/json">(.*?)</script>',
+                resp.content.decode('utf-8'),
+                py_re.DOTALL,
+            )
+            self.assertIsNotNone(match, f'Missing diamond-spa-config script on {host}')
+            cfg = py_json.loads(match.group(1))
+            self.assertEqual(cfg['portalMode'], expected_mode)
+            self.assertEqual(cfg['portalUrls']['admin'], 'http://admin.diamondschool.uz')
+
+    def test_portal_subpaths_normalize_to_root_and_preserve_query(self):
+        cli = Client()
+
+        r_admin = cli.get('/admin-panel/?tab=tests', HTTP_HOST='admin.diamondschool.uz')
+        self.assertEqual(r_admin.status_code, 302)
+        self.assertEqual(r_admin.headers['Location'], '/?tab=tests')
+
+        r_cross = cli.get('/student/', HTTP_HOST='admin.diamondschool.uz')
+        self.assertEqual(r_cross.status_code, 302)
+        self.assertEqual(r_cross.headers['Location'], '/')
+
+        r_teacher = cli.get('/teacher/?tab=coins', HTTP_HOST='teacher.diamondschool.uz')
+        self.assertEqual(r_teacher.status_code, 302)
+        self.assertEqual(r_teacher.headers['Location'], '/?tab=coins')
+
+        r_student = cli.get('/student/extra/path/', HTTP_HOST='student.diamondschool.uz')
+        self.assertEqual(r_student.status_code, 302)
+        self.assertEqual(r_student.headers['Location'], '/')
+
+    def test_section_redirects_and_spa_fallback_behavior(self):
+        cli = Client()
+
+        r_sec_sub = cli.get('/teachers/', HTTP_HOST='student.diamondschool.uz', HTTP_X_FORWARDED_PROTO='https')
+        self.assertEqual(r_sec_sub.status_code, 302)
+        self.assertEqual(r_sec_sub.headers['Location'], 'https://app.diamondschool.uz/#teachers-section')
+
+        r_sec_main = cli.get('/contact/', HTTP_HOST='app.diamondschool.uz')
+        self.assertEqual(r_sec_main.status_code, 302)
+        self.assertEqual(r_sec_main.headers['Location'], '/#contact-section')
+
+        r_sub_fallback = cli.get('/some-client-route', HTTP_HOST='teacher.diamondschool.uz')
+        self.assertEqual(r_sub_fallback.status_code, 200)
+        self.assertIn(b'"portalMode": "teacher"', r_sub_fallback.content)
+
+        r_main_unknown = cli.get('/some-unknown-route', HTTP_HOST='app.diamondschool.uz')
+        self.assertEqual(r_main_unknown.status_code, 404)
+
+    def test_api_meta_works_across_all_portal_subdomains(self):
+        cli = Client()
+        for host in ('app.diamondschool.uz', 'admin.diamondschool.uz', 'teacher.diamondschool.uz', 'student.diamondschool.uz'):
+            resp = cli.get('/api/meta/', HTTP_HOST=host)
+            self.assertEqual(resp.status_code, 200, f'/api/meta/ failed for {host}')
+            self.assertIn('classes', resp.json())
+            self.assertIn('subjects', resp.json())
+
+    def test_optional_main_domain_redirect_flag(self):
+        cli = Client()
+        # Default False keeps app.diamondschool.uz/admin-panel/ working until DNS is ready
+        r_disabled = cli.get('/admin-panel/', HTTP_HOST='app.diamondschool.uz')
+        self.assertEqual(r_disabled.status_code, 200)
+
+        with self.settings(REDIRECT_MAIN_PORTAL_PATHS_TO_SUBDOMAINS=True):
+            r_enabled = cli.get('/admin-panel/?tab=tests', HTTP_HOST='app.diamondschool.uz', HTTP_X_FORWARDED_PROTO='https')
+            self.assertEqual(r_enabled.status_code, 302)
+            self.assertEqual(r_enabled.headers['Location'], 'https://admin.diamondschool.uz/?tab=tests')
+
