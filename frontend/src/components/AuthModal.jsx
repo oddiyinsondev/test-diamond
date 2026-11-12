@@ -132,6 +132,24 @@ export default function AuthModal() {
               padding: '8px 4px',
               borderRadius: '8px',
               border: 'none',
+              background: role === 'tutor' ? 'linear-gradient(135deg, #7c3aed, #a855f7)' : 'transparent',
+              color: role === 'tutor' ? '#FFFFFF' : '#94A3B8',
+              fontWeight: 700,
+              fontSize: '0.8rem',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            onClick={() => setRole('tutor')}
+          >
+            <i className="fa-solid fa-user-check" style={{ marginRight: '5px' }}></i> {tr('Tyuter', 'Тьютор')}
+          </button>
+          <button
+            type="button"
+            style={{
+              flex: 1,
+              padding: '8px 4px',
+              borderRadius: '8px',
+              border: 'none',
               background: role === 'admin' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'transparent',
               color: role === 'admin' ? '#000000' : '#94A3B8',
               fontWeight: 700,
@@ -160,7 +178,7 @@ export default function AuthModal() {
             <input
               type="text"
               className="clean-input"
-              placeholder={role === 'admin' ? 'admin' : role === 'teacher' ? 'anvar_muallim' : 'jasur_9a'}
+              placeholder={tr('Loginni kiriting', 'Введите логин')}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoFocus
@@ -199,11 +217,6 @@ export default function AuthModal() {
             )}
           </button>
         </form>
-
-        <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)', textAlign: 'center', fontSize: '0.78rem', color: '#94A3B8' }}>
-          {tr('Test hisoblari paroli:', 'Пароль для тестовых аккаунтов:')}{' '}
-          <strong style={{ color: '#29B7E1' }}>123</strong>
-        </div>
       </div>
     </div>
   );

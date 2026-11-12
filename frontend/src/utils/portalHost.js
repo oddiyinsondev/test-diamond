@@ -1,9 +1,10 @@
-const VALID_PORTALS = ['admin', 'teacher', 'student'];
+const VALID_PORTALS = ['admin', 'teacher', 'tutor', 'student'];
 const ALL_MODES = ['main', ...VALID_PORTALS];
 
 const LEGACY_PORTAL_PATHS = {
   admin: '/admin-panel/',
   teacher: '/teacher/',
+  tutor: '/tutor/',
   student: '/student/',
 };
 
@@ -81,6 +82,9 @@ export function resolvePortalMode(options = {}) {
   }
   if (host === 'teacher.diamondschool.uz' || host === 'teacher.localhost') {
     return 'teacher';
+  }
+  if (host === 'tutor.diamondschool.uz' || host === 'tutor.localhost') {
+    return 'tutor';
   }
   if (host === 'student.diamondschool.uz' || host === 'student.localhost') {
     return 'student';

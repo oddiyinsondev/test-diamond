@@ -18,6 +18,8 @@ urlpatterns = [
     path('admin-panel/<path:extra>', views.admin_view),
     path('teacher/', views.teacher_view, name='teacher_portal'),
     path('teacher/<path:extra>', views.teacher_view),
+    path('tutor/', views.tutor_view, name='tutor_portal'),
+    path('tutor/<path:extra>', views.tutor_view),
     path('student/', views.student_view, name='student_portal'),
     path('student/<path:extra>', views.student_view),
     path('teachers/', views.section_redirect_view, {'section': 'teachers-section'}),
@@ -32,11 +34,17 @@ urlpatterns = [
     path('api/meta/', views.api_meta, name='api_meta'),
     path('api/profile/update/', views.api_update_profile, name='api_update_profile'),
 
-    # 3. ADMIN APIS (O'qituvchilar va O'quvchilar ALOHIDA)
+    # 3. ADMIN APIS (O'qituvchilar, Tyuterlar va O'quvchilar ALOHIDA)
     path('api/admin/teachers/', views.api_admin_teachers, name='api_admin_teachers'),
+    path('api/admin/tutors/', views.api_admin_tutors, name='api_admin_tutors'),
     path('api/admin/students/', views.api_admin_students, name='api_admin_students'),
     path('api/admin/users/<int:user_id>/', views.api_admin_user_manage, name='api_admin_user_manage'),
     path('api/admin/stats/', views.api_admin_stats, name='api_admin_stats'),
+
+    # 3.5 TUTOR APIS (Tyuter portali: biriktirilgan sinf o'quvchilari CRUD va Coin hamyoni)
+    path('api/tutor/dashboard/', views.api_tutor_dashboard, name='api_tutor_dashboard'),
+    path('api/tutor/students/', views.api_tutor_students, name='api_tutor_students'),
+    path('api/tutor/students/<int:student_id>/', views.api_tutor_student_manage, name='api_tutor_student_manage'),
 
     # 4. TEACHER APIS
     path('api/teacher/tests/', views.api_teacher_tests, name='api_teacher_tests'),

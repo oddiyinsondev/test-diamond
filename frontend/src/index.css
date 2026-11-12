@@ -2771,6 +2771,99 @@ body.dark-theme, body {
   box-shadow: none;
 }
 
+.teacher-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(7, 19, 34, 0.88);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.teacher-mode-btn {
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  cursor: pointer;
+  border: 1px solid transparent;
+  color: #94a3b8;
+  background: transparent;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.teacher-mode-btn:hover {
+  color: #e2e8f0;
+}
+
+.teacher-mode-btn.is-award.active {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.24), rgba(217, 119, 6, 0.28));
+  border-color: rgba(245, 158, 11, 0.55);
+  color: #fbbf24;
+  box-shadow: 0 2px 10px rgba(245, 158, 11, 0.2);
+}
+
+.teacher-mode-btn.is-deduct.active {
+  background: linear-gradient(135deg, rgba(244, 63, 94, 0.24), rgba(225, 29, 72, 0.28));
+  border-color: rgba(244, 63, 94, 0.55);
+  color: #fda4af;
+  box-shadow: 0 2px 10px rgba(244, 63, 94, 0.22);
+}
+
+.teacher-award-card.is-deduct {
+  border-color: rgba(244, 63, 94, 0.42);
+  background: linear-gradient(135deg, rgba(35, 14, 28, 0.92), rgba(15, 23, 42, 0.9));
+}
+
+.teacher-coin-amount-chip.is-deduct:hover:not(:disabled) {
+  background: rgba(244, 63, 94, 0.16);
+  border-color: rgba(244, 63, 94, 0.5);
+  color: #fda4af;
+}
+
+.teacher-coin-amount-chip.is-deduct.active {
+  background: linear-gradient(135deg, #f43f5e, #e11d48);
+  border-color: #fb7185;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(244, 63, 94, 0.4);
+}
+
+.teacher-quick-reason-pill.is-deduct:hover {
+  background: rgba(244, 63, 94, 0.15);
+  border-color: rgba(244, 63, 94, 0.45);
+  color: #fda4af;
+}
+
+.teacher-quick-reason-pill.is-deduct.active {
+  background: rgba(244, 63, 94, 0.2);
+  border-color: rgba(244, 63, 94, 0.6);
+  color: #fda4af;
+}
+
+.teacher-award-submit-btn.is-deduct {
+  background: linear-gradient(135deg, #f43f5e, #e11d48);
+  color: #ffffff;
+  border-color: rgba(251, 113, 133, 0.55);
+  box-shadow: 0 4px 16px rgba(244, 63, 94, 0.34);
+}
+
+.teacher-award-submit-btn.is-deduct:hover:not(:disabled) {
+  background: linear-gradient(135deg, #fb7185, #f43f5e);
+  box-shadow: 0 6px 20px rgba(244, 63, 94, 0.52);
+}
+
+.coin-amount-flex-box.is-deduct {
+  border-color: rgba(244, 63, 94, 0.42);
+}
+
+.coin-amount-flex-box.is-deduct .coin-amount-native-input {
+  color: #fda4af;
+}
+
 /* Empty Class Card */
 .teacher-empty-class-card {
   background: linear-gradient(135deg, rgba(15, 23, 42, 0.72), rgba(7, 19, 34, 0.85));
@@ -2953,6 +3046,18 @@ body.dark-theme, body {
   transform: scale(1.04);
 }
 
+.student-card-btn-pill.btn-deduct {
+  background: rgba(244, 63, 94, 0.12);
+  border-color: rgba(244, 63, 94, 0.32);
+  color: #fda4af;
+}
+.student-card-btn-pill.btn-deduct:hover:not(:disabled) {
+  background: rgba(244, 63, 94, 0.25);
+  border-color: rgba(244, 63, 94, 0.65);
+  color: #fecdd3;
+  transform: scale(1.04);
+}
+
 /* 5. Luxury Transaction Table & Badges */
 .teacher-tx-table-wrap {
   width: 100%;
@@ -2978,6 +3083,13 @@ body.dark-theme, body {
   color: #fbbf24;
   box-shadow: 0 2px 8px rgba(245, 158, 11, 0.18);
   white-space: nowrap;
+}
+
+.tx-amount-badge.is-deduct {
+  background: linear-gradient(135deg, rgba(244, 63, 94, 0.16), rgba(225, 29, 72, 0.26));
+  border-color: rgba(244, 63, 94, 0.48);
+  color: #fda4af;
+  box-shadow: 0 2px 8px rgba(244, 63, 94, 0.18);
 }
 
 .tx-category-badge {

@@ -44,8 +44,8 @@ export default function StudentPortal() {
   const { showToast } = useToast();
 
   // Gate state
-  const [gateUsername, setGateUsername] = useState('jasur_9a');
-  const [gatePassword, setGatePassword] = useState('123');
+  const [gateUsername, setGateUsername] = useState('');
+  const [gatePassword, setGatePassword] = useState('');
   const [gateLoading, setGateLoading] = useState(false);
   const [gateError, setGateError] = useState('');
   const [showGatePassword, setShowGatePassword] = useState(false);
@@ -418,36 +418,6 @@ export default function StudentPortal() {
             </p>
           </div>
 
-          {/* Demo credentials helper chip */}
-          <div className="demo-creds-box">
-            <div className="demo-title">
-              <GraduationCap size={13} style={{ color: '#38bdf8' }} />{' '}
-              {tr("Test uchun o'quvchi akkauntlari:", 'Тестовые аккаунты учеников:')}
-            </div>
-            <div className="demo-chips-row">
-              <button
-                type="button"
-                className="demo-chip-btn"
-                onClick={() => {
-                  setGateUsername('jasur_9a');
-                  setGatePassword('123');
-                }}
-              >
-                <span>🎓 Jasur (9-A) / 123</span>
-              </button>
-              <button
-                type="button"
-                className="demo-chip-btn"
-                onClick={() => {
-                  setGateUsername('madina_9a');
-                  setGatePassword('123');
-                }}
-              >
-                <span>🎓 Madina (9-A) / 123</span>
-              </button>
-            </div>
-          </div>
-
           {gateError && (
             <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2 mb-4">
               <AlertTriangle size={16} /> <span>{gateError}</span>
@@ -464,7 +434,7 @@ export default function StudentPortal() {
                   className="clean-input"
                   value={gateUsername}
                   onChange={(e) => setGateUsername(e.target.value)}
-                  placeholder="jasur_9a"
+                  placeholder={tr('Loginni kiriting', 'Введите логин')}
                   required
                 />
               </div>

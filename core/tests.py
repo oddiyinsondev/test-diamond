@@ -1,4 +1,5 @@
 import io
+import json
 from datetime import timedelta
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, Client
@@ -833,6 +834,160 @@ class TeacherRestrictionsTests(TestCase):
         r_del = cli.post(f'/api/teacher/coins/{tx.id}/delete/')
         self.assertEqual(r_del.status_code, 403)
 
+    def test_teacher_coin_deduct_workflow_and_guardrails(self):
+        cli = Client()
+        cli.login(username='tch_1', password='123')
+
+        # Give st_7a some starting coins and also consume teacher's +5 positive quota for 7-A
+        self.st_7a.coins = 7
+        self.st_7a.save(update_fields=['coins'])
+        r_cap = cli.post(
+            '/api/coins/award/',
+            {'studentId': self.st_7a.id, 'amount': 5, 'reason': 'Darsda juda faol qatnashdi'},
+            content_type='application/json',
+        )
+        self.assertEqual(r_cap.status_code, 200)
+        self.st_7a.refresh_from_db()
+        self.assertEqual(self.st_7a.coins, 12)
+
+        # Forbidden reason still blocked on deduction
+        r_bad_reason = cli.post(
+            '/api/coins/award/',
+            {'studentId': self.st_7a.id, 'amount': -2, 'reason': 'Test natijasi yomon'},
+            content_type='application/json',
+        )
+        self.assertEqual(r_bad_reason.status_code, 403)
+
+        # Exceeding -5 per deduction blocked
+        r_over_deduct = cli.post(
+            '/api/coins/award/',
+            {'studentId': self.st_7a.id, 'amount': -6, 'reason': 'Dars intizomini buzdi'},
+            content_type='application/json',
+        )
+        self.assertEqual(r_over_deduct.status_code, 403)
+
+        # Whole-class deduction blocked for teachers
+        r_batch_deduct = cli.post(
+            '/api/coins/award/',
+            {'className': '7-A', 'amount': -2, 'reason': 'Dars intizomini buzdi'},
+            content_type='application/json',
+        )
+        self.assertEqual(r_batch_deduct.status_code, 403)
+
+        # Valid single-student deduction works EVEN WHEN today's +5 positive quota is exhausted
+        r_deduct = cli.post(
+            '/api/coins/award/',
+            {'studentId': self.st_7a.id, 'amount': -3, 'reason': 'Dars intizomini buzgani uchun'},
+            content_type='application/json',
+        )
+        self.assertEqual(r_deduct.status_code, 200)
+        self.assertEqual(r_deduct.json()['coins'], 9)
+        self.assertEqual(r_deduct.json()['amountAwarded'], -3)
+        # Positive daily quota remains 0/5 remaining (deduction does not refund positive cap!)
+        self.assertEqual(r_deduct.json()['dailyCoinStatus']['coinsUsedToday'], 5)
+        self.assertEqual(r_deduct.json()['dailyCoinStatus']['coinsRemainingToday'], 0)
+
+        # Cannot deduct positive again today for 7-A after deduction
+        r_after_pos = cli.post(
+            '/api/coins/award/',
+            {'studentId': self.st_7a.id, 'amount': 1, 'reason': 'Darsda faol'},
+            content_type='application/json',
+        )
+        self.assertEqual(r_after_pos.status_code, 403)
+
+        # Deduction works when balance goes low, and prevents going negative (balance=2, try -4 -> 400)
+        self.st_7b.coins = 2
+        self.st_7b.save(update_fields=['coins'])
+        r_underflow = cli.post(
+            '/api/coins/award/',
+            {'studentId': self.st_7b.id, 'amount': -4, 'reason': 'Dars intizomini buzdi'},
+            content_type='application/json',
+        )
+        self.assertEqual(r_underflow.status_code, 400)
+        self.st_7b.refresh_from_db()
+        self.assertEqual(self.st_7b.coins, 2)
+
+        # History endpoint exposes deduction badge & canEdit=True
+        r_hist = cli.get(f'/api/teacher/coins/history/?grade=7-A')
+        self.assertEqual(r_hist.status_code, 200)
+        deduct_txs = [item for item in r_hist.json()['history'] if item['amount'] == -3]
+        self.assertEqual(len(deduct_txs), 1)
+        self.assertTrue(deduct_txs[0]['canEdit'])
+        self.assertIn('🔻', deduct_txs[0]['categoryBadge'])
+
+        # Teacher can edit negative tx between -1 and -5, cannot turn positive or exceed -5
+        tx_id = deduct_txs[0]['id']
+        self.assertEqual(
+            cli.post(f'/api/teacher/coins/{tx_id}/edit/', {'amount': 2, 'reason': 'Darsda faol'}, content_type='application/json').status_code,
+            403,
+        )
+        self.assertEqual(
+            cli.post(f'/api/teacher/coins/{tx_id}/edit/', {'amount': -6, 'reason': 'Dars intizomini buzdi'}, content_type='application/json').status_code,
+            403,
+        )
+        r_edit_ok = cli.post(
+            f'/api/teacher/coins/{tx_id}/edit/',
+            {'amount': -2, 'reason': "Darsda telefonda chalg'igani uchun"},
+            content_type='application/json',
+        )
+        self.assertEqual(r_edit_ok.status_code, 200)
+        self.st_7a.refresh_from_db()
+        self.assertEqual(self.st_7a.coins, 10)  # 12 - 3 -> edited to 12 - 2 = 10
+
+    def test_admin_test_create_detail_edit_and_delete_workflow(self):
+        adm = Client()
+        adm.login(username='adm_tr', password='123')
+
+        create_payload = {
+            'title': 'Admin New Test Workflow',
+            'subject': 'Matematika',
+            'language': 'uz',
+            'targetClasses': ['7-A'],
+            'durationMinutes': 25,
+            'maxAttempts': 2,
+            'isStudentAllowed': True,
+            'teacherId': self.teacher1.id,
+            'questions': [
+                {'question': '2 + 2 = ?', 'options': ['3', '4', '5', '6'], 'correctIndex': 1},
+                {'question': '3 * 3 = ?', 'options': ['6', '9', '12', '15'], 'correctIndex': 1},
+            ],
+        }
+        r_create = adm.post('/api/teacher/tests/', create_payload, content_type='application/json')
+        self.assertEqual(r_create.status_code, 200)
+        test_id = r_create.json()['testId']
+
+        r_detail = adm.get(f'/api/teacher/tests/{test_id}/')
+        self.assertEqual(r_detail.status_code, 200)
+        detail = r_detail.json()
+        self.assertEqual(detail['title'], 'Admin New Test Workflow')
+        self.assertFalse(detail['isAllClasses'])
+        self.assertEqual(detail['targetClasses'], ['7-A'])
+        self.assertEqual(len(detail['questions']), 2)
+
+        update_payload = {
+            **create_payload,
+            'title': 'Admin Updated Test Workflow',
+            'grade': 'Barchasi',
+            'targetClasses': ['7-A', '7-B'],
+            'questions': [
+                {'question': '5 + 5 = ?', 'options': ['8', '10', '11', '12'], 'correctIndex': 1},
+            ],
+        }
+        r_upd = adm.put(f'/api/teacher/tests/{test_id}/', update_payload, content_type='application/json')
+        self.assertEqual(r_upd.status_code, 200)
+
+        r_detail2 = adm.get(f'/api/teacher/tests/{test_id}/')
+        self.assertEqual(r_detail2.status_code, 200)
+        detail2 = r_detail2.json()
+        self.assertEqual(detail2['title'], 'Admin Updated Test Workflow')
+        self.assertTrue(detail2['isAllClasses'])
+        self.assertEqual(detail2['grade'], 'Barchasi')
+        self.assertEqual(len(detail2['questions']), 1)
+
+        r_del = adm.delete(f'/api/teacher/tests/{test_id}/')
+        self.assertEqual(r_del.status_code, 200)
+        self.assertFalse(Test.objects.filter(id=test_id).exists())
+
 
 class AdminCoinAndRankingTests(TestCase):
     def setUp(self):
@@ -912,6 +1067,7 @@ class SubdomainRoutingTests(TestCase):
             ('app.diamondschool.uz', 'main'),
             ('admin.diamondschool.uz', 'admin'),
             ('teacher.diamondschool.uz', 'teacher'),
+            ('tutor.diamondschool.uz', 'tutor'),
             ('student.diamondschool.uz', 'student'),
             ('127.0.0.1', 'main'),
         ]
@@ -985,4 +1141,454 @@ class SubdomainRoutingTests(TestCase):
             r_enabled = cli.get('/admin-panel/?tab=tests', HTTP_HOST='app.diamondschool.uz', HTTP_X_FORWARDED_PROTO='https')
             self.assertEqual(r_enabled.status_code, 302)
             self.assertEqual(r_enabled.headers['Location'], 'https://admin.diamondschool.uz/?tab=tests')
+
+
+class TutorPortalAndClassCoinsTests(TestCase):
+    def setUp(self):
+        self.admin = CustomUser.objects.create_user(
+            username='admin_tut',
+            password='123',
+            role='admin',
+            full_name='Bosh Administrator',
+        )
+        self.teacher = CustomUser.objects.create_user(
+            username='teacher_tut',
+            password='123',
+            role='teacher',
+            full_name='Ustoz Vali',
+            subject='Matematika',
+        )
+        self.class_a = SchoolClass.objects.create(name='7-A', grade_level=7, language='uz')
+        self.class_b = SchoolClass.objects.create(name='7-B', grade_level=7, language='uz')
+        self.outside_student = CustomUser.objects.create_user(
+            username='out_stud',
+            password='123',
+            role='student',
+            full_name='Tashqi Oquvchi',
+            grade='7-B',
+        )
+
+    def _login(self, client, username, password, role):
+        return client.post(
+            '/api/auth/login/',
+            data=json.dumps({'username': username, 'password': password, 'role': role}),
+            content_type='application/json',
+        )
+
+    def test_admin_creates_tutor_assigns_class_and_class_coins_credit_tutor(self):
+        cli = Client()
+        self.assertEqual(self._login(cli, 'admin_tut', '123', 'admin').status_code, 200)
+
+        # Admin creates tutor assigned to 7-A
+        res = cli.post(
+            '/api/admin/tutors/',
+            data=json.dumps({
+                'username': 'madina_tyuter',
+                'password': '123',
+                'fullName': 'Madina Tyuter',
+                'phone': '+998901234567',
+                'assignedClasses': ['7-A'],
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(res.status_code, 200)
+        tutor_id = res.json()['tutorId']
+        self.class_a.refresh_from_db()
+        self.assertEqual(self.class_a.tutor_id, tutor_id)
+
+        # Tutor can log in with role='tutor', rejected with role='teacher'
+        t_cli = Client()
+        self.assertEqual(self._login(t_cli, 'madina_tyuter', '123', 'teacher').status_code, 403)
+        self.assertEqual(self._login(t_cli, 'madina_tyuter', '123', 'tutor').status_code, 200)
+
+        # Student in 7-A created by tutor
+        s_res = t_cli.post(
+            '/api/tutor/students/',
+            data=json.dumps({
+                'fullName': 'Jasur 7A',
+                'username': 'jasur_7a',
+                'password': '123',
+                'grade': '7-A',
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(s_res.status_code, 200)
+        stud_id = s_res.json()['studentId']
+
+        # Admin awards +30 coins to class 7-A (class_only) -> credits class bonus AND tutor wallet
+        aw1 = cli.post(
+            '/api/coins/award/',
+            data=json.dumps({
+                'className': '7-A',
+                'awardScope': 'class_only',
+                'amount': 30,
+                'reason': 'Hafta sinfi',
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(aw1.status_code, 200)
+        self.assertEqual(aw1.json()['tutorCoins'], 30)
+
+        # Admin awards +20 coins with class_and_active (no active submissions yet, still credits class + tutor)
+        aw2 = cli.post(
+            '/api/coins/award/',
+            data=json.dumps({
+                'className': '7-A',
+                'awardScope': 'class_and_active',
+                'amount': 20,
+                'reason': 'Faol sinf',
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(aw2.status_code, 200)
+
+        tutor_obj = CustomUser.objects.get(id=tutor_id)
+        self.class_a.refresh_from_db()
+        self.assertEqual(self.class_a.bonus_coins, 50)
+        self.assertEqual(tutor_obj.coins, 50)
+        self.assertEqual(ClassCoinTransaction.objects.filter(tutor=tutor_obj).count(), 2)
+
+        # Tutor dashboard reflects 50 coins & student list & coinHistory
+        dash = t_cli.get('/api/tutor/dashboard/')
+        self.assertEqual(dash.status_code, 200)
+        dj = dash.json()
+        self.assertEqual(dj['summary']['tutorCoins'], 50)
+        self.assertEqual(len(dj['coinHistory']), 2)
+        self.assertTrue(any(s['id'] == stud_id for s in dj['students']))
+
+        # Admin coin rankings include tutorRankings & tutor name on class stats
+        rankings = cli.get('/api/coins/rankings/')
+        self.assertEqual(rankings.status_code, 200)
+        rj = rankings.json()
+        self.assertTrue(any(t['id'] == tutor_id and t['coins'] == 50 for t in rj['tutorRankings']))
+
+    def test_tutor_student_crud_scoping_and_teacher_read_only_enforcement(self):
+        tutor = CustomUser.objects.create_user(
+            username='tut_scope',
+            password='123',
+            role='tutor',
+            full_name='Tyuter Scope',
+        )
+        self.class_a.tutor = tutor
+        self.class_a.save(update_fields=['tutor'])
+
+        t_cli = Client()
+        self.assertEqual(self._login(t_cli, 'tut_scope', '123', 'tutor').status_code, 200)
+
+        # Tutor creates student in assigned class 7-A -> OK
+        create_ok = t_cli.post(
+            '/api/tutor/students/',
+            data=json.dumps({
+                'fullName': 'Ali 7A',
+                'username': 'ali_7a',
+                'password': '123',
+                'grade': '7-A',
+                'phone': '+998901111111',
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(create_ok.status_code, 200)
+        ali_id = create_ok.json()['studentId']
+
+        # Tutor cannot create student in unassigned class 7-B -> 403
+        create_bad = t_cli.post(
+            '/api/tutor/students/',
+            data=json.dumps({
+                'fullName': 'Vali 7B',
+                'username': 'vali_7b',
+                'password': '123',
+                'grade': '7-B',
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(create_bad.status_code, 403)
+
+        # Tutor updates student in 7-A -> OK, but cannot move student to 7-B -> 403
+        upd_ok = t_cli.put(
+            f'/api/tutor/students/{ali_id}/',
+            data=json.dumps({'fullName': 'Ali Karimov', 'phone': '+998902222222'}),
+            content_type='application/json',
+        )
+        self.assertEqual(upd_ok.status_code, 200)
+        self.assertEqual(CustomUser.objects.get(id=ali_id).full_name, 'Ali Karimov')
+
+        upd_bad_grade = t_cli.put(
+            f'/api/tutor/students/{ali_id}/',
+            data=json.dumps({'grade': '7-B'}),
+            content_type='application/json',
+        )
+        self.assertEqual(upd_bad_grade.status_code, 403)
+
+        # Tutor cannot edit or delete student in 7-B -> 403
+        self.assertEqual(
+            t_cli.put(
+                f'/api/tutor/students/{self.outside_student.id}/',
+                data=json.dumps({'fullName': 'Hacked'}),
+                content_type='application/json',
+            ).status_code,
+            403,
+        )
+        self.assertEqual(t_cli.delete(f'/api/tutor/students/{self.outside_student.id}/').status_code, 403)
+
+        # Teacher can READ students (read-only) but gets 403 on all add/edit/delete endpoints
+        tch_cli = Client()
+        self.assertEqual(self._login(tch_cli, 'teacher_tut', '123', 'teacher').status_code, 200)
+
+        read_students = tch_cli.get('/api/teacher/class-students/?grade=all&portal=teacher')
+        self.assertEqual(read_students.status_code, 200)
+        names = [s['username'] for s in read_students.json()['students']]
+        self.assertIn('ali_7a', names)
+        self.assertIn('out_stud', names)
+
+        # Teacher blocked from tutor and admin student write/manage routes
+        self.assertEqual(tch_cli.get('/api/tutor/students/').status_code, 403)
+        self.assertEqual(
+            tch_cli.post(
+                '/api/tutor/students/',
+                data=json.dumps({'fullName': 'X', 'username': 'x1', 'password': '123', 'grade': '7-A'}),
+                content_type='application/json',
+            ).status_code,
+            403,
+        )
+        self.assertEqual(
+            tch_cli.put(
+                f'/api/tutor/students/{ali_id}/',
+                data=json.dumps({'fullName': 'No'}),
+                content_type='application/json',
+            ).status_code,
+            403,
+        )
+        self.assertEqual(tch_cli.delete(f'/api/tutor/students/{ali_id}/').status_code, 403)
+        self.assertEqual(
+            tch_cli.post(
+                '/api/admin/students/',
+                data=json.dumps({'fullName': 'X', 'username': 'x2', 'password': '123', 'grade': '7-A'}),
+                content_type='application/json',
+            ).status_code,
+            403,
+        )
+        self.assertEqual(tch_cli.delete(f'/api/admin/users/{ali_id}/').status_code, 403)
+
+        # Tutor deletes student in 7-A -> OK
+        del_ok = t_cli.delete(f'/api/tutor/students/{ali_id}/')
+        self.assertEqual(del_ok.status_code, 200)
+        self.assertFalse(CustomUser.objects.filter(id=ali_id).exists())
+
+    def test_admin_controls_tutor_credentials_and_active_status(self):
+        adm = Client()
+        self.assertEqual(self._login(adm, 'admin_tut', '123', 'admin').status_code, 200)
+
+        # Admin creates tutor with specific credentials
+        res = adm.post(
+            '/api/admin/tutors/',
+            data=json.dumps({
+                'username': 'ctrl_tutor',
+                'password': 'init_pw_99',
+                'fullName': 'Nazorat Tyuter',
+                'assignedClasses': ['7-A'],
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(res.status_code, 200)
+        tutor_id = res.json()['tutorId']
+        self.assertTrue(res.json()['user']['isActive'])
+
+        t_cli = Client()
+        self.assertEqual(self._login(t_cli, 'ctrl_tutor', 'init_pw_99', 'tutor').status_code, 200)
+
+        # Tutor CANNOT change own username or password via /api/profile/update/ -> 403
+        r_chg_user = t_cli.post(
+            '/api/profile/update/',
+            data=json.dumps({'username': 'hacked_tutor'}),
+            content_type='application/json',
+        )
+        self.assertEqual(r_chg_user.status_code, 403)
+
+        r_chg_pw = t_cli.post(
+            '/api/profile/update/',
+            data=json.dumps({'oldPassword': 'init_pw_99', 'newPassword': 'new_self_pw'}),
+            content_type='application/json',
+        )
+        self.assertEqual(r_chg_pw.status_code, 403)
+
+        # Tutor CAN still update phone/bio (keeping username same) -> 200
+        r_upd_info = t_cli.post(
+            '/api/profile/update/',
+            data=json.dumps({
+                'username': 'ctrl_tutor',
+                'fullName': 'Nazorat Tyuter Updated',
+                'phone': '+998907776655',
+                'bio': 'Sinf rahbari',
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(r_upd_info.status_code, 200)
+        tutor_obj = CustomUser.objects.get(id=tutor_id)
+        self.assertEqual(tutor_obj.username, 'ctrl_tutor')
+        self.assertEqual(tutor_obj.phone, '+998907776655')
+        self.assertTrue(tutor_obj.check_password('init_pw_99'))
+
+        # Admin suspends (blocks) the tutor account
+        r_block = adm.put(
+            f'/api/admin/users/{tutor_id}/',
+            data=json.dumps({'isActive': False}),
+            content_type='application/json',
+        )
+        self.assertEqual(r_block.status_code, 200)
+        self.assertFalse(r_block.json()['user']['isActive'])
+
+        # Existing tutor session is immediately blocked on /api/tutor/dashboard/ and /api/auth/me/
+        self.assertIn(t_cli.get('/api/tutor/dashboard/').status_code, (401, 403))
+        me_after = t_cli.get('/api/auth/me/')
+        self.assertFalse(me_after.json()['authenticated'])
+
+        # Blocked tutor gets clear 403 on login with valid password
+        fresh_t_cli = Client()
+        r_blocked_login = self._login(fresh_t_cli, 'ctrl_tutor', 'init_pw_99', 'tutor')
+        self.assertEqual(r_blocked_login.status_code, 403)
+
+        # Admin updates tutor's login, resets password, and re-activates account
+        r_adm_reset = adm.put(
+            f'/api/admin/users/{tutor_id}/',
+            data=json.dumps({
+                'username': 'ctrl_tutor_v2',
+                'password': 'AdminReset77',
+                'isActive': True,
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(r_adm_reset.status_code, 200)
+        self.assertTrue(r_adm_reset.json()['user']['isActive'])
+
+        # Old credentials rejected, new admin-issued credentials work
+        self.assertEqual(self._login(fresh_t_cli, 'ctrl_tutor', 'init_pw_99', 'tutor').status_code, 401)
+        self.assertEqual(self._login(fresh_t_cli, 'ctrl_tutor_v2', 'AdminReset77', 'tutor').status_code, 200)
+        self.assertEqual(fresh_t_cli.get('/api/tutor/dashboard/').status_code, 200)
+
+    def test_tutor_dashboard_shows_all_class_coins_and_admin_tutor_statistics(self):
+        # Prior award on 7-A tied to a previous tutor before reassignment
+        prev_tutor = CustomUser.objects.create_user(
+            username='prev_tut',
+            password='123',
+            role='tutor',
+            full_name='Oldingi Tyuter',
+            coins=15,
+        )
+        self.class_a.bonus_coins = 15
+        self.class_a.save(update_fields=['bonus_coins'])
+        ClassCoinTransaction.objects.create(
+            school_class=self.class_a,
+            tutor=prev_tutor,
+            given_by=self.admin,
+            amount=15,
+            reason='Boshlangich sinf mukofoti',
+        )
+
+        # Two students in 7-A; 1 active test taker with 80% score
+        st1 = CustomUser.objects.create_user(
+            username='stat_st1',
+            password='123',
+            role='student',
+            full_name='Faol Oquvchi',
+            grade='7-A',
+            coins=12,
+        )
+        CustomUser.objects.create_user(
+            username='stat_st2',
+            password='123',
+            role='student',
+            full_name='Ikkinchi Oquvchi',
+            grade='7-A',
+            coins=5,
+        )
+        t_obj = Test.objects.create(
+            title='Tutor Stat Matematika',
+            teacher=self.teacher,
+            subject='Matematika',
+            grade='7-A',
+        )
+        TestResult.objects.create(
+            test=t_obj,
+            student=st1,
+            total_questions=10,
+            correct_answers=8,
+            score_percentage=80,
+        )
+
+        adm = Client()
+        self.assertEqual(self._login(adm, 'admin_tut', '123', 'admin').status_code, 200)
+
+        # Admin assigns 7-A to new tutor stat_tut
+        res = adm.post(
+            '/api/admin/tutors/',
+            data=json.dumps({
+                'username': 'stat_tut',
+                'password': '123',
+                'fullName': 'Statistika Tyuter',
+                'assignedClasses': ['7-A'],
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(res.status_code, 200)
+        stat_tut_id = res.json()['tutorId']
+
+        # Admin awards +40 coins to 7-A -> credits class bonus AND new tutor wallet
+        aw = adm.post(
+            '/api/coins/award/',
+            data=json.dumps({
+                'className': '7-A',
+                'awardScope': 'class_only',
+                'amount': 40,
+                'reason': 'Chorak yakuni bonusi',
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(aw.status_code, 200)
+
+        # Tutor dashboard shows full classBonusTotal (15 + 40 = 55), tutorCoins (40), and both transactions
+        t_cli = Client()
+        self.assertEqual(self._login(t_cli, 'stat_tut', '123', 'tutor').status_code, 200)
+        dash = t_cli.get('/api/tutor/dashboard/')
+        self.assertEqual(dash.status_code, 200)
+        dj = dash.json()
+        self.assertEqual(dj['summary']['classBonusTotal'], 55)
+        self.assertEqual(dj['summary']['tutorCoins'], 40)
+        self.assertEqual(len(dj['coinHistory']), 2)
+        cls_item = dj['assignedClasses'][0]
+        self.assertEqual(cls_item['name'], '7-A')
+        self.assertEqual(cls_item['bonusCoins'], 55)
+        self.assertEqual(cls_item['coinAwardsCount'], 2)
+        self.assertIsNotNone(cls_item['lastAward'])
+        self.assertEqual(cls_item['lastAward']['amount'], 40)
+
+        # Admin /api/admin/tutors/ returns detailed per-tutor statistics
+        adm_tuts = adm.get('/api/admin/tutors/')
+        self.assertEqual(adm_tuts.status_code, 200)
+        tut_map = {t['id']: t for t in adm_tuts.json()}
+        st_row = tut_map[stat_tut_id]
+        self.assertEqual(st_row['classesCount'], 1)
+        self.assertEqual(st_row['studentsCount'], 2)
+        self.assertEqual(st_row['activeStudentsCount'], 1)
+        self.assertEqual(st_row['testsPassedCount'], 1)
+        self.assertEqual(st_row['avgScore'], 80)
+        self.assertEqual(st_row['passRate'], 100)
+        self.assertEqual(st_row['studentCoinsTotal'], 17)
+        self.assertEqual(st_row['classBonusTotal'], 55)
+        self.assertEqual(st_row['coins'], 40)
+        self.assertEqual(st_row['coinAwardsCount'], 2)
+        self.assertEqual(st_row['recentAward']['className'], '7-A')
+        self.assertEqual(st_row['recentAward']['amount'], 40)
+        self.assertEqual(st_row['assignedClassesDetails'][0]['bonusCoins'], 55)
+
+        # Admin /api/admin/stats/ also includes tutors and tutorSummary
+        adm_stats = adm.get('/api/admin/stats/')
+        self.assertEqual(adm_stats.status_code, 200)
+        sj = adm_stats.json()
+        self.assertGreaterEqual(sj['tutorsCount'], 2)
+        self.assertIn('tutorSummary', sj)
+        self.assertGreaterEqual(sj['tutorSummary']['totalClassBonusCoins'], 55)
+        self.assertGreaterEqual(sj['tutorSummary']['totalTutorCoins'], 55)  # 15 + 40
+        self.assertGreaterEqual(sj['tutorSummary']['totalCoinAwardsCount'], 2)
+        self.assertTrue(any(t['id'] == stat_tut_id and t['classBonusTotal'] == 55 for t in sj['tutors']))
+
 

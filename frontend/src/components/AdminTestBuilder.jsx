@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { api } from '../api/endpoints';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { localizeSubject, localizeUserFullName } from '../i18n/portalUtils';
+import { localizeGrade, localizeSubject, localizeUserFullName } from '../i18n/portalUtils';
 import MathRenderer from './MathRenderer';
 import {
   Edit,
@@ -72,6 +72,8 @@ export default function AdminTestBuilder({
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [saving, setSaving] = useState(false);
   const [rewardSlotsUsed, setRewardSlotsUsed] = useState(0);
+  const hasTouchedClassesRef = useRef(false);
+  const isAllClassesLoadedRef = useRef(false);
 
   const [immediateReward, setImmediateReward] = useState({
     enabled: false,
@@ -105,6 +107,8 @@ export default function AdminTestBuilder({
   // Load or reset test form when editingTestId changes
   useEffect(() => {
     let cancelled = false;
+    hasTouchedClassesRef.current = false;
+    isAllClassesLoadedRef.current = false;
 
     if (!editingTestId) {
       setRewardSlotsUsed(0);
@@ -141,13 +145,17 @@ export default function AdminTestBuilder({
 
     // Populate quick metadata from summary card while fetching full detail
     if (initialTestSummary) {
-      const parsedClasses =
-        initialTestSummary.grade && initialTestSummary.grade.trim().toLowerCase() !== 'barchasi'
-          ? initialTestSummary.grade
-              .split(',')
-              .map((s) => s.trim())
-              .filter(Boolean)
-          : normalizedClasses;
+      const summaryAll =
+        !initialTestSummary.grade ||
+        initialTestSummary.grade.trim().toLowerCase() === 'barchasi' ||
+        Boolean(initialTestSummary.isAllClasses);
+      isAllClassesLoadedRef.current = summaryAll;
+      const parsedClasses = !summaryAll
+        ? initialTestSummary.grade
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : normalizedClasses;
 
       setRewardSlotsUsed(Number(initialTestSummary.rewardSlotsUsed || 0));
       setTestForm((prev) => ({
@@ -199,15 +207,17 @@ export default function AdminTestBuilder({
             }))
           : [];
 
-        const parsedClasses =
-          fullTest.isAllClasses || (fullTest.grade || '').trim().toLowerCase() === 'barchasi'
-            ? normalizedClasses
-            : fullTest.grade
-            ? fullTest.grade
-                .split(',')
-                .map((s) => s.trim())
-                .filter(Boolean)
-            : normalizedClasses;
+        const detailAll =
+          Boolean(fullTest.isAllClasses) ||
+          !fullTest.grade ||
+          (fullTest.grade || '').trim().toLowerCase() === 'barchasi';
+        isAllClassesLoadedRef.current = detailAll;
+        const parsedClasses = detailAll
+          ? normalizedClasses
+          : fullTest.grade
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean);
 
         setRewardSlotsUsed(Number(fullTest.rewardSlotsUsed || 0));
         setTestForm({
@@ -254,6 +264,32 @@ export default function AdminTestBuilder({
       cancelled = true;
     };
   }, [editingTestId]);
+
+  // Sync async classesList & currentUser after mount without overwriting manual selection
+  useEffect(() => {
+    setTestForm((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      if (!prev.teacherId && currentUser?.id) {
+        next.teacherId = String(currentUser.id);
+        changed = true;
+      }
+      if (!hasTouchedClassesRef.current && Array.isArray(classesList) && classesList.length > 0) {
+        if (editingTestId && isAllClassesLoadedRef.current) {
+          next.targetClasses = [...normalizedClasses];
+          changed = true;
+        } else if (
+          !editingTestId &&
+          prev.targetClasses.length === 1 &&
+          !normalizedClasses.includes(prev.targetClasses[0])
+        ) {
+          next.targetClasses = [normalizedClasses[0]];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [classesList, normalizedClasses, currentUser?.id, editingTestId]);
 
   const handleAddQuestion = () => {
     setTestForm((prev) => ({
@@ -504,6 +540,7 @@ export default function AdminTestBuilder({
   };
 
   const handleToggleClass = (className) => {
+    hasTouchedClassesRef.current = true;
     setTestForm((prev) => {
       const exists = prev.targetClasses.includes(className);
       if (exists) {
@@ -978,12 +1015,13 @@ export default function AdminTestBuilder({
               <button
                 type="button"
                 className="class-quick-filter-btn"
-                onClick={() =>
+                onClick={() => {
+                  hasTouchedClassesRef.current = true;
                   setTestForm((prev) => ({
                     ...prev,
                     targetClasses: [...normalizedClasses],
-                  }))
-                }
+                  }));
+                }}
               >
                 ✓ {tr('Barchasini Tanlash', 'Выбрать все')}
               </button>
@@ -995,6 +1033,7 @@ export default function AdminTestBuilder({
                     (c) => !c.toUpperCase().includes('RU')
                   );
                   if (uz.length) {
+                    hasTouchedClassesRef.current = true;
                     setTestForm((prev) => ({ ...prev, targetClasses: uz }));
                   }
                 }}
@@ -1009,6 +1048,7 @@ export default function AdminTestBuilder({
                     c.toUpperCase().includes('RU')
                   );
                   if (ru.length) {
+                    hasTouchedClassesRef.current = true;
                     setTestForm((prev) => ({ ...prev, targetClasses: ru }));
                   }
                 }}
@@ -1018,12 +1058,13 @@ export default function AdminTestBuilder({
               <button
                 type="button"
                 className="class-quick-filter-btn text-rose-400 hover:text-rose-300 hover:border-rose-400/40"
-                onClick={() =>
+                onClick={() => {
+                  hasTouchedClassesRef.current = true;
                   setTestForm((prev) => ({
                     ...prev,
                     targetClasses: [normalizedClasses[0] || '9-A'],
-                  }))
-                }
+                  }));
+                }}
               >
                 {tr('Tozalash', 'Сбросить')}
               </button>

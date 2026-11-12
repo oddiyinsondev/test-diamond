@@ -14,13 +14,16 @@ import {
 test('resolvePortalMode prefers explicit spa_config and falls back to hostname', () => {
   assert.equal(resolvePortalMode({ config: { portalMode: 'admin' }, hostname: 'app.diamondschool.uz' }), 'admin');
   assert.equal(resolvePortalMode({ config: { portalMode: 'teacher' } }), 'teacher');
+  assert.equal(resolvePortalMode({ config: { portalMode: 'tutor' } }), 'tutor');
   assert.equal(resolvePortalMode({ config: { portalMode: 'student' } }), 'student');
   assert.equal(resolvePortalMode({ config: { portalMode: 'main' } }), 'main');
 
   assert.equal(resolvePortalMode({ config: null, hostname: 'admin.diamondschool.uz' }), 'admin');
   assert.equal(resolvePortalMode({ config: null, hostname: 'teacher.diamondschool.uz:8000' }), 'teacher');
+  assert.equal(resolvePortalMode({ config: null, hostname: 'tutor.diamondschool.uz' }), 'tutor');
   assert.equal(resolvePortalMode({ config: null, hostname: 'STUDENT.DIAMONDSCHOOL.UZ' }), 'student');
   assert.equal(resolvePortalMode({ config: null, hostname: 'admin.localhost' }), 'admin');
+  assert.equal(resolvePortalMode({ config: null, hostname: 'tutor.localhost' }), 'tutor');
   assert.equal(resolvePortalMode({ config: null, hostname: 'app.diamondschool.uz' }), 'main');
   assert.equal(resolvePortalMode({ config: null, hostname: '127.0.0.1' }), 'main');
 });

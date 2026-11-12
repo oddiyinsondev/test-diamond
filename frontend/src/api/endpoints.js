@@ -45,6 +45,12 @@ export const api = {
         method: 'POST',
         body: data instanceof FormData ? data : JSON.stringify(data),
       }),
+    getTutors: () => apiClient('/api/admin/tutors/'),
+    createTutor: (data) =>
+      apiClient('/api/admin/tutors/', {
+        method: 'POST',
+        body: data instanceof FormData ? data : JSON.stringify(data),
+      }),
     getStudents: () => apiClient('/api/admin/students/'),
     createStudent: (data) =>
       apiClient('/api/admin/students/', {
@@ -188,6 +194,14 @@ export const api = {
       apiClient(`/api/teacher/results/${resultId}/`),
     getClassStudents: (grade) =>
       apiClient(`/api/teacher/class-students/?grade=${encodeURIComponent(grade)}&portal=teacher`),
+    getAllStudents: (grade = 'all', search = '') => {
+      const params = new URLSearchParams();
+      params.set('portal', 'teacher');
+      if (grade && grade !== 'all') params.set('grade', grade);
+      else params.set('grade', 'all');
+      if (search && search.trim()) params.set('search', search.trim());
+      return apiClient(`/api/teacher/class-students/?${params.toString()}`);
+    },
     awardCoins: (data) =>
       apiClient('/api/coins/award/', {
         method: 'POST',
@@ -207,6 +221,33 @@ export const api = {
     deleteCoinTx: (txId) =>
       apiClient(`/api/teacher/coins/${txId}/delete/`, {
         method: 'POST',
+      }),
+  },
+
+  // --- TUTOR (TYUTER) PORTAL ---
+  tutor: {
+    getDashboard: (tutorId = '') =>
+      apiClient(`/api/tutor/dashboard/${tutorId ? `?tutorId=${encodeURIComponent(tutorId)}` : ''}`),
+    getStudents: (grade = 'all', tutorId = '') => {
+      const params = new URLSearchParams();
+      if (grade && grade !== 'all') params.set('grade', grade);
+      if (tutorId) params.set('tutorId', tutorId);
+      const qs = params.toString();
+      return apiClient(`/api/tutor/students/${qs ? `?${qs}` : ''}`);
+    },
+    createStudent: (data) =>
+      apiClient('/api/tutor/students/', {
+        method: 'POST',
+        body: data instanceof FormData ? data : JSON.stringify(data),
+      }),
+    updateStudent: (studentId, data) =>
+      apiClient(`/api/tutor/students/${studentId}/`, {
+        method: data instanceof FormData ? 'POST' : 'PUT',
+        body: data instanceof FormData ? data : JSON.stringify(data),
+      }),
+    deleteStudent: (studentId) =>
+      apiClient(`/api/tutor/students/${studentId}/`, {
+        method: 'DELETE',
       }),
   },
 

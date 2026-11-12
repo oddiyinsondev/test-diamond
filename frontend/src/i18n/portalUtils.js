@@ -72,11 +72,13 @@ export function localizeRole(role, language = 'uz') {
   if (language === 'ru') {
     if (low === 'admin' || low === 'administrator') return 'Администратор';
     if (low === 'teacher' || low === "o'qituvchi") return 'Учитель';
+    if (low === 'tutor' || low === 'tyuter') return 'Тьютор';
     if (low === 'student' || low === "o'quvchi") return 'Ученик';
     return role || '';
   }
   if (low === 'admin' || low === 'administrator') return 'Administrator';
   if (low === 'teacher') return "O'qituvchi";
+  if (low === 'tutor') return 'Tyuter';
   if (low === 'student') return "O'quvchi";
   return role || '';
 }
@@ -120,6 +122,27 @@ export const TEACHER_LESSON_ACTIVITY_PRESETS_BY_LANG = {
 
 export function getTeacherLessonPresets(language = 'uz') {
   return TEACHER_LESSON_ACTIVITY_PRESETS_BY_LANG[language === 'ru' ? 'ru' : 'uz'];
+}
+
+export const TEACHER_DEDUCT_PRESETS_BY_LANG = {
+  uz: [
+    'Dars intizomini buzgani uchun ⚠️',
+    'Darsga tayyorgarliksiz kelgani uchun 📉',
+    "Darsda telefonda chalg'igani uchun 📵",
+    'Dars jarayoniga xalaqit bergani uchun 🚫',
+    'Tartib-qoidalarga amal qilmagani uchun 🔻',
+  ],
+  ru: [
+    'За нарушение дисциплины на уроке ⚠️',
+    'За неготовность к уроку 📉',
+    'Отвлекался на телефон на уроке 📵',
+    'Мешал проведению урока 🚫',
+    'За несоблюдение правил на уроке 🔻',
+  ],
+};
+
+export function getTeacherDeductPresets(language = 'uz') {
+  return TEACHER_DEDUCT_PRESETS_BY_LANG[language === 'ru' ? 'ru' : 'uz'];
 }
 
 export const ADMIN_STUDENT_COIN_PRESETS_BY_LANG = {

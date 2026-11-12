@@ -12,6 +12,7 @@ import LandingPage from './pages/LandingPage';
 import AdminPortal from './pages/AdminPortal';
 import TeacherPortal from './pages/TeacherPortal';
 import StudentPortal from './pages/StudentPortal';
+import TutorPortal from './pages/TutorPortal';
 
 function SubdomainRootRedirect() {
   const location = useLocation();
@@ -41,6 +42,11 @@ export default function App() {
                   <Route path="/" element={<TeacherPortal />} />
                   <Route path="*" element={<SubdomainRootRedirect />} />
                 </Routes>
+              ) : portalMode === 'tutor' ? (
+                <Routes>
+                  <Route path="/" element={<TutorPortal />} />
+                  <Route path="*" element={<SubdomainRootRedirect />} />
+                </Routes>
               ) : portalMode === 'student' ? (
                 <Routes>
                   <Route path="/" element={<StudentPortal />} />
@@ -51,6 +57,7 @@ export default function App() {
                   <Route path="/" element={<LandingPage />} />
                   <Route path="/admin-panel/*" element={<AdminPortal />} />
                   <Route path="/teacher/*" element={<TeacherPortal />} />
+                  <Route path="/tutor/*" element={<TutorPortal />} />
                   <Route path="/student/*" element={<StudentPortal />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>

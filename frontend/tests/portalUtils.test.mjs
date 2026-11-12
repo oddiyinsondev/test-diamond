@@ -10,6 +10,8 @@ import {
   localizeExperienceText,
   TEACHER_LESSON_ACTIVITY_PRESETS_BY_LANG,
   getTeacherLessonPresets,
+  TEACHER_DEDUCT_PRESETS_BY_LANG,
+  getTeacherDeductPresets,
   ADMIN_STUDENT_COIN_PRESETS_BY_LANG,
   ADMIN_CLASS_COIN_PRESETS_BY_LANG,
   getLockMessageLocalized,
@@ -83,8 +85,15 @@ test('teacher and admin coin presets are non-empty and comply with teacher lesso
   assert.ok(uzTeacher.length >= 3);
   assert.ok(ruTeacher.length >= 3);
 
+  const uzDeduct = getTeacherDeductPresets('uz');
+  const ruDeduct = getTeacherDeductPresets('ru');
+  assert.equal(uzDeduct, TEACHER_DEDUCT_PRESETS_BY_LANG.uz);
+  assert.equal(ruDeduct, TEACHER_DEDUCT_PRESETS_BY_LANG.ru);
+  assert.ok(uzDeduct.length >= 3);
+  assert.ok(ruDeduct.length >= 3);
+
   const forbidden = /\b(test|imtihon|olimpiad|uy\s+vazifa|тест|экзамен|олимпиад|домашн)\w*/i;
-  for (const preset of [...uzTeacher, ...ruTeacher]) {
+  for (const preset of [...uzTeacher, ...ruTeacher, ...uzDeduct, ...ruDeduct]) {
     assert.equal(forbidden.test(preset), false, `Forbidden keyword in teacher preset: ${preset}`);
   }
 

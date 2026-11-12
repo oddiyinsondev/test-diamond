@@ -402,6 +402,9 @@ def check_admin_permission(request):
     lang = _req_lang(request)
     if not request.user.is_authenticated:
         return JsonResponse({'error': _msg(lang, 'Tizimga kirish talab etiladi!', 'Требуется вход в систему!')}, status=401)
+    if not getattr(request.user, 'is_active', True):
+        logout(request)
+        return JsonResponse({'error': _msg(lang, 'Ushbu hisob administrator tomonidan bloklangan!', 'Этот аккаунт заблокирован администратором!')}, status=403)
     if request.user.role != 'admin' and not request.user.is_superuser and not request.user.is_staff:
         return JsonResponse({'error': _msg(lang, 'Ushbu amal uchun faqat administrator huquqi ruxsat etilgan!', 'Для этого действия требуются права администратора!')}, status=403)
     return None
@@ -433,9 +436,111 @@ def check_teacher_permission(request):
     lang = _req_lang(request)
     if not request.user.is_authenticated:
         return JsonResponse({'error': _msg(lang, 'Tizimga kirish talab etiladi!', 'Требуется вход в систему!')}, status=401)
+    if not getattr(request.user, 'is_active', True):
+        logout(request)
+        return JsonResponse({'error': _msg(lang, 'Ushbu hisob administrator tomonidan bloklangan!', 'Этот аккаунт заблокирован администратором!')}, status=403)
     if request.user.role in ['teacher', 'admin'] or request.user.is_superuser or request.user.is_staff:
         return None
     return JsonResponse({'error': _msg(lang, "Ushbu amal uchun o'qituvchi yoki administrator huquqi talab etiladi!", "Для этого действия требуются права учителя или администратора!")}, status=403)
+
+
+def check_tutor_permission(request):
+    """Foydalanuvchi tyuter yoki administrator ekanligini tekshirish (o'qituvchi va o'quvchi rad etiladi)"""
+    lang = _req_lang(request)
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': _msg(lang, 'Tizimga kirish talab etiladi!', 'Требуется вход в систему!')}, status=401)
+    if not getattr(request.user, 'is_active', True):
+        logout(request)
+        return JsonResponse({'error': _msg(lang, 'Ushbu tyuter hisobi administrator tomonidan vaqtincha bloklangan!', 'Этот аккаунт тьютора временно заблокирован администратором!')}, status=403)
+    if request.user.role == 'tutor' or is_admin_user(request.user):
+        return None
+    return JsonResponse({'error': _msg(lang, "Cheklov: Ushbu amal uchun faqat tyuter yoki administrator huquqi talab etiladi!", "Ограничение: для этого действия требуются права тьютора или администратора!")}, status=403)
+
+
+def _parse_assigned_class_names(data):
+    """JSON yoki FormData dan biriktirilgan sinf nomlari ro'yxatini xavfsiz o'qish"""
+    raw = None
+    has_key = False
+    for key in ('assignedClasses', 'assigned_classes', 'classNames', 'class_names', 'classes'):
+        if key in data:
+            has_key = True
+            if hasattr(data, 'getlist'):
+                vals = data.getlist(key)
+                if len(vals) == 1 and isinstance(vals[0], str) and vals[0].strip().startswith('['):
+                    try:
+                        raw = json.loads(vals[0])
+                    except Exception:
+                        raw = vals
+                elif len(vals) == 1 and ',' in str(vals[0]):
+                    raw = [x.strip() for x in str(vals[0]).split(',') if x.strip()]
+                else:
+                    raw = [str(x).strip() for x in vals if str(x).strip()]
+            else:
+                raw = data.get(key)
+            break
+    if not has_key:
+        return False, []
+    if raw is None or raw == '':
+        return True, []
+    if isinstance(raw, str):
+        s = raw.strip()
+        if s.startswith('['):
+            try:
+                raw = json.loads(s)
+            except Exception:
+                raw = [x.strip() for x in s.split(',') if x.strip()]
+        else:
+            raw = [x.strip() for x in s.split(',') if x.strip()]
+    if not isinstance(raw, list):
+        return True, []
+    seen = set()
+    cleaned = []
+    for item in raw:
+        val = str(item).strip()
+        if val and val.lower() not in seen:
+            seen.add(val.lower())
+            cleaned.append(val)
+    return True, cleaned
+
+
+def _sync_tutor_classes(tutor, class_names, replace=True, prev_tutor_name=None):
+    """Tyuterga biriktirilgan SchoolClass yozuvlarini yangilash"""
+    if not tutor or tutor.role != 'tutor':
+        return []
+    old_name = (prev_tutor_name if prev_tutor_name is not None else tutor.full_name) or ''
+    normalized_lookup = {}
+    for sc in SchoolClass.objects.filter(is_active=True):
+        normalized_lookup[sc.name.strip().lower()] = sc
+
+    target_classes = []
+    for raw_name in class_names:
+        sc = normalized_lookup.get(str(raw_name).strip().lower())
+        if sc and sc not in target_classes:
+            target_classes.append(sc)
+    target_ids = {sc.id for sc in target_classes}
+
+    if replace:
+        for old_sc in SchoolClass.objects.filter(tutor=tutor).exclude(id__in=target_ids):
+            old_sc.tutor = None
+            if old_sc.head_teacher and old_name and old_sc.head_teacher.strip() == old_name.strip():
+                old_sc.head_teacher = ''
+                old_sc.save(update_fields=['tutor', 'head_teacher'])
+            else:
+                old_sc.save(update_fields=['tutor'])
+
+    for sc in target_classes:
+        update_fields = []
+        if sc.tutor_id != tutor.id:
+            sc.tutor = tutor
+            update_fields.append('tutor')
+        if not (sc.head_teacher or '').strip() or (old_name and sc.head_teacher.strip() == old_name.strip()):
+            if sc.head_teacher != tutor.full_name:
+                sc.head_teacher = tutor.full_name
+                update_fields.append('head_teacher')
+        if update_fields:
+            sc.save(update_fields=update_fields)
+
+    return [sc.name for sc in target_classes]
 
 
 def _resolve_authenticated_teacher_actor(request):
@@ -488,13 +593,14 @@ def get_active_classes_meta():
                 'totalCoins': int(row['total_coins'] or 0),
             }
 
-    sc_map = {sc.name: sc for sc in SchoolClass.objects.filter(is_active=True)}
+    sc_map = {sc.name: sc for sc in SchoolClass.objects.select_related('tutor').filter(is_active=True)}
     meta = []
     for name in names:
         st = student_stats.get(name, {'studentsCount': 0, 'totalCoins': 0})
         sc = sc_map.get(name)
         bonus_coins = int(sc.bonus_coins or 0) if sc else 0
         student_coins = st['totalCoins']
+        tutor_obj = sc.tutor if (sc and sc.tutor and sc.tutor.role == 'tutor') else None
         meta.append({
             'name': name,
             'language': sc.language if sc else ('ru' if 'RU' in name.upper() else 'uz'),
@@ -502,6 +608,10 @@ def get_active_classes_meta():
             'studentCoins': student_coins,
             'bonusCoins': bonus_coins,
             'totalCoins': student_coins + bonus_coins,
+            'tutorId': tutor_obj.id if tutor_obj else None,
+            'tutorName': tutor_obj.full_name if tutor_obj else '',
+            'tutorUsername': tutor_obj.username if tutor_obj else '',
+            'tutorCoins': int(tutor_obj.coins or 0) if tutor_obj else 0,
         })
     return meta
 
@@ -612,6 +722,13 @@ def save_validated_user_avatar(user, img_file, lang='uz'):
     user.avatar = img_file
 
 def serialize_user_payload(user):
+    assigned_classes = []
+    if user.role == 'tutor':
+        assigned_classes = list(
+            user.tutor_classes.filter(is_active=True)
+            .order_by('grade_level', 'language', 'name')
+            .values_list('name', flat=True)
+        )
     return {
         'id': user.id,
         'username': user.username,
@@ -622,6 +739,8 @@ def serialize_user_payload(user):
         'phone': user.phone or '',
         'bio': user.bio or '',
         'coins': getattr(user, 'coins', 0),
+        'isActive': bool(getattr(user, 'is_active', True)),
+        'assignedClasses': assigned_classes,
         'avatarUrl': user.get_avatar_url(),
         'hasCustomAvatar': bool(user.avatar),
     }
@@ -641,6 +760,7 @@ def _resolve_portal_mode(request):
     portal_domains = getattr(settings, 'PORTAL_DOMAINS', {
         'admin': 'admin.diamondschool.uz',
         'teacher': 'teacher.diamondschool.uz',
+        'tutor': 'tutor.diamondschool.uz',
         'student': 'student.diamondschool.uz',
     })
     for mode, domain in portal_domains.items():
@@ -661,6 +781,7 @@ def _render_spa_for_request(request):
     portal_domains = getattr(settings, 'PORTAL_DOMAINS', {
         'admin': 'admin.diamondschool.uz',
         'teacher': 'teacher.diamondschool.uz',
+        'tutor': 'tutor.diamondschool.uz',
         'student': 'student.diamondschool.uz',
     })
     spa_config = {
@@ -711,6 +832,11 @@ def teacher_view(request, extra=''):
     return _handle_portal_entry(request, 'teacher')
 
 
+def tutor_view(request, extra=''):
+    """React SPA view - Tyuter Portali"""
+    return _handle_portal_entry(request, 'tutor')
+
+
 def student_view(request, extra=''):
     """React SPA view - O'quvchi Portali"""
     return _handle_portal_entry(request, 'student')
@@ -751,6 +877,15 @@ def api_login(request):
 
     user = authenticate(request, username=username, password=password)
     if not user:
+        existing_user = CustomUser.objects.filter(username=username).first()
+        if existing_user and not existing_user.is_active and existing_user.check_password(password):
+            return JsonResponse({
+                'error': _msg(
+                    lang,
+                    "Ushbu hisob administrator tomonidan vaqtincha bloklangan! Kirish uchun administratorga murojaat qiling.",
+                    "Этот аккаунт временно заблокирован администратором! Обратитесь к администратору.",
+                )
+            }, status=403)
         return JsonResponse({'error': _msg(lang, "Login yoki parol noto'g'ri!", "Неверный логин или пароль!")}, status=401)
 
     requested_role = data.get('role')
@@ -758,6 +893,7 @@ def api_login(request):
         role_names = {
             'admin': _msg(lang, 'administrator', 'администратора'),
             'teacher': _msg(lang, "o'qituvchi", 'учителя'),
+            'tutor': _msg(lang, 'tyuter', 'тьютора'),
             'student': _msg(lang, "o'quvchi", 'ученика'),
         }
         rname = role_names.get(requested_role, requested_role)
@@ -791,6 +927,9 @@ def api_meta(request):
 
 def api_current_user(request):
     if request.user.is_authenticated:
+        if not getattr(request.user, 'is_active', True):
+            logout(request)
+            return JsonResponse({'authenticated': False, 'blocked': True})
         return JsonResponse({
             'authenticated': True,
             'user': serialize_user_payload(request.user),
@@ -878,6 +1017,190 @@ def api_admin_teachers(request):
             })
         except ValueError as ve:
             if 'user' in locals() and user.id:
+                user.delete()
+            return JsonResponse({'error': str(ve)}, status=400)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+
+    return JsonResponse({'error': _msg(lang, "Metod qo'llab-quvvatlanmaydi", "Метод не поддерживается")}, status=405)
+
+
+def _compute_tutors_analytics_list(tutors_qs=None):
+    """Tyuterlar ro'yxati va ularning sinflari, o'quvchilari, test hamda coin statistikalarini hisoblash"""
+    if tutors_qs is None:
+        tutors_qs = CustomUser.objects.filter(role='tutor')
+    tutors = list(tutors_qs.prefetch_related('tutor_classes').order_by('-id'))
+    all_assigned_names = set()
+    for t in tutors:
+        for c in t.tutor_classes.all():
+            if c.is_active:
+                all_assigned_names.add(c.name)
+
+    students_by_grade = {}
+    if all_assigned_names:
+        for s in CustomUser.objects.filter(role='student', grade__in=list(all_assigned_names)).only('id', 'grade', 'coins'):
+            students_by_grade.setdefault((s.grade or '').strip(), []).append(s)
+
+    results_by_grade = {}
+    tested_student_ids_by_grade = {}
+    if all_assigned_names:
+        for st_id, g_name, sc_pct in (
+            TestResult.objects.filter(student__grade__in=list(all_assigned_names))
+            .values_list('student_id', 'student__grade', 'score_percentage')
+        ):
+            g_clean = (g_name or '').strip()
+            results_by_grade.setdefault(g_clean, []).append(int(sc_pct or 0))
+            tested_student_ids_by_grade.setdefault(g_clean, set()).add(st_id)
+
+    data = []
+    for t in tutors:
+        cls_objs = [c for c in t.tutor_classes.all() if c.is_active]
+        cls_objs.sort(key=lambda c: (int(c.grade_level or 0), c.language, c.name))
+        cls_names = [c.name for c in cls_objs]
+
+        students_cnt = 0
+        active_students_cnt = 0
+        student_coins_tot = 0
+        class_bonus_tot = 0
+        tutor_scores = []
+        cls_details = []
+
+        for c in cls_objs:
+            c_stds = students_by_grade.get(c.name, [])
+            c_scores = results_by_grade.get(c.name, [])
+            c_tested_ids = tested_student_ids_by_grade.get(c.name, set())
+            c_std_cnt = len(c_stds)
+            c_act_cnt = len(c_tested_ids)
+            c_std_coins = sum(int(s.coins or 0) for s in c_stds)
+            c_bonus = int(c.bonus_coins or 0)
+            c_subs = len(c_scores)
+            c_avg = round(sum(c_scores) / c_subs) if c_subs > 0 else 0
+
+            students_cnt += c_std_cnt
+            active_students_cnt += c_act_cnt
+            student_coins_tot += c_std_coins
+            class_bonus_tot += c_bonus
+            tutor_scores.extend(c_scores)
+
+            cls_details.append({
+                'id': c.id,
+                'name': c.name,
+                'language': c.language,
+                'bonusCoins': c_bonus,
+                'studentCoins': c_std_coins,
+                'studentsCount': c_std_cnt,
+                'activeStudentsCount': c_act_cnt,
+                'submissionsCount': c_subs,
+                'avgScore': c_avg,
+            })
+
+        tests_passed_cnt = len(tutor_scores)
+        avg_score = round(sum(tutor_scores) / tests_passed_cnt) if tests_passed_cnt > 0 else 0
+        passed_cnt = sum(1 for sc in tutor_scores if sc >= 60)
+        pass_rate = round((passed_cnt / tests_passed_cnt) * 100) if tests_passed_cnt > 0 else 0
+
+        ctx_qs = ClassCoinTransaction.objects.filter(
+            Q(tutor=t) | Q(school_class__in=cls_objs)
+        ).select_related('school_class').order_by('-created_at')
+        awards_cnt = ctx_qs.count()
+        class_awarded_sum = int(ctx_qs.filter(amount__gt=0).aggregate(sum=Sum('amount'))['sum'] or 0)
+        last_ctx = ctx_qs.first()
+
+        data.append({
+            'id': t.id,
+            'username': t.username,
+            'fullName': t.full_name,
+            'phone': t.phone or '-',
+            'rawPhone': t.phone or '',
+            'bio': t.bio or '',
+            'coins': int(t.coins or 0),
+            'isActive': bool(getattr(t, 'is_active', True)),
+            'avatarUrl': t.get_avatar_url(),
+            'hasCustomAvatar': bool(t.avatar),
+            'classesCount': len(cls_names),
+            'assignedClasses': cls_names,
+            'assignedClassesDetails': cls_details,
+            'studentsCount': students_cnt,
+            'activeStudentsCount': active_students_cnt,
+            'testsPassedCount': tests_passed_cnt,
+            'avgScore': avg_score,
+            'passRate': pass_rate,
+            'studentCoinsTotal': student_coins_tot,
+            'classBonusTotal': class_bonus_tot,
+            'totalEcosystemCoins': student_coins_tot + class_bonus_tot,
+            'coinAwardsCount': awards_cnt,
+            'classAwardedHistorySum': class_awarded_sum,
+            'recentAward': {
+                'className': last_ctx.school_class.name if last_ctx.school_class else '-',
+                'amount': int(last_ctx.amount or 0),
+                'reason': last_ctx.reason,
+                'date': _fmt_local_dt(last_ctx.created_at) or '',
+            } if last_ctx else None,
+            'dateJoined': t.date_joined.strftime('%d.%m.%Y'),
+        })
+    return data
+
+
+# 1.5 Tutors list & create (Tyuterlar boshqaruvi - faqat Admin)
+@csrf_exempt
+def api_admin_tutors(request):
+    auth_err = check_admin_permission(request)
+    if auth_err:
+        return auth_err
+    lang = _req_lang(request)
+
+    if request.method == 'GET':
+        data = _compute_tutors_analytics_list()
+        return JsonResponse(data, safe=False)
+
+    elif request.method == 'POST':
+        user = None
+        try:
+            is_json = (request.content_type or '').startswith('application/json')
+            data = json.loads(request.body.decode('utf-8')) if is_json and request.body else request.POST
+
+            username = (data.get('username') or '').strip()
+            password = (data.get('password') or '').strip()
+            full_name = (data.get('fullName') or data.get('full_name') or '').strip()
+            phone = (data.get('phone') or '').strip()
+            bio = (data.get('bio') or '').strip()
+            is_active = _parse_bool_flag(
+                data.get('isActive') if 'isActive' in data else data.get('is_active'),
+                default=True,
+            )
+            has_cls_key, assigned_names = _parse_assigned_class_names(data)
+
+            if not username or not password or not full_name:
+                return JsonResponse({'error': _msg(lang, "Barcha majburiy maydonlarni to'ldiring!", "Заполните все обязательные поля!")}, status=400)
+            if len(password) < 3:
+                return JsonResponse({'error': _msg(lang, "Parol kamida 3 ta belgidan iborat bo'lishi kerak!", "Пароль должен содержать минимум 3 символа!")}, status=400)
+            if CustomUser.objects.filter(username=username).exists():
+                return JsonResponse({'error': _msg(lang, "Ushbu login bilan foydalanuvchi allaqachon mavjud!", "Пользователь с таким логином уже существует!")}, status=400)
+
+            with transaction.atomic():
+                user = CustomUser.objects.create_user(
+                    username=username,
+                    password=password,
+                    role='tutor',
+                    full_name=full_name,
+                    phone=phone,
+                    bio=bio,
+                    is_active=is_active,
+                )
+                if 'avatar' in request.FILES:
+                    save_validated_user_avatar(user, request.FILES['avatar'], lang=lang)
+                    user.save(update_fields=['avatar'])
+                if has_cls_key:
+                    _sync_tutor_classes(user, assigned_names, replace=True)
+
+            return JsonResponse({
+                'success': True,
+                'tutorId': user.id,
+                'user': serialize_user_payload(user),
+                'avatarUrl': user.get_avatar_url(),
+            })
+        except ValueError as ve:
+            if user and user.id:
                 user.delete()
             return JsonResponse({'error': str(ve)}, status=400)
         except Exception as e:
@@ -983,6 +1306,15 @@ def api_admin_user_manage(request, user_id):
         return JsonResponse({'error': _msg(lang, 'Foydalanuvchi topilmadi!', 'Пользователь не найден!')}, status=404)
 
     if request.method == 'GET':
+        assigned_classes = (
+            list(
+                user.tutor_classes.filter(is_active=True)
+                .order_by('grade_level', 'language', 'name')
+                .values_list('name', flat=True)
+            )
+            if user.role == 'tutor'
+            else []
+        )
         return JsonResponse({
             'id': user.id,
             'username': user.username,
@@ -990,6 +1322,9 @@ def api_admin_user_manage(request, user_id):
             'role': user.role,
             'subject': user.subject,
             'grade': user.grade,
+            'coins': int(user.coins or 0),
+            'isActive': bool(getattr(user, 'is_active', True)),
+            'assignedClasses': assigned_classes,
             'phone': user.phone or '',
             'bio': user.bio or '',
             'avatarUrl': user.get_avatar_url(),
@@ -1009,6 +1344,8 @@ def api_admin_user_manage(request, user_id):
             new_subject = (data.get('subject') or '').strip()
             new_grade = (data.get('grade') or '').strip()
             clear_avatar = str(data.get('clearAvatar', '')).lower() in ['true', '1', 'yes', 'да']
+            has_cls_key, parsed_assigned_classes = _parse_assigned_class_names(data)
+            prev_full_name = user.full_name
 
             if new_username and new_username != user.username:
                 if CustomUser.objects.filter(username=new_username).exclude(id=user.id).exists():
@@ -1026,6 +1363,19 @@ def api_admin_user_manage(request, user_id):
             if user.role == 'student' and new_grade:
                 user.grade = new_grade
 
+            if 'isActive' in data or 'is_active' in data:
+                raw_active = data.get('isActive') if 'isActive' in data else data.get('is_active')
+                parsed_active = _parse_bool_flag(raw_active, default=user.is_active)
+                if not parsed_active and (user.is_superuser or user.username == 'admin' or user.id == request.user.id):
+                    return JsonResponse({
+                        'error': _msg(
+                            lang,
+                            "Bosh administrator yoki o'zingizning hisobingizni bloklab bo'lmaydi!",
+                            "Невозможно заблокировать главного администратора или собственный аккаунт!",
+                        )
+                    }, status=400)
+                user.is_active = parsed_active
+
             if clear_avatar and user.avatar:
                 user.avatar.delete(save=False)
                 user.avatar = None
@@ -1041,7 +1391,27 @@ def api_admin_user_manage(request, user_id):
                 if request.user.is_authenticated and request.user.id == user.id:
                     update_session_auth_hash(request, user)
 
-            user.save()
+            with transaction.atomic():
+                user.save()
+                if user.role == 'tutor':
+                    if has_cls_key:
+                        _sync_tutor_classes(
+                            user,
+                            parsed_assigned_classes,
+                            replace=True,
+                            prev_tutor_name=prev_full_name,
+                        )
+                    elif new_full_name and new_full_name != prev_full_name:
+                        current_cls_names = list(
+                            user.tutor_classes.filter(is_active=True).values_list('name', flat=True)
+                        )
+                        _sync_tutor_classes(
+                            user,
+                            current_cls_names,
+                            replace=False,
+                            prev_tutor_name=prev_full_name,
+                        )
+
             return JsonResponse({
                 'success': True,
                 'message': _msg(lang, "Ma'lumotlar muvaffaqiyatli yangilandi!", "Данные успешно обновлены!"),
@@ -1057,6 +1427,359 @@ def api_admin_user_manage(request, user_id):
             return JsonResponse({'error': _msg(lang, "Bosh administratorni o'chirib bo'lmaydi!", "Невозможно удалить главного администратора!")}, status=400)
         user.delete()
         return JsonResponse({'success': True})
+
+    return JsonResponse({'error': _msg(lang, "Metod qo'llab-quvvatlanmaydi", "Метод не поддерживается")}, status=405)
+
+
+# ================= 🎓 TUTOR (TYUTER) PORTAL APIS =================
+
+def _resolve_tutor_scope(request):
+    """Tyuter (yoki admin tanlagan tyuter) hamda uning biriktirilgan sinflarini aniqlash"""
+    auth_err = check_tutor_permission(request)
+    if auth_err:
+        return None, False, None, auth_err
+    lang = _req_lang(request)
+    user = request.user
+    tutor_id_param = (request.GET.get('tutorId') or '').strip()
+
+    if is_admin_user(user):
+        if tutor_id_param:
+            target = CustomUser.objects.filter(id=tutor_id_param, role='tutor').first()
+            if not target:
+                return None, False, None, JsonResponse({'error': _msg(lang, "Tyuter topilmadi!", "Тьютор не найден!")}, status=404)
+            cls_qs = SchoolClass.objects.filter(is_active=True, tutor=target).order_by('grade_level', 'language', 'name')
+            return target, False, cls_qs, None
+        cls_qs = SchoolClass.objects.filter(is_active=True).order_by('grade_level', 'language', 'name')
+        return user, True, cls_qs, None
+
+    cls_qs = SchoolClass.objects.filter(is_active=True, tutor=user).order_by('grade_level', 'language', 'name')
+    return user, False, cls_qs, None
+
+
+def _assert_tutor_grade_allowed(assigned_classes_qs, is_admin_all, grade_val, lang='uz'):
+    """Tyuterga faqat o'z sinflaridagi o'quvchilarni boshqarishga ruxsat berish"""
+    if is_admin_all:
+        return (grade_val or '').strip(), None
+    assigned_list = list(assigned_classes_qs)
+    if not assigned_list:
+        return None, JsonResponse({
+            'error': _msg(
+                lang,
+                "Sizga hali birorta sinf biriktirilmagan! Administrator sizga sinf biriktirgandan so'ng o'quvchi qo'sha olasiz.",
+                "Вам ещё не назначен ни один класс! Вы сможете добавлять учеников после того, как администратор назначит вам класс.",
+            )
+        }, status=403)
+    lookup = {sc.name.strip().lower(): sc.name for sc in assigned_list}
+    key = (grade_val or '').strip().lower()
+    if not key or key not in lookup:
+        return None, JsonResponse({
+            'error': _msg(
+                lang,
+                "Cheklov: Siz faqat o'zingizga biriktirilgan sinf o'quvchilarini qo'shish, tahrirlash va o'chirishingiz mumkin!",
+                "Ограничение: вы можете добавлять, редактировать и удалять учеников только в назначенных вам классах!",
+            )
+        }, status=403)
+    return lookup[key], None
+
+
+def api_tutor_dashboard(request):
+    """Tyuter portali uchun biriktirilgan sinflar, o'quvchilar va sinf coinlari hamyoni ma'lumotlari"""
+    tutor_actor, is_admin_all, cls_qs, auth_err = _resolve_tutor_scope(request)
+    if auth_err:
+        return auth_err
+    lang = _req_lang(request)
+
+    assigned_classes = list(cls_qs.select_related('tutor'))
+    assigned_names = [c.name for c in assigned_classes]
+
+    students_qs = CustomUser.objects.filter(role='student')
+    if not is_admin_all:
+        students_qs = students_qs.filter(grade__in=assigned_names) if assigned_names else students_qs.none()
+    students_qs = students_qs.order_by('grade', 'full_name')
+
+    students_data = []
+    class_student_counts = {}
+    class_student_coins = {}
+    for s in students_qs:
+        res_qs = s.results.all()
+        res_cnt = res_qs.count()
+        avg_sc = round(res_qs.aggregate(avg=Avg('score_percentage'))['avg'] or 0) if res_cnt > 0 else 0
+        g = (s.grade or '').strip()
+        if g:
+            class_student_counts[g] = class_student_counts.get(g, 0) + 1
+            class_student_coins[g] = class_student_coins.get(g, 0) + int(s.coins or 0)
+        students_data.append({
+            'id': s.id,
+            'username': s.username,
+            'fullName': s.full_name,
+            'grade': g or '-',
+            'phone': s.phone or '-',
+            'rawPhone': s.phone or '',
+            'bio': s.bio or '',
+            'coins': int(s.coins or 0),
+            'avatarUrl': s.get_avatar_url(),
+            'hasCustomAvatar': bool(s.avatar),
+            'testsPassed': res_cnt,
+            'avgScore': avg_sc,
+            'dateJoined': s.date_joined.strftime('%d.%m.%Y'),
+        })
+
+    classes_data = []
+    for c in assigned_classes:
+        c_res_qs = TestResult.objects.filter(student__grade=c.name)
+        c_subs = c_res_qs.count()
+        c_avg = round(c_res_qs.aggregate(avg=Avg('score_percentage'))['avg'] or 0) if c_subs > 0 else 0
+        classes_data.append({
+            'id': c.id,
+            'name': c.name,
+            'gradeLevel': c.grade_level,
+            'language': c.language,
+            'room': c.room or '-',
+            'studentsCount': class_student_counts.get(c.name, 0),
+            'studentCoins': class_student_coins.get(c.name, 0),
+            'bonusCoins': int(c.bonus_coins or 0),
+            'totalCoins': class_student_coins.get(c.name, 0) + int(c.bonus_coins or 0),
+            'avgScore': c_avg,
+            'submissionsCount': c_subs,
+        })
+
+    if is_admin_all:
+        tx_qs = ClassCoinTransaction.objects.select_related('school_class', 'given_by', 'tutor').order_by('-created_at')[:60]
+    else:
+        tx_qs = (
+            ClassCoinTransaction.objects.filter(Q(tutor=tutor_actor) | Q(school_class__in=assigned_classes))
+            .select_related('school_class', 'given_by', 'tutor')
+            .order_by('-created_at')[:60]
+        )
+
+    coin_history = []
+    per_class_awards = {}
+    for ctx in tx_qs:
+        c_name = ctx.school_class.name if ctx.school_class else '-'
+        dt_str = _fmt_local_dt(ctx.created_at) or ctx.created_at.strftime('%d.%m.%Y %H:%M')
+        entry = {
+            'id': ctx.id,
+            'className': c_name,
+            'amount': int(ctx.amount or 0),
+            'reason': ctx.reason,
+            'givenBy': ctx.given_by.full_name if ctx.given_by else _msg(lang, 'Administrator', 'Администратор'),
+            'tutorName': ctx.tutor.full_name if ctx.tutor else (ctx.school_class.tutor.full_name if ctx.school_class and ctx.school_class.tutor else ''),
+            'date': dt_str,
+        }
+        coin_history.append(entry)
+        if c_name not in per_class_awards:
+            per_class_awards[c_name] = {'count': 0, 'latest': entry}
+        per_class_awards[c_name]['count'] += 1
+
+    for c_row in classes_data:
+        aw_meta = per_class_awards.get(c_row['name'])
+        c_row['coinAwardsCount'] = aw_meta['count'] if aw_meta else 0
+        c_row['lastAward'] = aw_meta['latest'] if aw_meta else None
+
+    tutor_coins = (
+        CustomUser.objects.filter(role='tutor').aggregate(sum=Sum('coins'))['sum'] or 0
+        if is_admin_all
+        else int(tutor_actor.coins or 0)
+    )
+    all_scores = [st['avgScore'] for st in students_data if st['testsPassed'] > 0]
+    overall_avg = round(sum(all_scores) / len(all_scores)) if all_scores else 0
+
+    return JsonResponse({
+        'success': True,
+        'tutor': serialize_user_payload(tutor_actor),
+        'assignedClasses': classes_data,
+        'students': students_data,
+        'coinHistory': coin_history,
+        'summary': {
+            'assignedClassesCount': len(classes_data),
+            'studentsCount': len(students_data),
+            'tutorCoins': int(tutor_coins),
+            'classBonusTotal': sum(c['bonusCoins'] for c in classes_data),
+            'studentCoinsTotal': sum(st['coins'] for st in students_data),
+            'avgScore': overall_avg,
+        },
+    })
+
+
+@csrf_exempt
+def api_tutor_students(request):
+    """Tyuter portali: biriktirilgan sinf o'quvchilarini ko'rish va yangi o'quvchi qo'shish (O'qituvchi rad etiladi)"""
+    tutor_actor, is_admin_all, cls_qs, auth_err = _resolve_tutor_scope(request)
+    if auth_err:
+        return auth_err
+    lang = _req_lang(request)
+    assigned_names = list(cls_qs.values_list('name', flat=True))
+
+    if request.method == 'GET':
+        grade_filter = (request.GET.get('grade') or '').strip()
+        students = CustomUser.objects.filter(role='student')
+        if not is_admin_all:
+            students = students.filter(grade__in=assigned_names) if assigned_names else students.none()
+        if grade_filter and grade_filter != 'all':
+            students = students.filter(grade__iexact=grade_filter)
+        students = students.order_by('grade', 'full_name')
+        data = []
+        for s in students:
+            res_count = s.results.count()
+            avg_score = round(s.results.aggregate(avg=Avg('score_percentage'))['avg'] or 0) if res_count > 0 else 0
+            data.append({
+                'id': s.id,
+                'username': s.username,
+                'fullName': s.full_name,
+                'grade': s.grade or '-',
+                'phone': s.phone or '-',
+                'rawPhone': s.phone or '',
+                'bio': s.bio or '',
+                'avatarUrl': s.get_avatar_url(),
+                'hasCustomAvatar': bool(s.avatar),
+                'testsPassed': res_count,
+                'avgScore': avg_score,
+                'coins': int(s.coins or 0),
+                'dateJoined': s.date_joined.strftime('%d.%m.%Y'),
+            })
+        return JsonResponse(data, safe=False)
+
+    elif request.method == 'POST':
+        user = None
+        try:
+            is_json = (request.content_type or '').startswith('application/json')
+            data = json.loads(request.body.decode('utf-8')) if is_json and request.body else request.POST
+
+            username = (data.get('username') or '').strip()
+            password = (data.get('password') or '').strip()
+            full_name = (data.get('fullName') or data.get('full_name') or '').strip()
+            raw_grade = (data.get('grade') or '').strip()
+            phone = (data.get('phone') or '').strip()
+            bio = (data.get('bio') or '').strip()
+
+            resolved_grade, scope_err = _assert_tutor_grade_allowed(cls_qs, is_admin_all, raw_grade, lang=lang)
+            if scope_err:
+                return scope_err
+
+            if not username or not password or not full_name or not resolved_grade:
+                return JsonResponse({'error': _msg(lang, "Barcha majburiy maydonlarni to'ldiring!", "Заполните все обязательные поля!")}, status=400)
+            if len(password) < 3:
+                return JsonResponse({'error': _msg(lang, "Parol kamida 3 ta belgidan iborat bo'lishi kerak!", "Пароль должен содержать минимум 3 символа!")}, status=400)
+            if CustomUser.objects.filter(username=username).exists():
+                return JsonResponse({'error': _msg(lang, "Ushbu login bilan foydalanuvchi allaqachon mavjud!", "Пользователь с таким логином уже существует!")}, status=400)
+
+            user = CustomUser.objects.create_user(
+                username=username,
+                password=password,
+                role='student',
+                full_name=full_name,
+                grade=resolved_grade,
+                phone=phone,
+                bio=bio,
+            )
+            if 'avatar' in request.FILES:
+                save_validated_user_avatar(user, request.FILES['avatar'], lang=lang)
+                user.save(update_fields=['avatar'])
+
+            return JsonResponse({
+                'success': True,
+                'studentId': user.id,
+                'user': serialize_user_payload(user),
+                'avatarUrl': user.get_avatar_url(),
+            })
+        except ValueError as ve:
+            if user and user.id:
+                user.delete()
+            return JsonResponse({'error': str(ve)}, status=400)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+
+    return JsonResponse({'error': _msg(lang, "Metod qo'llab-quvvatlanmaydi", "Метод не поддерживается")}, status=405)
+
+
+@csrf_exempt
+def api_tutor_student_manage(request, student_id):
+    """Tyuter portali: biriktirilgan sinf o'quvchisini ko'rish, tahrirlash va o'chirish"""
+    _, is_admin_all, cls_qs, auth_err = _resolve_tutor_scope(request)
+    if auth_err:
+        return auth_err
+    lang = _req_lang(request)
+
+    student = CustomUser.objects.filter(id=student_id, role='student').first()
+    if not student:
+        return JsonResponse({'error': _msg(lang, "O'quvchi topilmadi!", "Ученик не найден!")}, status=404)
+
+    _, cur_err = _assert_tutor_grade_allowed(cls_qs, is_admin_all, student.grade, lang=lang)
+    if cur_err:
+        return cur_err
+
+    if request.method == 'GET':
+        return JsonResponse({
+            'id': student.id,
+            'username': student.username,
+            'fullName': student.full_name,
+            'role': student.role,
+            'grade': student.grade,
+            'phone': student.phone or '',
+            'bio': student.bio or '',
+            'coins': int(student.coins or 0),
+            'avatarUrl': student.get_avatar_url(),
+            'hasCustomAvatar': bool(student.avatar),
+        })
+
+    elif request.method in ['PUT', 'POST', 'PATCH']:
+        try:
+            is_json = (request.content_type or '').startswith('application/json')
+            data = json.loads(request.body.decode('utf-8')) if is_json and request.body else request.POST
+
+            new_username = (data.get('username') or '').strip()
+            new_password = (data.get('password') or data.get('newPassword') or '').strip()
+            new_full_name = (data.get('fullName') or data.get('full_name') or '').strip()
+            new_phone = data.get('phone') if 'phone' in data else None
+            new_bio = data.get('bio') if 'bio' in data else None
+            new_grade = (data.get('grade') or '').strip()
+            clear_avatar = str(data.get('clearAvatar', '')).lower() in ['true', '1', 'yes', 'да']
+
+            if new_username and new_username != student.username:
+                if CustomUser.objects.filter(username=new_username).exclude(id=student.id).exists():
+                    return JsonResponse({'error': _msg(lang, "Ushbu login bilan boshqa foydalanuvchi mavjud!", "Пользователь с таким логином уже существует!")}, status=400)
+                student.username = new_username
+
+            if new_full_name:
+                student.full_name = new_full_name
+            if new_phone is not None:
+                student.phone = str(new_phone).strip()
+            if new_bio is not None:
+                student.bio = str(new_bio).strip()
+            if new_grade:
+                resolved_grade, new_err = _assert_tutor_grade_allowed(cls_qs, is_admin_all, new_grade, lang=lang)
+                if new_err:
+                    return new_err
+                student.grade = resolved_grade
+
+            if clear_avatar and student.avatar:
+                student.avatar.delete(save=False)
+                student.avatar = None
+            if 'avatar' in request.FILES:
+                save_validated_user_avatar(student, request.FILES['avatar'], lang=lang)
+
+            if new_password:
+                if len(new_password) < 3:
+                    return JsonResponse({'error': _msg(lang, "Yangi parol kamida 3 ta belgidan iborat bo'lishi kerak!", "Новый пароль должен содержать минимум 3 символа!")}, status=400)
+                student.set_password(new_password)
+
+            student.save()
+            return JsonResponse({
+                'success': True,
+                'message': _msg(lang, "O'quvchi ma'lumotlari muvaffaqiyatli yangilandi!", "Данные ученика успешно обновлены!"),
+                'user': serialize_user_payload(student),
+            })
+        except ValueError as ve:
+            return JsonResponse({'error': str(ve)}, status=400)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+
+    elif request.method == 'DELETE':
+        student.delete()
+        return JsonResponse({
+            'success': True,
+            'message': _msg(lang, "O'quvchi ro'yxatdan o'chirildi!", "Ученик удалён из списка!"),
+        })
 
     return JsonResponse({'error': _msg(lang, "Metod qo'llab-quvvatlanmaydi", "Метод не поддерживается")}, status=405)
 
@@ -1079,6 +1802,9 @@ def api_update_profile(request):
         user_id = data.get('userId') or request.POST.get('userId') or request.GET.get('userId')
         if not request.user.is_authenticated:
             return JsonResponse({'error': _msg(lang, "Tizimga kirmagansiz! Profilni o'zgartirish uchun avval tizimga kiring.", "Вы не вошли в систему! Сначала войдите для изменения профиля.")}, status=401)
+        if not getattr(request.user, 'is_active', True):
+            logout(request)
+            return JsonResponse({'error': _msg(lang, "Ushbu hisob administrator tomonidan bloklangan!", "Этот аккаунт заблокирован администратором!")}, status=403)
 
         user = request.user
         if user_id:
@@ -1103,6 +1829,14 @@ def api_update_profile(request):
 
         new_username = (data.get('username') or request.POST.get('username') or '').strip()
         if new_username and new_username != user.username:
+            if user.role == 'tutor' and not is_admin_user(request.user):
+                return JsonResponse({
+                    'error': _msg(
+                        lang,
+                        "Cheklov: Tyuter logini faqat administrator tomonidan beriladi va o'zgartiriladi!",
+                        "Ограничение: логин тьютора выдаётся и изменяется только администратором!",
+                    )
+                }, status=403)
             if CustomUser.objects.filter(username=new_username).exclude(id=user.id).exists():
                 return JsonResponse({'error': _msg(lang, "Ushbu login boshqa foydalanuvchi tomonidan band qilingan!", "Этот логин уже занят другим пользователем!")}, status=400)
             user.username = new_username
@@ -1137,6 +1871,15 @@ def api_update_profile(request):
             or request.POST.get('password')
             or ''
         ).strip()
+
+        if (old_password or new_password) and user.role == 'tutor' and not is_admin_user(request.user):
+            return JsonResponse({
+                'error': _msg(
+                    lang,
+                    "Cheklov: Tyuter paroli faqat administrator tomonidan beriladi va nazorat qilinadi!",
+                    "Ограничение: пароль тьютора выдаётся и контролируется только администратором!",
+                )
+            }, status=403)
 
         if old_password and not new_password:
             return JsonResponse({'error': _msg(lang, 'Yangi parolni ham kiriting!', 'Введите также новый пароль!')}, status=400)
@@ -1264,6 +2007,7 @@ def api_admin_stats(request):
     lang = _req_lang(request)
 
     total_teachers = CustomUser.objects.filter(role='teacher').count()
+    total_tutors = CustomUser.objects.filter(role='tutor').count()
     total_students = CustomUser.objects.filter(role='student').count()
     total_tests = Test.objects.count()
     total_results = TestResult.objects.count()
@@ -1324,30 +2068,20 @@ def api_admin_stats(request):
         for s in SUBJECTS_LIST[:5]:
             subject_performance.append({
                 'subject': s,
-                'avgScore': 86,
-                'submissions': 12
+                'avgScore': 0,
+                'submissions': 0
             })
 
     # Grades performance breakdown (Bilingual: Uzbek & Russian classes from DB)
     grades_data = []
     classes_qs = SchoolClass.objects.filter(is_active=True).order_by('grade_level', 'language', 'name')
-    if not classes_qs.exists():
-        class_names = ['5-A', '6-A', '7-A', '8-A', '9-A', '9-B', '10-A', '10-B', '11-A', '11-B', '5-RU', '6-RU', '7-RU', '8-RU', '9-RU', '10-RU', '11-RU']
-        for cn in class_names:
-            SchoolClass.objects.get_or_create(
-                name=cn,
-                defaults={'grade_level': int(''.join(filter(str.isdigit, cn)) or 5), 'language': 'ru' if 'RU' in cn else 'uz'}
-            )
-        classes_qs = SchoolClass.objects.filter(is_active=True).order_by('grade_level', 'language', 'name')
 
     for c in classes_qs:
         g_students = CustomUser.objects.filter(role='student', grade=c.name)
         g_std_count = g_students.count()
         g_results = TestResult.objects.filter(student__grade=c.name)
         g_subs = g_results.count()
-        g_avg = round(g_results.aggregate(avg=Avg('score_percentage'))['avg'] or 0)
-        if g_subs == 0:
-            g_avg = 84 if c.language == 'uz' else 87
+        g_avg = round(g_results.aggregate(avg=Avg('score_percentage'))['avg'] or 0) if g_subs > 0 else 0
 
         grades_data.append({
             'id': c.id,
@@ -1381,9 +2115,33 @@ def api_admin_stats(request):
         }
     }
 
+    tutors_stats = _compute_tutors_analytics_list()
+    tutor_summary = {
+        'totalTutors': len(tutors_stats),
+        'activeTutors': sum(1 for item in tutors_stats if item['isActive']),
+        'blockedTutors': sum(1 for item in tutors_stats if not item['isActive']),
+        'assignedClassesCount': sum(item['classesCount'] for item in tutors_stats),
+        'totalStudents': sum(item['studentsCount'] for item in tutors_stats),
+        'activeStudents': sum(item['activeStudentsCount'] for item in tutors_stats),
+        'totalTutorCoins': sum(item['coins'] for item in tutors_stats),
+        'totalClassBonusCoins': sum(item['classBonusTotal'] for item in tutors_stats),
+        'totalTestsPassed': sum(item['testsPassedCount'] for item in tutors_stats),
+        'totalCoinAwardsCount': sum(item['coinAwardsCount'] for item in tutors_stats),
+        'avgScore': (
+            round(
+                sum(item['avgScore'] * item['testsPassedCount'] for item in tutors_stats)
+                / max(1, sum(item['testsPassedCount'] for item in tutors_stats))
+            )
+            if any(item['testsPassedCount'] > 0 for item in tutors_stats)
+            else 0
+        ),
+    }
+
     return JsonResponse({
         'totalTeachers': total_teachers,
         'teachersCount': total_teachers,
+        'totalTutors': total_tutors,
+        'tutorsCount': total_tutors,
         'totalStudents': total_students,
         'studentsCount': total_students,
         'totalTests': total_tests,
@@ -1391,6 +2149,8 @@ def api_admin_stats(request):
         'totalResults': total_results,
         'avgScore': avg_score,
         'teachers': teachers_data,
+        'tutors': tutors_stats,
+        'tutorSummary': tutor_summary,
         'grades': grades_data,
         'languageAnalysis': language_analysis,
         'distribution': distribution,
@@ -1880,35 +2640,36 @@ def api_teacher_test_manage(request, test_id):
             if 'rewardMinScore' in data or 'reward_min_score' in data:
                 test.reward_min_score = min(100, max(0, int(data.get('rewardMinScore', data.get('reward_min_score', 0)) or 0)))
 
-            test.save()
+            with transaction.atomic():
+                test.save()
 
-            if questions_data and len(questions_data) > 0:
-                test.questions.all().delete()
-                for idx, q_item in enumerate(questions_data, 1):
-                    q_text = (q_item.get('text') or q_item.get('question') or '').strip()
-                    q_img = q_item.get('imageUrl') or q_item.get('image', '')
-                    opts = q_item.get('options', [])
-                    correct_idx = int(q_item.get('correctIndex', 0))
+                if questions_data and len(questions_data) > 0:
+                    test.questions.all().delete()
+                    for idx, q_item in enumerate(questions_data, 1):
+                        q_text = (q_item.get('text') or q_item.get('question') or '').strip()
+                        q_img = q_item.get('imageUrl') or q_item.get('image', '')
+                        opts = q_item.get('options', [])
+                        correct_idx = int(q_item.get('correctIndex', 0))
 
-                    q_obj = Question.objects.create(
-                        test=test,
-                        text=q_text,
-                        image_url=q_img,
-                        order=idx
-                    )
-                    for opt_idx, opt_raw in enumerate(opts):
-                        if isinstance(opt_raw, dict):
-                            opt_text = (opt_raw.get('text') or '').strip()
-                            is_corr = bool(opt_raw.get('isCorrect') or opt_raw.get('is_correct'))
-                        else:
-                            opt_text = str(opt_raw).strip()
-                            is_corr = (opt_idx == correct_idx)
-
-                        Option.objects.create(
-                            question=q_obj,
-                            text=opt_text,
-                            is_correct=is_corr
+                        q_obj = Question.objects.create(
+                            test=test,
+                            text=q_text,
+                            image_url=q_img,
+                            order=idx
                         )
+                        for opt_idx, opt_raw in enumerate(opts):
+                            if isinstance(opt_raw, dict):
+                                opt_text = (opt_raw.get('text') or '').strip()
+                                is_corr = bool(opt_raw.get('isCorrect') or opt_raw.get('is_correct'))
+                            else:
+                                opt_text = str(opt_raw).strip()
+                                is_corr = (opt_idx == correct_idx)
+
+                            Option.objects.create(
+                                question=q_obj,
+                                text=opt_text,
+                                is_correct=is_corr
+                            )
 
             return JsonResponse({'success': True, 'message': _msg(lang, 'Test muvaffaqiyatli tahrirlandi va saqlandi!', 'Тест успешно отредактирован и сохранён!')})
         except Exception as e:
@@ -3440,7 +4201,7 @@ def api_admin_classes(request):
         return auth_err
     lang = _req_lang(request)
     if request.method == 'GET':
-        classes_qs = SchoolClass.objects.filter(is_active=True).order_by('grade_level', 'language', 'name')
+        classes_qs = SchoolClass.objects.select_related('tutor').filter(is_active=True).order_by('grade_level', 'language', 'name')
 
         classes_data = []
         uz_classes = []
@@ -3503,6 +4264,7 @@ def api_admin_classes(request):
             if subs_count > 0:
                 pm['_score_sum'] += sum(res_qs.values_list('score_percentage', flat=True))
 
+            tutor_obj = c.tutor if (c.tutor and c.tutor.role == 'tutor') else None
             item = {
                 'id': c.id,
                 'name': c.name,
@@ -3514,7 +4276,11 @@ def api_admin_classes(request):
                     else _msg(lang, "Rus tili (Русский)", "Русский язык")
                 ),
                 'room': c.room or '-',
-                'headTeacher': c.head_teacher or _msg(lang, 'Belgilanmagan', 'Не указан'),
+                'headTeacher': (c.head_teacher or (tutor_obj.full_name if tutor_obj else '')) or _msg(lang, 'Belgilanmagan', 'Не указан'),
+                'tutorId': tutor_obj.id if tutor_obj else None,
+                'tutorName': tutor_obj.full_name if tutor_obj else '',
+                'tutorUsername': tutor_obj.username if tutor_obj else '',
+                'tutorCoins': int(tutor_obj.coins or 0) if tutor_obj else 0,
                 'description': c.description,
                 'studentsCount': std_count,
                 'activeStudentsCount': active_std_count,
@@ -3643,6 +4409,14 @@ def api_admin_classes(request):
             room = (data.get('room') or '').strip()
             head_teacher = (data.get('head_teacher') or data.get('headTeacher') or '').strip()
             description = (data.get('description') or '').strip()
+            raw_tutor_id = data.get('tutorId') if 'tutorId' in data else data.get('tutor_id')
+            tutor_obj = None
+            if raw_tutor_id not in (None, '', 'none', 'null'):
+                tutor_obj = CustomUser.objects.filter(id=raw_tutor_id, role='tutor').first()
+                if not tutor_obj:
+                    return JsonResponse({'error': _msg(lang, 'Tanlangan tyuter topilmadi!', 'Выбранный тьютор не найден!')}, status=404)
+                if not head_teacher:
+                    head_teacher = tutor_obj.full_name
 
             # Uniqueness check
             existing = SchoolClass.objects.filter(name__iexact=name).first()
@@ -3653,6 +4427,7 @@ def api_admin_classes(request):
                     existing.language = language
                     existing.room = room
                     existing.head_teacher = head_teacher
+                    existing.tutor = tutor_obj
                     existing.description = description
                     existing.save()
                     return JsonResponse({'success': True, 'message': _msg(lang, f"'{name}' sinfi qayta faollashtirildi!", f"Класс '{name}' снова активирован!")})
@@ -3664,6 +4439,7 @@ def api_admin_classes(request):
                 language=language,
                 room=room,
                 head_teacher=head_teacher,
+                tutor=tutor_obj,
                 description=description,
                 is_active=True
             )
@@ -3708,6 +4484,20 @@ def api_admin_class_manage(request, class_id):
                 sc.room = data['room'].strip()
             if 'head_teacher' in data or 'headTeacher' in data:
                 sc.head_teacher = (data.get('head_teacher') or data.get('headTeacher') or '').strip()
+            if 'tutorId' in data or 'tutor_id' in data:
+                raw_tid = data.get('tutorId') if 'tutorId' in data else data.get('tutor_id')
+                prev_tutor_name = sc.tutor.full_name if sc.tutor else ''
+                if raw_tid in (None, '', 'none', 'null'):
+                    sc.tutor = None
+                    if prev_tutor_name and (sc.head_teacher or '').strip() == prev_tutor_name.strip():
+                        sc.head_teacher = ''
+                else:
+                    new_tutor = CustomUser.objects.filter(id=raw_tid, role='tutor').first()
+                    if not new_tutor:
+                        return JsonResponse({'error': _msg(lang, 'Tanlangan tyuter topilmadi!', 'Выбранный тьютор не найден!')}, status=404)
+                    sc.tutor = new_tutor
+                    if not (sc.head_teacher or '').strip() or (prev_tutor_name and sc.head_teacher.strip() == prev_tutor_name.strip()):
+                        sc.head_teacher = new_tutor.full_name
             if 'description' in data:
                 sc.description = data['description'].strip()
 
@@ -3744,7 +4534,13 @@ def api_award_coins(request):
         amount = int(data.get('amount', 0) or 0)
         raw_class_amount = data.get('classAmount') if 'classAmount' in data else data.get('class_amount')
         class_amount = int(raw_class_amount) if raw_class_amount not in (None, '') else amount
-        reason = (data.get('reason') or '').strip() or _msg(lang, "Darsdagi namunali faollik uchun", "За образцовую активность на уроке")
+        raw_reason = (data.get('reason') or '').strip()
+        if raw_reason:
+            reason = raw_reason
+        elif amount < 0:
+            reason = _msg(lang, "Dars intizomini buzgani uchun", "За нарушение дисциплины на уроке")
+        else:
+            reason = _msg(lang, "Darsdagi namunali faollik uchun", "За образцовую активность на уроке")
         result_id = data.get('resultId') or data.get('result_id')
         test_id_param = data.get('testId') or data.get('test_id')
         activity_type = (data.get('activityType') or data.get('activity_type') or 'lesson_activity').strip()
@@ -3756,7 +4552,7 @@ def api_award_coins(request):
         is_admin_preview = is_admin and (portal == 'teacher')
         tx_portal = 'teacher' if enforce_teacher_rules else 'admin'
 
-        # O'qituvchi (yoki Teacher portali) FAQAT darsdagi faollik uchun HAR BIR sinfga kuniga max 5 coin bera oladi
+        # O'qituvchi (yoki Teacher portali) FAQAT darsdagi faollik/intizom uchun HAR BIR sinfga kuniga max +5 coin berishi va yakka o'quvchidan -1..-5 coin olishi mumkin
         if enforce_teacher_rules:
             if (isinstance(student_ids_raw, list) and len(student_ids_raw) > 0) or award_scope in (
                 'class_only', 'class', 'both', 'class_and_students', 'class_and_active', 'active_students'
@@ -3780,14 +4576,31 @@ def api_award_coins(request):
             if reason_err:
                 return JsonResponse({'error': reason_err}, status=403)
 
-            if amount <= 0:
-                return JsonResponse({'error': _msg(lang, "O'qituvchilar faqat musbat (1 dan 5 gacha) coin berishi mumkin!", "Учитель может начислить только положительное число койнов (от 1 до 5)!")}, status=400)
+            if amount == 0:
+                return JsonResponse({'error': _msg(lang, "Coin miqdori 0 bo'lishi mumkin emas!", "Количество койнов не может быть 0!")}, status=400)
             if amount > DAILY_TEACHER_MAX_COINS:
                 return JsonResponse({
                     'error': _msg(
                         lang,
                         f"Kunlik limit: Har bir sinf uchun kuniga ko'pi bilan {DAILY_TEACHER_MAX_COINS} Coin berish mumkin!",
                         f"Дневной лимит: максимум {DAILY_TEACHER_MAX_COINS} Coin в день для каждого класса!",
+                    )
+                }, status=403)
+            if amount < -DAILY_TEACHER_MAX_COINS:
+                return JsonResponse({
+                    'error': _msg(
+                        lang,
+                        f"Bir urinishda ko'pi bilan {DAILY_TEACHER_MAX_COINS} Coin olish mumkin!",
+                        f"За один раз можно снять не более {DAILY_TEACHER_MAX_COINS} койнов!",
+                    )
+                }, status=403)
+
+            if amount < 0 and class_name and not student_id:
+                return JsonResponse({
+                    'error': _msg(
+                        lang,
+                        "O'qituvchi butun sinfdan birvarakayiga coin ola olmaydi, aniq o'quvchini tanlang!",
+                        "Учитель не может снимать койны сразу со всего класса, выберите конкретного ученика!",
                     )
                 }, status=403)
 
@@ -3804,26 +4617,27 @@ def api_award_coins(request):
             if not target_class:
                 return JsonResponse({'error': _msg(lang, "Sinf tanlanishi shart!", "Необходимо выбрать класс!")}, status=400)
 
-            daily_status = get_teacher_daily_coin_status(giver, enforce_for_portal=True, grade=target_class)
-            if not daily_status['canAwardToday'] or daily_status['coinsRemainingToday'] <= 0:
-                return JsonResponse({
-                    'error': _msg(
-                        lang,
-                        f"Kunlik limit tugadi! Bugun '{target_class}' sinfi uchun kunlik {DAILY_TEACHER_MAX_COINS} coin limiti to'liq berib bo'lindi. Boshqa sinflarga berishingiz mumkin, '{target_class}' sinfi uchun yangi limit ertaga ochiladi.",
-                        f"Дневной лимит исчерпан! На сегодня лимит в {DAILY_TEACHER_MAX_COINS} койнов для класса '{target_class}' полностью использован. Вы можете начислять другим классам, а новый лимит для '{target_class}' откроется завтра.",
-                    ),
-                    'dailyCoinStatus': daily_status
-                }, status=403)
+            if amount > 0:
+                daily_status = get_teacher_daily_coin_status(giver, enforce_for_portal=True, grade=target_class)
+                if not daily_status['canAwardToday'] or daily_status['coinsRemainingToday'] <= 0:
+                    return JsonResponse({
+                        'error': _msg(
+                            lang,
+                            f"Kunlik limit tugadi! Bugun '{target_class}' sinfi uchun kunlik {DAILY_TEACHER_MAX_COINS} coin limiti to'liq berib bo'lindi. Boshqa sinflarga berishingiz mumkin, '{target_class}' sinfi uchun yangi limit ertaga ochiladi.",
+                            f"Дневной лимит исчерпан! На сегодня лимит в {DAILY_TEACHER_MAX_COINS} койнов для класса '{target_class}' полностью использован. Вы можете начислять другим классам, а новый лимит для '{target_class}' откроется завтра.",
+                        ),
+                        'dailyCoinStatus': daily_status
+                    }, status=403)
 
-            if amount > daily_status['coinsRemainingToday']:
-                return JsonResponse({
-                    'error': _msg(
-                        lang,
-                        f"Kunlik limitdan oshib ketdi! Bugun '{target_class}' sinfi uchun yana ko'pi bilan {daily_status['coinsRemainingToday']} coin berishingiz mumkin.",
-                        f"Превышен дневной лимит! На сегодня для класса '{target_class}' можно начислить не более {daily_status['coinsRemainingToday']} койнов.",
-                    ),
-                    'dailyCoinStatus': daily_status
-                }, status=403)
+                if amount > daily_status['coinsRemainingToday']:
+                    return JsonResponse({
+                        'error': _msg(
+                            lang,
+                            f"Kunlik limitdan oshib ketdi! Bugun '{target_class}' sinfi uchun yana ko'pi bilan {daily_status['coinsRemainingToday']} coin berishingiz mumkin.",
+                            f"Превышен дневной лимит! На сегодня для класса '{target_class}' можно начислить не более {daily_status['coinsRemainingToday']} койнов.",
+                        ),
+                        'dailyCoinStatus': daily_status
+                    }, status=403)
 
         # 0. Admin: Tanlangan bir nechta (faol) o'quvchilarga birgalikda coin berish
         if not enforce_teacher_rules and isinstance(student_ids_raw, list) and len(student_ids_raw) > 0:
@@ -3892,16 +4706,33 @@ def api_award_coins(request):
                 if class_amount == 0:
                     return JsonResponse({'error': _msg(lang, "Coin miqdori 0 bo'lishi mumkin emas!", "Количество койнов не может быть 0!")}, status=400)
 
+                credited_tutor = None
                 with transaction.atomic():
-                    sc_locked = SchoolClass.objects.select_for_update().get(id=sc.id)
+                    sc_locked = SchoolClass.objects.select_for_update().select_related('tutor').get(id=sc.id)
                     sc_locked.bonus_coins = max(0, int(sc_locked.bonus_coins or 0) + class_amount)
                     sc_locked.save(update_fields=['bonus_coins'])
+                    if sc_locked.tutor_id and sc_locked.tutor and sc_locked.tutor.role == 'tutor':
+                        credited_tutor = CustomUser.objects.select_for_update().get(id=sc_locked.tutor_id)
+                        credited_tutor.coins = max(0, int(credited_tutor.coins or 0) + class_amount)
+                        credited_tutor.save(update_fields=['coins'])
                     ClassCoinTransaction.objects.create(
                         school_class=sc_locked,
+                        tutor=credited_tutor,
                         given_by=giver,
                         amount=class_amount,
                         reason=f"{reason} {_msg(lang, '(Faol sinf fondi)', '(Фонд активного класса)')}",
                     )
+
+                msg_uz = (
+                    f"'{sc_locked.name}' sinf fondiga {class_amount:+d} Diamond Coin qo'shildi va tyuter {credited_tutor.full_name} hisobiga yozildi! (Tyuter balansi: {credited_tutor.coins} 💎)"
+                    if credited_tutor
+                    else f"'{sc_locked.name}' faol sinf fondiga {class_amount:+d} Diamond Coin qo'shildi! (Sinf fondi: {sc_locked.bonus_coins} 💎)"
+                )
+                msg_ru = (
+                    f"В фонд класса '{sc_locked.name}' добавлено {class_amount:+d} Diamond Coin и зачислено на счёт тьютора {credited_tutor.full_name}! (Баланс тьютора: {credited_tutor.coins} 💎)"
+                    if credited_tutor
+                    else f"В фонд активного класса '{sc_locked.name}' добавлено {class_amount:+d} Diamond Coin! (Фонд класса: {sc_locked.bonus_coins} 💎)"
+                )
 
                 return JsonResponse({
                     'success': True,
@@ -3909,14 +4740,13 @@ def api_award_coins(request):
                     'awardScope': 'class_only',
                     'className': sc_locked.name,
                     'classBonusCoins': sc_locked.bonus_coins,
+                    'tutorId': credited_tutor.id if credited_tutor else None,
+                    'tutorName': credited_tutor.full_name if credited_tutor else '',
+                    'tutorCoins': int(credited_tutor.coins or 0) if credited_tutor else 0,
                     'amountAwarded': class_amount,
                     'count': 0,
                     'totalGiven': class_amount,
-                    'message': _msg(
-                        lang,
-                        f"'{sc_locked.name}' faol sinf fondiga {class_amount:+d} Diamond Coin qo'shildi! (Sinf fondi: {sc_locked.bonus_coins} 💎)",
-                        f"В фонд активного класса '{sc_locked.name}' добавлено {class_amount:+d} Diamond Coin! (Фонд класса: {sc_locked.bonus_coins} 💎)",
-                    ),
+                    'message': _msg(lang, msg_uz, msg_ru),
                 })
 
             if not enforce_teacher_rules and award_scope in ('both', 'class_and_students', 'class_and_active'):
@@ -3931,13 +4761,19 @@ def api_award_coins(request):
                 std_ids = list(std_qs.values_list('id', flat=True))
 
                 awarded_count = 0
+                credited_tutor = None
                 with transaction.atomic():
-                    sc_locked = SchoolClass.objects.select_for_update().get(id=sc.id)
+                    sc_locked = SchoolClass.objects.select_for_update().select_related('tutor').get(id=sc.id)
                     if class_amount != 0:
                         sc_locked.bonus_coins = max(0, int(sc_locked.bonus_coins or 0) + class_amount)
                         sc_locked.save(update_fields=['bonus_coins'])
+                        if sc_locked.tutor_id and sc_locked.tutor and sc_locked.tutor.role == 'tutor':
+                            credited_tutor = CustomUser.objects.select_for_update().get(id=sc_locked.tutor_id)
+                            credited_tutor.coins = max(0, int(credited_tutor.coins or 0) + class_amount)
+                            credited_tutor.save(update_fields=['coins'])
                         ClassCoinTransaction.objects.create(
                             school_class=sc_locked,
+                            tutor=credited_tutor,
                             given_by=giver,
                             amount=class_amount,
                             reason=f"{reason} {_msg(lang, '(Faol sinf fondi)', '(Фонд активного класса)')}",
@@ -3956,17 +4792,19 @@ def api_award_coins(request):
                             )
                             awarded_count += 1
 
+                tutor_note_uz = f" (Tyuter {credited_tutor.full_name} hisobiga ham {class_amount:+d} coin yozildi)" if credited_tutor else ""
+                tutor_note_ru = f" (Тьютору {credited_tutor.full_name} также начислено {class_amount:+d} койн.)" if credited_tutor else ""
                 if awarded_count > 0:
                     msg = _msg(
                         lang,
-                        f"'{sc_locked.name}' sinf fondiga {class_amount:+d} va {awarded_count} nafar {'faol ' if award_scope == 'class_and_active' else ''}o'quvchiga {amount:+d} Diamond Coin berildi!",
-                        f"В фонд класса '{sc_locked.name}' начислено {class_amount:+d}, а {awarded_count} {'активным ' if award_scope == 'class_and_active' else ''}ученикам по {amount:+d} Diamond Coin!",
+                        f"'{sc_locked.name}' sinf fondiga {class_amount:+d}{tutor_note_uz} va {awarded_count} nafar {'faol ' if award_scope == 'class_and_active' else ''}o'quvchiga {amount:+d} Diamond Coin berildi!",
+                        f"В фонд класса '{sc_locked.name}' начислено {class_amount:+d}{tutor_note_ru}, а {awarded_count} {'активным ' if award_scope == 'class_and_active' else ''}ученикам по {amount:+d} Diamond Coin!",
                     )
                 else:
                     msg = _msg(
                         lang,
-                        f"'{sc_locked.name}' sinf fondiga {class_amount:+d} Diamond Coin qo'shildi! (Sinfda mos o'quvchilar hozircha 0 nafar)",
-                        f"В фонд класса '{sc_locked.name}' добавлено {class_amount:+d} Diamond Coin! (Подходящих учеников в классе пока 0)",
+                        f"'{sc_locked.name}' sinf fondiga {class_amount:+d} Diamond Coin qo'shildi{tutor_note_uz}! (Sinfda mos o'quvchilar hozircha 0 nafar)",
+                        f"В фонд класса '{sc_locked.name}' добавлено {class_amount:+d} Diamond Coin{tutor_note_ru}! (Подходящих учеников в классе пока 0)",
                     )
 
                 return JsonResponse({
@@ -3976,6 +4814,9 @@ def api_award_coins(request):
                     'awardScope': award_scope,
                     'className': sc_locked.name,
                     'classBonusCoins': sc_locked.bonus_coins,
+                    'tutorId': credited_tutor.id if credited_tutor else None,
+                    'tutorName': credited_tutor.full_name if credited_tutor else '',
+                    'tutorCoins': int(credited_tutor.coins or 0) if credited_tutor else 0,
                     'count': awarded_count,
                     'amountAwarded': amount,
                     'classAmountAwarded': class_amount,
@@ -4062,7 +4903,7 @@ def api_award_coins(request):
             return JsonResponse({'error': _msg(lang, "O'quvchi topilmadi!", "Ученик не найден!")}, status=404)
 
         student_grade = (student.grade or '').strip()
-        if enforce_teacher_rules:
+        if enforce_teacher_rules and amount > 0:
             st_totals = get_teacher_students_today_coin_totals(
                 giver, [student.id], is_admin_preview=is_admin_preview
             )
@@ -4083,7 +4924,16 @@ def api_award_coins(request):
 
         with transaction.atomic():
             student_locked = CustomUser.objects.select_for_update().get(id=student.id)
-            new_coins = max(0, int(student_locked.coins or 0) + amount)
+            current_coins = int(student_locked.coins or 0)
+            if amount < 0 and enforce_teacher_rules and current_coins < abs(amount):
+                return JsonResponse({
+                    'error': _msg(
+                        lang,
+                        f"{student_locked.full_name} hisobida yetarli coin yo'q (Mavjud: {current_coins} 💎)!",
+                        f"На балансе ученика {student_locked.full_name} недостаточно койнов (Доступно: {current_coins} 💎)!",
+                    )
+                }, status=400)
+            new_coins = max(0, current_coins + amount)
             student_locked.coins = new_coins
             student_locked.save(update_fields=['coins'])
 
@@ -4096,6 +4946,20 @@ def api_award_coins(request):
                 portal=tx_portal,
             )
 
+        success_msg = (
+            _msg(
+                lang,
+                f"{student_locked.full_name} hisobidan {abs(amount)} Diamond Coin olindi!",
+                f"С баланса ученика {student_locked.full_name} снято {abs(amount)} Diamond Coin!",
+            )
+            if amount < 0
+            else _msg(
+                lang,
+                f"{student_locked.full_name} ga {amount:+d} Diamond Coin muvaffaqiyatli berildi!",
+                f"Ученику {student_locked.full_name} успешно начислено {amount:+d} Diamond Coin!",
+            )
+        )
+
         return JsonResponse({
             'success': True,
             'studentId': student_locked.id,
@@ -4104,11 +4968,7 @@ def api_award_coins(request):
             'amountAwarded': amount,
             'reason': reason,
             'dailyCoinStatus': get_teacher_daily_coin_status(giver, enforce_for_portal=enforce_teacher_rules, grade=student_grade),
-            'message': _msg(
-                lang,
-                f"{student_locked.full_name} ga {amount:+d} Diamond Coin muvaffaqiyatli berildi!",
-                f"Ученику {student_locked.full_name} успешно начислено {amount:+d} Diamond Coin!",
-            )
+            'message': success_msg,
         })
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -4180,16 +5040,23 @@ def api_coin_rankings(request):
             '_sort_dt': tx.created_at,
         })
 
-    ctx_qs = ClassCoinTransaction.objects.select_related('school_class', 'given_by').order_by('-created_at')[:20]
+    ctx_qs = ClassCoinTransaction.objects.select_related('school_class', 'given_by', 'tutor').order_by('-created_at')[:20]
     for ctx in ctx_qs:
         cls_name = ctx.school_class.name if ctx.school_class else '-'
+        tx_tutor = ctx.tutor or (ctx.school_class.tutor if ctx.school_class and ctx.school_class.tutor else None)
         combined_txs.append({
             'id': f"c_{ctx.id}",
             'entryType': 'class',
             'classId': ctx.school_class_id,
             'className': cls_name,
+            'tutorId': tx_tutor.id if tx_tutor else None,
+            'tutorName': tx_tutor.full_name if tx_tutor else '',
             'studentId': None,
-            'studentName': _msg(lang, f"{cls_name} sinfi (Sinf fondi)", f"Класс {cls_name} (Фонд класса)"),
+            'studentName': (
+                _msg(lang, f"{cls_name} sinfi (Tyuter: {tx_tutor.full_name})", f"Класс {cls_name} (Тьютор: {tx_tutor.full_name})")
+                if tx_tutor
+                else _msg(lang, f"{cls_name} sinfi (Sinf fondi)", f"Класс {cls_name} (Фонд класса)")
+            ),
             'grade': cls_name,
             'amount': ctx.amount,
             'reason': ctx.reason,
@@ -4207,7 +5074,7 @@ def api_coin_rankings(request):
 
     # Sinflar bo'yicha coin statistikasi (Barcha faol sinflar: o'quvchilar coini + sinf fondi)
     classes_coin_stats = []
-    all_school_classes = SchoolClass.objects.filter(is_active=True).order_by('grade_level', 'name')
+    all_school_classes = SchoolClass.objects.select_related('tutor').filter(is_active=True).order_by('grade_level', 'name')
     uz_coins_tot = 0
     ru_coins_tot = 0
     uz_stds_tot = 0
@@ -4232,6 +5099,7 @@ def api_coin_rankings(request):
             ru_coins_tot += tot_c
             ru_stds_tot += st_count
 
+        tutor_obj = sc.tutor if (sc.tutor and sc.tutor.role == 'tutor') else None
         classes_coin_stats.append({
             'id': sc.id,
             'className': sc.name,
@@ -4241,6 +5109,9 @@ def api_coin_rankings(request):
                 if sc.language == 'uz'
                 else _msg(lang, "Rus tili (Русский)", "Русский язык")
             ),
+            'tutorId': tutor_obj.id if tutor_obj else None,
+            'tutorName': tutor_obj.full_name if tutor_obj else '',
+            'tutorCoins': int(tutor_obj.coins or 0) if tutor_obj else 0,
             'studentCoins': st_coins,
             'classBonusCoins': cls_bonus,
             'bonusCoins': cls_bonus,
@@ -4420,6 +5291,18 @@ def api_coin_rankings(request):
     coin_sources = list(src_buckets.values())
     coin_timeline = [timeline_map[k] for k in sorted(timeline_map.keys())][-12:]
 
+    tutor_rankings = []
+    for tut in CustomUser.objects.filter(role='tutor').prefetch_related('tutor_classes').order_by('-coins', 'full_name'):
+        t_classes = [c.name for c in tut.tutor_classes.all() if c.is_active]
+        tutor_rankings.append({
+            'id': tut.id,
+            'fullName': tut.full_name,
+            'username': tut.username,
+            'coins': int(tut.coins or 0),
+            'assignedClasses': t_classes,
+            'avatarUrl': tut.get_avatar_url(),
+        })
+
     return JsonResponse({
         'success': True,
         'summary': {
@@ -4434,6 +5317,7 @@ def api_coin_rankings(request):
         },
         'topStudents': top_students[:500],
         'bottomStudents': bottom_students[:500],
+        'tutorRankings': tutor_rankings,
         'recentTransactions': recent_txs,
         'classesCoinStats': classes_coin_stats,
         'languageCoinStats': language_coin_stats,
@@ -4955,13 +5839,19 @@ def api_teacher_class_students(request):
 
     students = []
     for s in qs:
+        res_qs = s.results.all()
+        tests_passed = res_qs.count()
+        avg_score = round(res_qs.aggregate(avg=Avg('score_percentage'))['avg'] or 0) if tests_passed > 0 else 0
         students.append({
             'id': s.id,
             'fullName': s.full_name,
             'full_name': s.full_name,
             'username': s.username,
             'grade': s.grade or '-',
+            'phone': s.phone or '-',
             'coins': s.coins,
+            'testsPassed': tests_passed,
+            'avgScore': avg_score,
             'avatarUrl': s.get_avatar_url()
         })
 
@@ -5014,7 +5904,10 @@ def api_teacher_coin_history(request):
         is_non_lesson_reason = bool(NON_LESSON_COIN_REASON_RE.search(reason_str))
         is_classroom = (tx.test_result is None) and (not is_non_lesson_reason)
         test_title = tx.test_result.test.title if tx.test_result and tx.test_result.test else None
-        if is_classroom:
+        if is_classroom and int(tx.amount or 0) < 0:
+            category_label = _msg(lang, "Coin olish / Jarima 🔻", "Снятие койнов / Штраф 🔻")
+            short_badge = _msg(lang, "🔻 Coin olish", "🔻 Снятие")
+        elif is_classroom:
             category_label = _msg(lang, "Darsdagi faollik 📚", "Активность на уроке 📚")
             short_badge = _msg(lang, "📚 Dars faolligi", "📚 Активность на уроке")
         elif test_title:
@@ -5106,49 +5999,68 @@ def api_teacher_coin_edit(request, tx_id):
             if reason_err:
                 return JsonResponse({'error': reason_err}, status=403)
 
-        old_amount = tx.amount
+        old_amount = int(tx.amount or 0)
         diff = new_amount - old_amount
 
         target_class = (tx.student.grade or '').strip() if tx.student else ''
         if enforce_teacher_rules:
-            if new_amount <= 0 or new_amount > DAILY_TEACHER_MAX_COINS:
+            if old_amount < 0:
+                if new_amount >= 0 or new_amount < -DAILY_TEACHER_MAX_COINS:
+                    return JsonResponse({
+                        'error': _msg(
+                            lang,
+                            f"Coin olish tranzaksiyasini -1 dan -{DAILY_TEACHER_MAX_COINS} gacha tahrirlash mumkin!",
+                            f"Транзакцию снятия койнов можно редактировать от -1 до -{DAILY_TEACHER_MAX_COINS}!",
+                        )
+                    }, status=403)
+            else:
+                if new_amount <= 0 or new_amount > DAILY_TEACHER_MAX_COINS:
+                    return JsonResponse({
+                        'error': _msg(
+                            lang,
+                            f"O'qituvchi beradigan coin miqdori 1 dan {DAILY_TEACHER_MAX_COINS} gacha bo'lishi shart!",
+                            f"Количество койнов, начисляемых учителем, должно быть от 1 до {DAILY_TEACHER_MAX_COINS}!",
+                        )
+                    }, status=403)
+                if diff > 0:
+                    tx_local_date = timezone.localtime(tx.created_at).date() if tx.created_at else None
+                    if tx_local_date != timezone.localdate():
+                        return JsonResponse({'error': _msg(lang, "O'tgan kunlardagi coin miqdorini oshirish mumkin emas!", "Нельзя увеличивать количество койнов за прошлые дни!")}, status=403)
+                    daily_status = get_teacher_daily_coin_status(giver, enforce_for_portal=True, grade=target_class)
+                    if diff > daily_status['coinsRemainingToday']:
+                        cls_disp = target_class or _msg(lang, 'Tanlangan', 'Выбранного')
+                        return JsonResponse({
+                            'error': _msg(
+                                lang,
+                                f"'{cls_disp}' sinfi uchun kunlik {DAILY_TEACHER_MAX_COINS} coin limitidan oshib ketish mumkin emas!",
+                                f"Для класса '{cls_disp}' нельзя превысить дневной лимит в {DAILY_TEACHER_MAX_COINS} койнов!",
+                            )
+                        }, status=403)
+                    st_totals = get_teacher_students_today_coin_totals(
+                        giver, [tx.student_id], is_admin_preview=is_admin_preview, exclude_tx_id=tx.id
+                    )
+                    if st_totals.get(tx.student_id, 0) + new_amount > DAILY_TEACHER_MAX_COINS:
+                        return JsonResponse({
+                            'error': _msg(
+                                lang,
+                                f"Limit: Bir o'quvchiga kuniga {DAILY_TEACHER_MAX_COINS} coindan ortiq berib bo'lmaydi!",
+                                f"Лимит: одному ученику нельзя начислить более {DAILY_TEACHER_MAX_COINS} койнов в день!",
+                            )
+                        }, status=403)
+
+        # O'quvchi balansini yangilash
+        with transaction.atomic():
+            student = CustomUser.objects.select_for_update().get(id=tx.student_id)
+            current_coins = int(student.coins or 0)
+            if enforce_teacher_rules and diff < 0 and current_coins + diff < 0:
                 return JsonResponse({
                     'error': _msg(
                         lang,
-                        f"O'qituvchi beradigan coin miqdori 1 dan {DAILY_TEACHER_MAX_COINS} gacha bo'lishi shart!",
-                        f"Количество койнов, начисляемых учителем, должно быть от 1 до {DAILY_TEACHER_MAX_COINS}!",
+                        f"{student.full_name} hisobida yetarli coin yo'q (Mavjud: {current_coins} 💎)!",
+                        f"На балансе ученика {student.full_name} недостаточно койнов (Доступно: {current_coins} 💎)!",
                     )
-                }, status=403)
-            if diff > 0:
-                tx_local_date = timezone.localtime(tx.created_at).date() if tx.created_at else None
-                if tx_local_date != timezone.localdate():
-                    return JsonResponse({'error': _msg(lang, "O'tgan kunlardagi coin miqdorini oshirish mumkin emas!", "Нельзя увеличивать количество койнов за прошлые дни!")}, status=403)
-                daily_status = get_teacher_daily_coin_status(giver, enforce_for_portal=True, grade=target_class)
-                if diff > daily_status['coinsRemainingToday']:
-                    cls_disp = target_class or _msg(lang, 'Tanlangan', 'Выбранного')
-                    return JsonResponse({
-                        'error': _msg(
-                            lang,
-                            f"'{cls_disp}' sinfi uchun kunlik {DAILY_TEACHER_MAX_COINS} coin limitidan oshib ketish mumkin emas!",
-                            f"Для класса '{cls_disp}' нельзя превысить дневной лимит в {DAILY_TEACHER_MAX_COINS} койнов!",
-                        )
-                    }, status=403)
-                st_totals = get_teacher_students_today_coin_totals(
-                    giver, [tx.student_id], is_admin_preview=is_admin_preview, exclude_tx_id=tx.id
-                )
-                if st_totals.get(tx.student_id, 0) + new_amount > DAILY_TEACHER_MAX_COINS:
-                    return JsonResponse({
-                        'error': _msg(
-                            lang,
-                            f"Limit: Bir o'quvchiga kuniga {DAILY_TEACHER_MAX_COINS} coindan ortiq berib bo'lmaydi!",
-                            f"Лимит: одному ученику нельзя начислить более {DAILY_TEACHER_MAX_COINS} койнов в день!",
-                        )
-                    }, status=403)
-
-        # O'quvchi balansini yangilash
-        student = tx.student
-        with transaction.atomic():
-            student.coins = max(0, student.coins + diff)
+                }, status=400)
+            student.coins = max(0, current_coins + diff)
             student.save(update_fields=['coins'])
 
             tx.amount = new_amount

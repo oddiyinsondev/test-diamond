@@ -5,6 +5,7 @@ class CustomUser(AbstractUser):
     ROLE_CHOICES = (
         ('admin', 'Administrator'),
         ('teacher', "O'qituvchi"),
+        ('tutor', 'Tyuter'),
         ('student', "O'quvchi"),
     )
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='student')
@@ -279,6 +280,15 @@ class SchoolClass(models.Model):
     language = models.CharField(max_length=10, choices=LANGUAGE_CHOICES, default='uz', verbose_name="Ta'lim tili")
     room = models.CharField(max_length=50, blank=True, default="", verbose_name="Sinf xonasi")
     head_teacher = models.CharField(max_length=150, blank=True, default="", verbose_name="Sinf rahbari")
+    tutor = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tutor_classes',
+        limit_choices_to={'role': 'tutor'},
+        verbose_name="Biriktirilgan tyuter",
+    )
     description = models.TextField(blank=True, default="", verbose_name="Izoh / Tavsif")
     bonus_coins = models.PositiveIntegerField(default=0, verbose_name="Sinf jamg'armasi (Sinfning o'ziga berilgan coinlar)")
     is_active = models.BooleanField(default=True, verbose_name="Faol sinf")
@@ -297,6 +307,14 @@ class SchoolClass(models.Model):
 class ClassCoinTransaction(models.Model):
     """Faol sinflarning o'z hisobiga berilgan coinlar tarixi (Audit log)"""
     school_class = models.ForeignKey(SchoolClass, on_delete=models.CASCADE, related_name='coin_transactions', verbose_name="Sinf")
+    tutor = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tutor_class_coin_transactions',
+        verbose_name="Biriktirilgan tyuter hisobi",
+    )
     given_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='awarded_class_coins', verbose_name="Kim tomonidan berildi")
     amount = models.IntegerField(default=0, verbose_name="Coin miqdori (+ yoki -)")
     reason = models.CharField(max_length=255, verbose_name="Coin berish sababi")

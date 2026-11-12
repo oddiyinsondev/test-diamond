@@ -60,9 +60,14 @@ import {
   Unlock,
   Calendar,
   RefreshCw,
+  UserCheck,
+  KeyRound,
+  Copy,
+  Check,
+  ShieldOff,
 } from 'lucide-react';
 
-const ADMIN_VALID_TABS = ['teachers', 'students', 'tests', 'coins', 'classes', 'showcase'];
+const ADMIN_VALID_TABS = ['teachers', 'tutors', 'students', 'tests', 'coins', 'classes', 'showcase'];
 
 export default function AdminPortal() {
   const { user, login, language, tr } = useAuth();
@@ -70,7 +75,7 @@ export default function AdminPortal() {
   const [searchParams] = useSearchParams();
 
   // Gate state
-  const [gateUsername, setGateUsername] = useState('admin');
+  const [gateUsername, setGateUsername] = useState('');
   const [gatePassword, setGatePassword] = useState('');
   const [gateLoading, setGateLoading] = useState(false);
   const [gateError, setGateError] = useState('');
@@ -150,6 +155,8 @@ export default function AdminPortal() {
     unreadMessages: 0,
   });
   const [teachers, setTeachers] = useState([]);
+  const [tutors, setTutors] = useState([]);
+  const [tutorRankings, setTutorRankings] = useState([]);
   const [students, setStudents] = useState([]);
   const [classesList, setClassesList] = useState([]);
   const [contactMessages, setContactMessages] = useState([]);
@@ -176,6 +183,7 @@ export default function AdminPortal() {
   const [coinsBarMetric, setCoinsBarMetric] = useState('total'); // 'total' | 'avg' | 'fund'
   const [classesBarMode, setClassesBarMode] = useState('coins'); // 'coins' | 'parallels' | 'students'
   const [classesScoreOnlyActive, setClassesScoreOnlyActive] = useState(true);
+  const [tutorStatsMetric, setTutorStatsMetric] = useState('coins'); // 'coins' | 'students' | 'score'
   const [coinSearchQuery, setCoinSearchQuery] = useState('');
   const [coinGradeFilter, setCoinGradeFilter] = useState('all');
   const [coinTierFilter, setCoinTierFilter] = useState('all'); // 'all' | 'diamond' | 'gold' | 'silver' | 'bronze' | 'zero'
@@ -193,11 +201,13 @@ export default function AdminPortal() {
 
   // Search and filter states
   const [teacherSearch, setTeacherSearch] = useState('');
+  const [tutorSearch, setTutorSearch] = useState('');
   const [studentSearch, setStudentSearch] = useState('');
   const [selectedGradeFilter, setSelectedGradeFilter] = useState('all');
 
   // Modals state
   const [isAddTeacherOpen, setIsAddTeacherOpen] = useState(false);
+  const [isAddTutorOpen, setIsAddTutorOpen] = useState(false);
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
   const [isAddClassOpen, setIsAddClassOpen] = useState(false);
   const [isAwardCoinsOpen, setIsAwardCoinsOpen] = useState(false);
@@ -239,6 +249,41 @@ export default function AdminPortal() {
   const [showEditTeacherPw, setShowEditTeacherPw] = useState(false);
   const [savingEditTeacher, setSavingEditTeacher] = useState(false);
 
+  // Tutor Form State
+  const [tutorForm, setTutorForm] = useState({
+    fullName: '',
+    username: '',
+    password: '123',
+    phone: '',
+    bio: '',
+    assignedClasses: [],
+    isActive: true,
+  });
+  const [tutorAvatarFile, setTutorAvatarFile] = useState(null);
+  const [tutorAvatarPreview, setTutorAvatarPreview] = useState('');
+  const [savingAddTutor, setSavingAddTutor] = useState(false);
+
+  // Edit Tutor Modal State
+  const [editingTutor, setEditingTutor] = useState(null);
+  const [editTutorForm, setEditTutorForm] = useState({
+    fullName: '',
+    username: '',
+    password: '',
+    phone: '',
+    bio: '',
+    assignedClasses: [],
+    isActive: true,
+    avatarFile: null,
+    avatarPreview: '',
+    clearAvatar: false,
+    hasCustomAvatar: false,
+  });
+  const [showEditTutorPw, setShowEditTutorPw] = useState(false);
+  const [savingEditTutor, setSavingEditTutor] = useState(false);
+  const [togglingTutorId, setTogglingTutorId] = useState(null);
+  const [issuedTutorCreds, setIssuedTutorCreds] = useState(null);
+  const [copiedTutorCreds, setCopiedTutorCreds] = useState(false);
+
   // Student Form State
   const [studentForm, setStudentForm] = useState({
     fullName: '',
@@ -248,12 +293,37 @@ export default function AdminPortal() {
     phone: '',
   });
 
+  // Edit Student Modal State
+  const [editingStudent, setEditingStudent] = useState(null);
+  const [editStudentForm, setEditStudentForm] = useState({
+    fullName: '',
+    username: '',
+    password: '',
+    grade: '9-A',
+    phone: '',
+  });
+  const [showEditStudentPw, setShowEditStudentPw] = useState(false);
+  const [savingEditStudent, setSavingEditStudent] = useState(false);
+
   // Class Form State
   const [classForm, setClassForm] = useState({
     name: '',
     gradeLevel: 9,
     language: 'uz',
+    tutorId: '',
   });
+
+  // Edit Class Modal State
+  const [editingClass, setEditingClass] = useState(null);
+  const [editClassForm, setEditClassForm] = useState({
+    name: '',
+    gradeLevel: 9,
+    language: 'uz',
+    room: '',
+    headTeacher: '',
+    tutorId: '',
+  });
+  const [savingEditClass, setSavingEditClass] = useState(false);
 
   // Award Coins Form State (Supports single & multi-select active students)
   const [awardCoinsForm, setAwardCoinsForm] = useState({
@@ -287,9 +357,10 @@ export default function AdminPortal() {
     if (!isAdmin) return;
     setLoadingData(true);
     try {
-      const [statsRes, teachersRes, studentsRes, classesRes, msgRes, coinsRes, testsRes, permRes] = await Promise.allSettled([
+      const [statsRes, teachersRes, tutorsRes, studentsRes, classesRes, msgRes, coinsRes, testsRes, permRes] = await Promise.allSettled([
         api.admin.getStats(),
         api.admin.getTeachers(),
+        api.admin.getTutors(),
         api.admin.getStudents(),
         api.admin.getClasses(),
         api.admin.getContactMessages(),
@@ -302,6 +373,10 @@ export default function AdminPortal() {
       if (teachersRes.status === 'fulfilled') {
         const val = teachersRes.value;
         setTeachers(Array.isArray(val) ? val : (val?.teachers || []));
+      }
+      if (tutorsRes.status === 'fulfilled') {
+        const val = tutorsRes.value;
+        setTutors(Array.isArray(val) ? val : (val?.tutors || []));
       }
       if (studentsRes.status === 'fulfilled') {
         const val = studentsRes.value;
@@ -319,6 +394,7 @@ export default function AdminPortal() {
       if (coinsRes.status === 'fulfilled') {
         const val = coinsRes.value;
         setCoinRankings(Array.isArray(val) ? val : (val?.topStudents || val?.rankings || []));
+        setTutorRankings(Array.isArray(val?.tutorRankings) ? val.tutorRankings : []);
         setRecentCoinTxs(Array.isArray(val?.recentTransactions) ? val.recentTransactions : []);
         setCoinStats(val?.summary || null);
         setClassesCoinStats(Array.isArray(val?.classesCoinStats) ? val.classesCoinStats : []);
@@ -1019,6 +1095,193 @@ export default function AdminPortal() {
     }
   };
 
+  // Generate random readable password & suggested tutor username
+  const buildRandomPassword = (length = 8) => {
+    const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let out = 'Dm';
+    for (let i = 2; i < length; i += 1) {
+      out += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return out;
+  };
+
+  const buildSuggestedTutorUsername = (fullNameVal) => {
+    const base = String(fullNameVal || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 14);
+    const suffix = Math.floor(10 + Math.random() * 89);
+    return base ? `${base}_tyuter` : `tyuter_${suffix}`;
+  };
+
+  const handleCopyTutorCredentials = async (creds) => {
+    if (!creds) return;
+    const portalUrl = `${window.location.origin}/tutor/`;
+    const lines = [
+      `Diamond School — ${tr('Tyuter kirish maʼlumotlari', 'Данные для входа тьютора')}`,
+      `${tr('F.I.Sh', 'Ф.И.О.')}: ${creds.fullName}`,
+      `${tr('Portal', 'Портал')}: ${portalUrl}`,
+      `${tr('Login', 'Логин')}: ${creds.username}`,
+      creds.password
+        ? `${tr('Parol', 'Пароль')}: ${creds.password}`
+        : `${tr('Parol', 'Пароль')}: ${tr('(Avvalgi parol saqlangan)', '(Сохранён прежний пароль)')}`,
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(lines);
+      setCopiedTutorCreds(true);
+      showToast(tr("Kirish ma'lumotlari nusxalandi!", 'Данные для входа скопированы!'), 'success');
+      setTimeout(() => setCopiedTutorCreds(false), 2200);
+    } catch {
+      showToast(tr('Nusxalash imkoni bo‘lmadi, qo‘lda belgilang.', 'Не удалось скопировать автоматически.'), 'warning');
+    }
+  };
+
+  // Add Tutor (supports assignedClasses, isActive & optional avatar)
+  const handleCreateTutor = async (e) => {
+    e.preventDefault();
+    setSavingAddTutor(true);
+    const createdUsername = tutorForm.username.trim();
+    const createdPassword = tutorForm.password.trim();
+    const createdFullName = tutorForm.fullName.trim();
+    const createdClasses = [...(tutorForm.assignedClasses || [])];
+    try {
+      const fd = new FormData();
+      fd.append('fullName', createdFullName);
+      fd.append('username', createdUsername);
+      fd.append('password', createdPassword);
+      fd.append('phone', tutorForm.phone.trim());
+      fd.append('bio', (tutorForm.bio || '').trim());
+      fd.append('isActive', tutorForm.isActive ? 'true' : 'false');
+      fd.append('assignedClasses', JSON.stringify(createdClasses));
+      if (tutorAvatarFile) {
+        fd.append('avatar', tutorAvatarFile);
+      }
+      await api.admin.createTutor(fd);
+      showToast(
+        tr("Yangi tyuter qo'shildi va login-parol yaratildi!", 'Новый тьютор добавлен, логин и пароль созданы!'),
+        'success'
+      );
+      setIssuedTutorCreds({
+        fullName: createdFullName,
+        username: createdUsername,
+        password: createdPassword,
+        assignedClasses: createdClasses,
+        isActive: tutorForm.isActive,
+        mode: 'created',
+      });
+      setCopiedTutorCreds(false);
+      setIsAddTutorOpen(false);
+      setTutorForm({
+        fullName: '',
+        username: '',
+        password: '123',
+        phone: '',
+        bio: '',
+        assignedClasses: [],
+        isActive: true,
+      });
+      setTutorAvatarFile(null);
+      setTutorAvatarPreview('');
+      loadAdminData();
+    } catch (err) {
+      showToast(err.message || tr("Tyuter qo'shishda xatolik!", 'Ошибка при добавлении тьютора!'), 'error');
+    } finally {
+      setSavingAddTutor(false);
+    }
+  };
+
+  // Open Edit Tutor Modal
+  const handleOpenEditTutor = (tut) => {
+    setEditingTutor(tut);
+    setEditTutorForm({
+      fullName: tut.fullName || '',
+      username: tut.username || '',
+      password: '',
+      phone: tut.rawPhone !== undefined ? tut.rawPhone : (tut.phone && tut.phone !== '-' ? tut.phone : ''),
+      bio: tut.bio || '',
+      assignedClasses: Array.isArray(tut.assignedClasses) ? tut.assignedClasses : [],
+      isActive: tut.isActive !== false,
+      avatarFile: null,
+      avatarPreview: tut.avatarUrl || '',
+      clearAvatar: false,
+      hasCustomAvatar: Boolean(tut.hasCustomAvatar),
+    });
+    setShowEditTutorPw(false);
+  };
+
+  const handleToggleTutorActive = async (tut) => {
+    if (!tut) return;
+    const nextActive = tut.isActive === false;
+    setTogglingTutorId(tut.id);
+    try {
+      await api.admin.updateUser(tut.id, { isActive: nextActive });
+      showToast(
+        nextActive
+          ? tr(`${tut.fullName || tut.username} hisobi faollashtirildi!`, `Аккаунт ${tut.fullName || tut.username} активирован!`)
+          : tr(`${tut.fullName || tut.username} hisobi bloklandi!`, `Аккаунт ${tut.fullName || tut.username} заблокирован!`),
+        nextActive ? 'success' : 'warning'
+      );
+      loadAdminData();
+    } catch (err) {
+      showToast(err.message || tr('Holatni o‘zgartirishda xatolik!', 'Ошибка изменения статуса!'), 'error');
+    } finally {
+      setTogglingTutorId(null);
+    }
+  };
+
+  const handleSaveEditTutor = async (e) => {
+    e.preventDefault();
+    if (!editingTutor) return;
+    if (editTutorForm.password && editTutorForm.password.trim().length < 3) {
+      showToast(tr("Yangi parol kamida 3 ta belgidan iborat bo'lishi kerak!", 'Новый пароль должен содержать минимум 3 символа!'), 'warning');
+      return;
+    }
+    setSavingEditTutor(true);
+    const updatedUsername = editTutorForm.username.trim();
+    const updatedPassword = editTutorForm.password.trim();
+    const updatedFullName = editTutorForm.fullName.trim();
+    const credentialsChanged =
+      updatedPassword.length > 0 || updatedUsername !== (editingTutor.username || '');
+    try {
+      const fd = new FormData();
+      fd.append('fullName', updatedFullName);
+      fd.append('username', updatedUsername);
+      fd.append('phone', editTutorForm.phone.trim());
+      fd.append('bio', (editTutorForm.bio || '').trim());
+      fd.append('isActive', editTutorForm.isActive ? 'true' : 'false');
+      fd.append('assignedClasses', JSON.stringify(editTutorForm.assignedClasses || []));
+      if (updatedPassword) {
+        fd.append('password', updatedPassword);
+      }
+      if (editTutorForm.clearAvatar) {
+        fd.append('clearAvatar', 'true');
+      }
+      if (editTutorForm.avatarFile) {
+        fd.append('avatar', editTutorForm.avatarFile);
+      }
+      await api.admin.updateUser(editingTutor.id, fd);
+      showToast(tr("Tyuter ma'lumotlari va kirish huquqlari yangilandi!", 'Данные и доступ тьютора обновлены!'), 'success');
+      if (credentialsChanged) {
+        setIssuedTutorCreds({
+          fullName: updatedFullName || editingTutor.fullName,
+          username: updatedUsername,
+          password: updatedPassword || '',
+          assignedClasses: [...(editTutorForm.assignedClasses || [])],
+          isActive: editTutorForm.isActive,
+          mode: 'updated',
+        });
+        setCopiedTutorCreds(false);
+      }
+      setEditingTutor(null);
+      loadAdminData();
+    } catch (err) {
+      showToast(err.message || tr("Tyuterni yangilashda xatolik!", 'Ошибка при обновлении тьютора!'), 'error');
+    } finally {
+      setSavingEditTutor(false);
+    }
+  };
+
   // Add Student
   const handleCreateStudent = async (e) => {
     e.preventDefault();
@@ -1039,17 +1302,101 @@ export default function AdminPortal() {
     }
   };
 
+  // Open & Save Edit Student Modal (Admin)
+  const handleOpenEditStudent = (std) => {
+    setEditingStudent(std);
+    setEditStudentForm({
+      fullName: std.fullName || '',
+      username: std.username || '',
+      password: '',
+      grade: std.grade && std.grade !== '-' ? std.grade : availableGrades[0] || '9-A',
+      phone: std.phone && std.phone !== '-' ? std.phone : '',
+    });
+    setShowEditStudentPw(false);
+  };
+
+  const handleSaveEditStudent = async (e) => {
+    e.preventDefault();
+    if (!editingStudent) return;
+    if (editStudentForm.password && editStudentForm.password.trim().length < 3) {
+      showToast(tr("Yangi parol kamida 3 ta belgidan iborat bo'lishi kerak!", 'Новый пароль должен содержать минимум 3 символа!'), 'warning');
+      return;
+    }
+    setSavingEditStudent(true);
+    try {
+      const payload = {
+        fullName: editStudentForm.fullName.trim(),
+        username: editStudentForm.username.trim(),
+        grade: editStudentForm.grade,
+        phone: editStudentForm.phone.trim(),
+      };
+      if (editStudentForm.password.trim()) {
+        payload.password = editStudentForm.password.trim();
+      }
+      await api.admin.updateUser(editingStudent.id, payload);
+      showToast(tr("O'quvchi ma'lumotlari yangilandi!", 'Данные ученика обновлены!'), 'success');
+      setEditingStudent(null);
+      loadAdminData();
+    } catch (err) {
+      showToast(err.message || tr("O'quvchini yangilashda xatolik!", 'Ошибка при обновлении ученика!'), 'error');
+    } finally {
+      setSavingEditStudent(false);
+    }
+  };
+
   // Add Class
   const handleCreateClass = async (e) => {
     e.preventDefault();
     try {
-      await api.admin.createClass(classForm);
+      const payload = {
+        name: classForm.name,
+        gradeLevel: classForm.gradeLevel,
+        language: classForm.language,
+        tutorId: classForm.tutorId ? Number(classForm.tutorId) : null,
+      };
+      await api.admin.createClass(payload);
       showToast(tr("Yangi sinf muvaffaqiyatli qo'shildi!", 'Новый класс успешно добавлен!'), 'success');
       setIsAddClassOpen(false);
-      setClassForm({ name: '', gradeLevel: 9, language: 'uz' });
+      setClassForm({ name: '', gradeLevel: 9, language: 'uz', tutorId: '' });
       loadAdminData();
     } catch (err) {
       showToast(err.message || tr("Sinf qo'shishda xatolik!", 'Ошибка при добавлении класса!'), 'error');
+    }
+  };
+
+  // Open & Save Edit Class (assign/change Tyuter, room, language)
+  const handleOpenEditClass = (cls) => {
+    setEditingClass(cls);
+    setEditClassForm({
+      name: cls.name || '',
+      gradeLevel: cls.gradeLevel || 9,
+      language: cls.language || 'uz',
+      room: cls.room && cls.room !== '-' ? cls.room : '',
+      headTeacher: cls.headTeacher && cls.headTeacher !== 'Belgilanmagan' && cls.headTeacher !== 'Не указан' ? cls.headTeacher : '',
+      tutorId: cls.tutorId ? String(cls.tutorId) : '',
+    });
+  };
+
+  const handleSaveEditClass = async (e) => {
+    e.preventDefault();
+    if (!editingClass) return;
+    setSavingEditClass(true);
+    try {
+      await api.admin.updateClass(editingClass.id, {
+        name: editClassForm.name.trim().toUpperCase(),
+        gradeLevel: Number(editClassForm.gradeLevel),
+        language: editClassForm.language,
+        room: editClassForm.room.trim(),
+        headTeacher: editClassForm.headTeacher.trim(),
+        tutorId: editClassForm.tutorId ? Number(editClassForm.tutorId) : null,
+      });
+      showToast(tr("Sinf ma'lumotlari va tyuter birikmasi yangilandi!", 'Данные класса и привязка тьютора обновлены!'), 'success');
+      setEditingClass(null);
+      loadAdminData();
+    } catch (err) {
+      showToast(err.message || tr("Sinfni yangilashda xatolik!", 'Ошибка при обновлении класса!'), 'error');
+    } finally {
+      setSavingEditClass(false);
     }
   };
 
@@ -1215,9 +1562,14 @@ export default function AdminPortal() {
     }
   };
 
-  // Delete User (Teacher or Student)
+  // Delete User (Teacher, Tutor or Student)
   const handleDeleteUser = (u) => {
-    const roleLabel = u.role === 'teacher' ? tr("o'qituvchi", 'учитель') : tr("o'quvchi", 'ученик');
+    const roleLabel =
+      u.role === 'teacher'
+        ? tr("o'qituvchi", 'учитель')
+        : u.role === 'tutor'
+        ? tr('tyuter', 'тьютор')
+        : tr("o'quvchi", 'ученик');
     setConfirmModalState({
       isOpen: true,
       title: tr(`${u.fullName || u.username} ni o'chirish`, `Удалить ${u.fullName || u.username}`),
@@ -1282,6 +1634,21 @@ export default function AdminPortal() {
       );
     });
   }, [teachers, teacherSearch]);
+
+  // Filtered tutors
+  const filteredTutors = useMemo(() => {
+    const list = Array.isArray(tutors) ? tutors : [];
+    const q = tutorSearch.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(
+      (t) =>
+        t.fullName?.toLowerCase().includes(q) ||
+        t.username?.toLowerCase().includes(q) ||
+        t.phone?.toLowerCase().includes(q) ||
+        (Array.isArray(t.assignedClasses) &&
+          t.assignedClasses.some((c) => c.toLowerCase().includes(q)))
+    );
+  }, [tutors, tutorSearch]);
 
   // Filtered students
   const filteredStudents = useMemo(() => {
@@ -1379,26 +1746,6 @@ export default function AdminPortal() {
             </p>
           </div>
 
-          {/* Demo credentials helper chip */}
-          <div className="demo-creds-box">
-            <div className="demo-title">
-              <ShieldCheck size={13} style={{ color: '#f59e0b' }} /> {tr('Test uchun tezkor kirish:', 'Быстрый вход для проверки:')}
-            </div>
-            <div className="demo-chips-row">
-              <button
-                type="button"
-                className="demo-chip-btn"
-                onClick={() => {
-                  setGateUsername('admin');
-                  setGatePassword('123');
-                }}
-              >
-                <span>👑 admin / 123</span>
-                <span style={{ fontSize: '10px', opacity: 0.6 }}>{tr('(bosish)', '(нажать)')}</span>
-              </button>
-            </div>
-          </div>
-
           {gateError && (
             <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2 mb-4">
               <AlertCircle size={16} /> <span>{gateError}</span>
@@ -1415,7 +1762,7 @@ export default function AdminPortal() {
                   className="clean-input"
                   value={gateUsername}
                   onChange={(e) => setGateUsername(e.target.value)}
-                  placeholder="admin"
+                  placeholder={tr('Loginni kiriting', 'Введите логин')}
                   required
                 />
               </div>
@@ -1514,6 +1861,24 @@ export default function AdminPortal() {
           </div>
         </div>
 
+        <div
+          className="admin-kpi-card cursor-pointer hover:border-purple-500/50 transition-colors"
+          data-testid="admin-kpi-tutors"
+          onClick={() => setActiveTab('tutors')}
+          title={tr('Tyuterlar va ularning statistikasiga o‘tish', 'Перейти к тьюторам и их статистике')}
+        >
+          <div className="admin-kpi-icon" style={{ background: 'rgba(168, 85, 247, 0.16)', color: '#c084fc' }}>
+            <UserCheck size={24} />
+          </div>
+          <div>
+            <div className="admin-kpi-val">{stats.tutorsCount ?? tutors.length}</div>
+            <div className="admin-kpi-label">{tr('Jami Tyuterlar', 'Всего тьюторов')}</div>
+            <div className="text-[10px] text-purple-300 font-bold mt-0.5">
+              {stats.tutorSummary?.totalTutorCoins ?? tutors.reduce((s, t) => s + Number(t.coins || 0), 0)} 💎
+            </div>
+          </div>
+        </div>
+
         <div className="admin-kpi-card">
           <div className="admin-kpi-icon kpi-green">
             <Users size={24} />
@@ -1596,6 +1961,18 @@ export default function AdminPortal() {
               </div>
               <span className="portal-nav-label">{tr("O'qituvchilar", 'Учителя')}</span>
               <span className="portal-nav-badge">{teachers.length}</span>
+            </button>
+
+            <button
+              type="button"
+              className={`portal-nav-btn ${activeTab === 'tutors' ? 'active' : ''}`}
+              onClick={() => setActiveTab('tutors')}
+            >
+              <div className="portal-nav-icon">
+                <UserCheck size={18} />
+              </div>
+              <span className="portal-nav-label">{tr('Tyuterlar', 'Тьюторы')}</span>
+              <span className="portal-nav-badge">{tutors.length}</span>
             </button>
 
             <button
@@ -2581,6 +2958,546 @@ export default function AdminPortal() {
             </div>
           )}
 
+          {/* TAB 1.5: TUTORS MANAGEMENT */}
+          {activeTab === 'tutors' && (
+            <div className="space-y-4 animate-fade-in">
+              <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="text-xs text-slate-200 space-y-1">
+                  <div className="font-bold text-sm text-purple-200 flex items-center gap-1.5">
+                    <ShieldCheck size={16} className="text-purple-400" />
+                    {tr('Tyuterlar Boshqaruvi — Login, Parol va Nazorat', 'Управление тьюторами — логин, пароль и контроль')}
+                  </div>
+                  <p className="text-slate-300 m-0">
+                    {tr(
+                      "Tyuterlar uchun login va parol faqat Administrator tomonidan beriladi hamda nazorat qilinadi (tyuter o'zi login yoki parolni o'zgartira olmaydi). Admin hisoblarni istalgan payt bloklashi yoki parolni yangilashi mumkin.",
+                      'Логин и пароль для тьюторов выдаются и контролируются только администратором (тьютор не может самостоятельно менять логин или пароль). Администратор может блокировать аккаунт или сбрасывать пароль в любой момент.'
+                    )}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  data-testid="admin-add-tutor-btn"
+                  className="btn btn-diamond-cyan btn-sm flex items-center gap-1.5 font-bold flex-shrink-0"
+                  onClick={() => setIsAddTutorOpen(true)}
+                >
+                  <Plus size={16} /> {tr('Yangi Tyuter', 'Новый тьютор')}
+                </button>
+              </div>
+
+              {/* Copyable Issued Credentials Banner */}
+              {issuedTutorCreds && (
+                <div
+                  data-testid="issued-tutor-credentials-card"
+                  className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/40 space-y-3"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-emerald-300 font-extrabold text-sm">
+                      <KeyRound size={17} />
+                      <span>
+                        {issuedTutorCreds.mode === 'created'
+                          ? tr('Tyuter yaratildi — kirish maʼlumotlarini topshiring', 'Тьютор создан — передайте данные для входа')
+                          : tr('Tyuter kirish maʼlumotlari yangilandi', 'Данные входа тьютора обновлены')}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleCopyTutorCredentials(issuedTutorCreds)}
+                        className="btn btn-xs bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-emerald-200 font-bold flex items-center gap-1.5"
+                      >
+                        {copiedTutorCreds ? <Check size={13} /> : <Copy size={13} />}
+                        <span>{copiedTutorCreds ? tr('Nusxalandi', 'Скопировано') : tr('Nusxa olish', 'Копировать')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIssuedTutorCreds(null)}
+                        className="text-xs text-slate-400 hover:text-white px-2 py-1"
+                        title={tr('Yopish', 'Закрыть')}
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
+                    <div className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800">
+                      <div className="text-[10px] text-slate-400 uppercase font-bold">{tr('Tyuter', 'Тьютор')}</div>
+                      <div className="font-bold text-white truncate">{issuedTutorCreds.fullName}</div>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800">
+                      <div className="text-[10px] text-slate-400 uppercase font-bold">{tr('Login', 'Логин')}</div>
+                      <div className="font-mono font-bold text-cyan-300">{issuedTutorCreds.username}</div>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800">
+                      <div className="text-[10px] text-slate-400 uppercase font-bold">{tr('Parol', 'Пароль')}</div>
+                      <div className="font-mono font-bold text-amber-300">
+                        {issuedTutorCreds.password || tr('(O‘zgarmadi)', '(Без изменений)')}
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800">
+                      <div className="text-[10px] text-slate-400 uppercase font-bold">{tr('Portal', 'Портал')}</div>
+                      <div className="font-mono font-bold text-purple-300">/tutor/</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tutor Analytics & Statistics Dashboard */}
+              {(() => {
+                const tutorRows = tutors.length > 0 ? tutors : (Array.isArray(stats.tutors) ? stats.tutors : []);
+                const fallbackSummary = stats.tutorSummary || {};
+                const activeTutorsCount = tutorRows.length > 0
+                  ? tutorRows.filter((t) => t.isActive !== false).length
+                  : Number(fallbackSummary.activeTutors || 0);
+                const blockedTutorsCount = tutorRows.length > 0
+                  ? tutorRows.filter((t) => t.isActive === false).length
+                  : Number(fallbackSummary.blockedTutors || 0);
+                const totalTutorsCount = tutorRows.length > 0
+                  ? tutorRows.length
+                  : Number(fallbackSummary.totalTutors || 0);
+                const assignedClassesCount = tutorRows.length > 0
+                  ? tutorRows.reduce((s, t) => s + Number(t.classesCount ?? t.assignedClasses?.length ?? 0), 0)
+                  : Number(fallbackSummary.assignedClassesCount || 0);
+                const totalTutorStudents = tutorRows.length > 0
+                  ? tutorRows.reduce((s, t) => s + Number(t.studentsCount || 0), 0)
+                  : Number(fallbackSummary.totalStudents || 0);
+                const totalActiveStudents = tutorRows.length > 0
+                  ? tutorRows.reduce((s, t) => s + Number(t.activeStudentsCount || 0), 0)
+                  : Number(fallbackSummary.activeStudents || 0);
+                const totalTutorWalletCoins = tutorRows.length > 0
+                  ? tutorRows.reduce((s, t) => s + Number(t.coins || 0), 0)
+                  : Number(fallbackSummary.totalTutorCoins || 0);
+                const totalClassBonusCoins = tutorRows.length > 0
+                  ? tutorRows.reduce((s, t) => s + Number(t.classBonusTotal || 0), 0)
+                  : Number(fallbackSummary.totalClassBonusCoins || 0);
+                const totalCoinAwardsCount = tutorRows.length > 0
+                  ? tutorRows.reduce((s, t) => s + Number(t.coinAwardsCount || 0), 0)
+                  : Number(fallbackSummary.totalCoinAwardsCount || 0);
+                const totalTestsPassed = tutorRows.length > 0
+                  ? tutorRows.reduce((s, t) => s + Number(t.testsPassedCount || 0), 0)
+                  : Number(fallbackSummary.totalTestsPassed || 0);
+                const weightedScoreSum = tutorRows.reduce(
+                  (s, t) => s + Number(t.avgScore || 0) * Math.max(1, Number(t.testsPassedCount || 0)),
+                  0
+                );
+                const weightedTestsDenom = tutorRows.reduce(
+                  (s, t) => s + (Number(t.testsPassedCount || 0) > 0 ? Number(t.testsPassedCount || 0) : 0),
+                  0
+                );
+                const avgTutorScore = weightedTestsDenom > 0
+                  ? Math.round(weightedScoreSum / weightedTestsDenom)
+                  : Number(fallbackSummary.avgScore || 0);
+
+                const palette = ['#a855f7', '#06b6d4', '#f59e0b', '#10b981', '#ec4899', '#38bdf8', '#fb7185', '#84cc16'];
+                const barItems = tutorRows.map((tut, idx) => {
+                  const firstName = (tut.fullName || tut.username || 'Tutor').split(' ')[0];
+                  const clsBadge = Array.isArray(tut.assignedClasses) && tut.assignedClasses.length > 0
+                    ? tut.assignedClasses.slice(0, 2).join(', ')
+                    : tr('Sinf yo‘q', 'Нет кл.');
+                  if (tutorStatsMetric === 'students') {
+                    const activeSt = Number(tut.activeStudentsCount || 0);
+                    const totalSt = Number(tut.studentsCount || 0);
+                    const passiveSt = Math.max(0, totalSt - activeSt);
+                    return {
+                      key: tut.username,
+                      label: firstName,
+                      sublabel: clsBadge,
+                      primaryValue: activeSt,
+                      secondaryValue: passiveSt,
+                      value: totalSt,
+                      displayValue: `${totalSt}`,
+                      detail: tr(
+                        `${tut.fullName}: ${totalSt} nafar o'quvchi (${activeSt} faol testchi)`,
+                        `${tut.fullName}: ${totalSt} учеников (${activeSt} активных)`
+                      ),
+                    };
+                  }
+                  if (tutorStatsMetric === 'score') {
+                    const sc = Number(tut.avgScore || 0);
+                    return {
+                      key: tut.username,
+                      label: firstName,
+                      sublabel: `${tut.testsPassedCount || 0} ${tr('test', 'тест.')}`,
+                      primaryValue: sc,
+                      value: sc,
+                      displayValue: `${sc}%`,
+                      color: sc >= 80 ? '#10b981' : sc >= 60 ? '#06b6d4' : '#f59e0b',
+                      detail: tr(
+                        `${tut.fullName}: O'rtacha ${sc}% (Pass ${tut.passRate || 0}% • ${tut.testsPassedCount || 0} ta test)`,
+                        `${tut.fullName}: Средний ${sc}% (Усп. ${tut.passRate || 0}% • ${tut.testsPassedCount || 0} тест.)`
+                      ),
+                    };
+                  }
+                  const wallet = Number(tut.coins || 0);
+                  const clsBonus = Number(tut.classBonusTotal || 0);
+                  return {
+                    key: tut.username,
+                    label: firstName,
+                    sublabel: clsBadge,
+                    primaryValue: wallet,
+                    secondaryValue: clsBonus,
+                    value: wallet + clsBonus,
+                    displayValue: `${wallet}💎`,
+                    color: palette[idx % palette.length],
+                    detail: tr(
+                      `${tut.fullName}: Tyuter hamyoni ${wallet} 💎 + Sinf fondi ${clsBonus} 💎 (${tut.coinAwardsCount || 0} ta mukofot)`,
+                      `${tut.fullName}: Кошелёк тьютора ${wallet} 💎 + Фонд классов ${clsBonus} 💎 (${tut.coinAwardsCount || 0} наград)`
+                    ),
+                  };
+                });
+
+                const useCoinsForDonut = tutorRows.some((t) => Number(t.coins || 0) > 0 || Number(t.classBonusTotal || 0) > 0);
+                const donutSegments = tutorRows.map((tut, idx) => {
+                  const val = useCoinsForDonut
+                    ? Number(tut.coins || 0)
+                    : Number(tut.studentsCount || 0);
+                  return {
+                    key: tut.username,
+                    label: `${tut.fullName || tut.username} (@${tut.username})`,
+                    shortLabel: (tut.fullName || tut.username).split(' ')[0],
+                    value: val,
+                    countText: useCoinsForDonut ? `${tut.coins || 0} 💎` : `${tut.studentsCount || 0} ${tr('nafar', 'уч.')}`,
+                    secondaryText: tr(
+                      `Sinflar: ${(tut.assignedClasses || []).join(', ') || '—'} • Sinf fondi: ${tut.classBonusTotal || 0} 💎 • O'rtacha: ${tut.avgScore || 0}%`,
+                      `Классы: ${(tut.assignedClasses || []).join(', ') || '—'} • Фонд: ${tut.classBonusTotal || 0} 💎 • Средний: ${tut.avgScore || 0}%`
+                    ),
+                    color: palette[idx % palette.length],
+                  };
+                });
+
+                const selectedTutorKey = tutorRows.some((t) => t.username === tutorSearch.trim()) ? tutorSearch.trim() : null;
+
+                return (
+                  <div className="space-y-4" data-testid="admin-tutors-statistics-section">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3" data-testid="admin-tutors-stats-summary">
+                      <div className="p-3.5 rounded-xl bg-slate-900/75 border border-purple-500/30">
+                        <div className="text-[11px] text-purple-300 font-bold uppercase tracking-wider">
+                          {tr('Tyuterlar va Sinflar', 'Тьюторы и классы')}
+                        </div>
+                        <div className="text-xl font-black text-white mt-1">
+                          {activeTutorsCount} / {totalTutorsCount}
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">
+                          {tr(`${assignedClassesCount} ta biriktirilgan sinf`, `${assignedClassesCount} назначенных классов`)}
+                          {blockedTutorsCount > 0 ? ` • ${blockedTutorsCount} ${tr('bloklangan', 'заблок.')}` : ''}
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-slate-900/75 border border-cyan-500/30">
+                        <div className="text-[11px] text-cyan-300 font-bold uppercase tracking-wider">
+                          {tr("Nazoratdagi O'quvchilar", 'Ученики под контролем')}
+                        </div>
+                        <div className="text-xl font-black text-white mt-1">
+                          {totalTutorStudents} {tr('nafar', 'уч.')}
+                        </div>
+                        <div className="text-[11px] text-cyan-200/80 mt-0.5">
+                          {tr(`${totalActiveStudents} nafari testlarda faol`, `${totalActiveStudents} активны в тестах`)}
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-slate-900/75 border border-amber-500/30">
+                        <div className="text-[11px] text-amber-300 font-bold uppercase tracking-wider">
+                          {tr('Tyuter va Sinf Coinlari', 'Койны тьюторов и фондов')}
+                        </div>
+                        <div className="text-xl font-black text-amber-300 mt-1">
+                          {totalTutorWalletCoins} 💎
+                        </div>
+                        <div className="text-[11px] text-slate-300 mt-0.5">
+                          {tr(`Sinf fondi: ${totalClassBonusCoins} 💎 • ${totalCoinAwardsCount} ta mukofot`, `Фонд классов: ${totalClassBonusCoins} 💎 • ${totalCoinAwardsCount} наград`)}
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-slate-900/75 border border-emerald-500/30">
+                        <div className="text-[11px] text-emerald-300 font-bold uppercase tracking-wider">
+                          {tr("O'rtacha O'zlashtirish", 'Средняя успеваемость')}
+                        </div>
+                        <div className="text-xl font-black text-emerald-300 mt-1">
+                          {avgTutorScore}%
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">
+                          {tr(`${totalTestsPassed} ta topshirilgan test bo'yicha`, `По ${totalTestsPassed} сданным тестам`)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {tutorRows.length > 0 && (
+                      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                        <ValueBarDiagram
+                          testId="admin-tutors-bar-diagram"
+                          title={tr("Tyuterlar Bo'yicha Qiyosiy Statistika", 'Сравнительная статистика тьюторов')}
+                          subtitle={tr("Ustunni bossangiz jadval shu tyuterga filtrlanadi", 'Нажмите на столбец, чтобы отфильтровать таблицу по тьютору')}
+                          items={barItems}
+                          unit={tutorStatsMetric === 'coins' ? '💎' : tutorStatsMetric === 'score' ? '%' : tr('nafar', 'уч.')}
+                          primaryColor={tutorStatsMetric === 'coins' ? '#a855f7' : tutorStatsMetric === 'score' ? '#10b981' : '#06b6d4'}
+                          secondaryColor="#f59e0b"
+                          primaryLegend={
+                            tutorStatsMetric === 'coins'
+                              ? tr('Tyuter hamyoni', 'Кошелёк тьютора')
+                              : tutorStatsMetric === 'students'
+                              ? tr('Faol testchilar', 'Активные')
+                              : ''
+                          }
+                          secondaryLegend={
+                            tutorStatsMetric === 'coins'
+                              ? tr('Sinf fondi', 'Фонд класса')
+                              : tutorStatsMetric === 'students'
+                              ? tr('Qolgan o‘quvchilar', 'Остальные')
+                              : ''
+                          }
+                          selectedKey={selectedTutorKey}
+                          onItemClick={(item) => setTutorSearch((prev) => (prev === item.key ? '' : item.key))}
+                          emptyText={tr("Tyuterlar statistikasi mavjud emas", 'Статистика тьюторов отсутствует')}
+                          headerRight={
+                            <div className="flex items-center bg-slate-900 p-0.5 rounded-lg border border-slate-800 text-[10px] font-bold">
+                              {[
+                                { id: 'coins', lbl: tr('Coinlar', 'Койны') },
+                                { id: 'students', lbl: tr("O'quvchilar", 'Ученики') },
+                                { id: 'score', lbl: tr("Ball %", 'Балл %') },
+                              ].map((m) => (
+                                <button
+                                  key={m.id}
+                                  type="button"
+                                  className={`px-2 py-1 rounded-md transition-all ${
+                                    tutorStatsMetric === m.id
+                                      ? 'bg-purple-500 text-white font-black'
+                                      : 'text-slate-400 hover:text-white'
+                                  }`}
+                                  onClick={() => setTutorStatsMetric(m.id)}
+                                >
+                                  {m.lbl}
+                                </button>
+                              ))}
+                            </div>
+                          }
+                        />
+
+                        <MultiSegmentDonutChart
+                          testId="admin-tutors-donut-chart"
+                          title={
+                            useCoinsForDonut
+                              ? tr("Tyuterlar O'rtasida Coin Ulushi", 'Доля койнов между тьюторами')
+                              : tr("Tyuterlar O'rtasida O'quvchilar Taqsimoti", 'Распределение учеников между тьюторами')
+                          }
+                          subtitle={tr("Segmentni bossangiz jadval shu tyuter bo'yicha saralanadi", 'Нажмите на сегмент, чтобы отфильтровать таблицу по тьютору')}
+                          segments={donutSegments}
+                          centerValue={useCoinsForDonut ? `${totalTutorWalletCoins}` : `${totalTutorStudents}`}
+                          centerLabel={useCoinsForDonut ? tr('Tyuter Coin', 'Койнов') : tr("O'quvchi", 'Учеников')}
+                          badgeText={
+                            selectedTutorKey
+                              ? `@${selectedTutorKey} ×`
+                              : `${totalTutorsCount} ${tr('tyuter', 'тьюторов')}`
+                          }
+                          selectedKey={selectedTutorKey}
+                          onSegmentClick={(seg) => setTutorSearch((prev) => (prev === seg.key ? '' : seg.key))}
+                          emptyText={tr("Hozircha tyuterlar bo'yicha ulush shakllanmagan", 'Данные для распределения пока отсутствуют')}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/70 p-4 rounded-xl border border-slate-800">
+                <div className="input-with-icon flex-1 max-w-sm">
+                  <Search size={16} className="input-icon" />
+                  <input
+                    type="text"
+                    className="clean-input text-xs"
+                    placeholder={tr("Tyuter ismi, logini yoki sinf bo'yicha qidiruv...", 'Поиск по имени, логину или классу...')}
+                    value={tutorSearch}
+                    onChange={(e) => setTutorSearch(e.target.value)}
+                  />
+                </div>
+                <div className="flex items-center gap-3 text-xs text-slate-300 font-semibold flex-wrap">
+                  <span>
+                    {tr('Jami tyuterlar:', 'Всего тьюторов:')}{' '}
+                    <strong className="text-purple-300">{tutors.length}</strong>
+                  </span>
+                  <span className="text-emerald-300">
+                    {tr('Faol:', 'Активны:')}{' '}
+                    <strong>{tutors.filter((t) => t.isActive !== false).length}</strong>
+                  </span>
+                  {tutors.some((t) => t.isActive === false) && (
+                    <span className="text-rose-300">
+                      {tr('Bloklangan:', 'Заблокированы:')}{' '}
+                      <strong>{tutors.filter((t) => t.isActive === false).length}</strong>
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Tutors Table */}
+              <div className="table-responsive bg-slate-900/60 rounded-xl border border-slate-800/80 overflow-hidden">
+                <table className="diamond-table w-full text-left">
+                  <thead>
+                    <tr>
+                      <th>{tr('Tyuter', 'Тьютор')}</th>
+                      <th>{tr('Biriktirilgan Sinflar', 'Назначенные классы')}</th>
+                      <th>{tr('Login (Admin beradi)', 'Логин (выдан админом)')}</th>
+                      <th>{tr('Holat', 'Статус')}</th>
+                      <th>{tr('Telefon', 'Телефон')}</th>
+                      <th>{tr("O'quvchilar", 'Ученики')}</th>
+                      <th>{tr("O'zlashtirish / Testlar", 'Успеваемость / Тесты')}</th>
+                      <th>{tr('Tyuter & Sinf Coinlari', 'Койны тьютора и классов')}</th>
+                      <th className="text-right">{tr('Nazorat / Amallar', 'Контроль / Действия')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredTutors.map((tut) => {
+                      const isTutorActive = tut.isActive !== false;
+                      const clsDetails = Array.isArray(tut.assignedClassesDetails) ? tut.assignedClassesDetails : [];
+                      return (
+                        <tr key={tut.id} className={isTutorActive ? '' : 'opacity-70'}>
+                          <td>
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-9 h-9 rounded-lg overflow-hidden bg-slate-800 border border-purple-400/50 flex items-center justify-center font-bold text-purple-300">
+                                {tut.avatarUrl ? (
+                                  <img src={tut.avatarUrl} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  tut.fullName?.charAt(0) || 'T'
+                                )}
+                              </div>
+                              <div>
+                                <div className="font-bold text-white text-xs">{tut.fullName}</div>
+                                <div className="text-[11px] text-slate-400">{tut.dateJoined || '-'}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            {clsDetails.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {clsDetails.map((clsDet) => (
+                                  <span
+                                    key={clsDet.name}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-500/15 border border-purple-500/35 text-purple-200 text-[11px] font-bold"
+                                  >
+                                    <span>{localizeGrade(clsDet.name, language)}</span>
+                                    <span className="text-amber-300 font-black">+{clsDet.bonusCoins || 0}💎</span>
+                                  </span>
+                                ))}
+                              </div>
+                            ) : Array.isArray(tut.assignedClasses) && tut.assignedClasses.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {tut.assignedClasses.map((cName) => (
+                                  <span
+                                    key={cName}
+                                    className="px-2 py-0.5 rounded-md bg-purple-500/15 border border-purple-500/35 text-purple-200 text-[11px] font-bold"
+                                  >
+                                    {localizeGrade(cName, language)}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-amber-300/80 italic">
+                                {tr('Sinf biriktirilmagan', 'Классы не назначены')}
+                              </span>
+                            )}
+                          </td>
+                          <td className="font-mono text-xs text-cyan-300 font-semibold">{tut.username}</td>
+                          <td>
+                            {isTutorActive ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 text-[11px] font-bold">
+                                <CheckCircle size={11} /> {tr('Faol', 'Активен')}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/35 text-rose-300 text-[11px] font-bold">
+                                <ShieldOff size={11} /> {tr('Bloklangan', 'Заблокирован')}
+                              </span>
+                            )}
+                          </td>
+                          <td className="text-xs text-slate-400">{tut.phone || '-'}</td>
+                          <td>
+                            <div className="font-bold text-xs text-cyan-400">
+                              {tut.studentsCount || 0} {tr('nafar', 'уч.')}
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              {tr('Faol:', 'Акт.:')} {tut.activeStudentsCount || 0}
+                            </div>
+                          </td>
+                          <td>
+                            <div className="font-extrabold text-xs text-emerald-300">
+                              {tut.avgScore || 0}%{' '}
+                              <span className="text-[10px] text-slate-400 font-semibold">
+                                ({tr('Pass:', 'Усп.:')} {tut.passRate || 0}%)
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              {tut.testsPassedCount || 0} {tr('ta test', 'тест.')} • {tr("O'quvchi:", 'Учен.:')} {tut.studentCoinsTotal || 0} 💎
+                            </div>
+                          </td>
+                          <td>
+                            <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/35 text-amber-300 text-xs font-black">
+                              <Coins size={12} />
+                              <span>{tut.coins || 0} 💎</span>
+                            </div>
+                            <div className="text-[10px] text-purple-200/90 mt-1">
+                              {tr('Sinf fondi:', 'Фонд классов:')} <strong>{tut.classBonusTotal || 0} 💎</strong> • {tut.coinAwardsCount || 0} {tr('ta', 'оп.')}
+                            </div>
+                            {tut.recentAward && (
+                              <div className="text-[10px] text-slate-400 truncate max-w-[170px]" title={`${tut.recentAward.className}: ${tut.recentAward.reason}`}>
+                                {tr('Oxirgi:', 'Посл.:')} {localizeGrade(tut.recentAward.className, language)} {tut.recentAward.amount >= 0 ? `+${tut.recentAward.amount}` : tut.recentAward.amount} 💎
+                              </div>
+                            )}
+                          </td>
+                          <td className="text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                disabled={togglingTutorId === tut.id}
+                                className={`btn-icon p-1.5 rounded-lg transition-colors ${
+                                  isTutorActive
+                                    ? 'text-amber-400 hover:bg-amber-500/20'
+                                    : 'text-emerald-400 hover:bg-emerald-500/20'
+                                }`}
+                                onClick={() => handleToggleTutorActive(tut)}
+                                title={
+                                  isTutorActive
+                                    ? tr('Tyuter hisobini bloklash', 'Заблокировать аккаунт тьютора')
+                                    : tr('Tyuter hisobini faollashtirish', 'Активировать аккаунт тьютора')
+                                }
+                              >
+                                {togglingTutorId === tut.id ? (
+                                  <Loader2 size={15} className="animate-spin" />
+                                ) : isTutorActive ? (
+                                  <ShieldOff size={15} />
+                                ) : (
+                                  <ShieldCheck size={15} />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-icon text-cyan-400 hover:bg-cyan-500/20 p-1.5 rounded-lg transition-colors"
+                                onClick={() => handleOpenEditTutor(tut)}
+                                title={tr('Login, parol va sinflarni tahrirlash', 'Изменить логин, пароль и классы')}
+                              >
+                                <KeyRound size={15} />
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-icon text-rose-400 hover:bg-rose-500/20 p-1.5 rounded-lg transition-colors"
+                                onClick={() => handleDeleteUser({ ...tut, role: 'tutor' })}
+                                title={tr("O'chirish", 'Удалить')}
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+
+                    {filteredTutors.length === 0 && (
+                      <tr>
+                        <td colSpan={9} className="text-center py-8 text-slate-400 text-xs">
+                          {tr('Tyuterlar topilmadi.', 'Тьюторы не найдены.')}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* TAB 2: STUDENTS */}
           {activeTab === 'students' && (
             <div className="space-y-4 animate-fade-in">
@@ -2684,6 +3601,14 @@ export default function AdminPortal() {
                               title={tr('+10 Coin berish', 'Начислить +10 койнов')}
                             >
                               +10 💎
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-icon text-cyan-400 hover:bg-cyan-500/20 p-1.5 rounded-lg transition-colors"
+                              onClick={() => handleOpenEditStudent(std)}
+                              title={tr("O'quvchini tahrirlash", 'Редактировать ученика')}
+                            >
+                              <Edit size={15} />
                             </button>
                             <button
                               type="button"
@@ -3375,6 +4300,48 @@ export default function AdminPortal() {
                 </div>
               </div>
 
+              {/* Tyuterlar Coin Reytingi Strip (if tutors exist) */}
+              {tutorRankings.length > 0 && (
+                <div className="p-4 rounded-2xl bg-slate-900/75 border border-purple-500/30 space-y-3">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="text-xs sm:text-sm font-black text-white flex items-center gap-2">
+                      <UserCheck size={17} className="text-purple-400" />
+                      <span>{tr('Tyuterlar Hisobiga Yozilgan Sinf Coinlari', 'Койны классов на балансе тьюторов')}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-[11px] font-bold text-purple-300 hover:text-purple-200"
+                      onClick={() => setActiveTab('tutors')}
+                    >
+                      {tr('Tyuterlarni boshqarish →', 'Управлять тьюторами →')}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    {tutorRankings.map((trItem, idx) => (
+                      <div
+                        key={trItem.id}
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/70 border border-slate-800"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="text-xs font-black text-purple-300">#{idx + 1}</span>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-white truncate">{trItem.fullName}</div>
+                            <div className="text-[10px] text-slate-400 truncate">
+                              {Array.isArray(trItem.assignedClasses) && trItem.assignedClasses.length > 0
+                                ? trItem.assignedClasses.map((c) => localizeGrade(c, language)).join(', ')
+                                : tr('Sinf biriktirilmagan', 'Нет классов')}
+                            </div>
+                          </div>
+                        </div>
+                        <span className="text-xs font-black text-amber-300 font-mono flex-shrink-0 pl-2">
+                          {trItem.coins || 0} 💎
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* ============================================================ */}
               {/* MAKTAB YETAKCHILARI SHOHSUPASI (TOP 3 PODIUM)                */}
               {/* ============================================================ */}
@@ -3744,6 +4711,7 @@ export default function AdminPortal() {
                         <tr>
                           <th>{tr("O'rin", 'Место')}</th>
                           <th>{tr('Sinf Nomi', 'Класс')}</th>
+                          <th>{tr('Tyuter', 'Тьютор')}</th>
                           <th>{tr("O'quvchilar", 'Ученики')}</th>
                           <th>{tr('Sinf Fondi + Jami Coin', 'Фонд класса + Всего койнов')}</th>
                           <th>{tr("O'rtacha / Bola", 'В среднем / Ученик')}</th>
@@ -3765,6 +4733,16 @@ export default function AdminPortal() {
                               </td>
                               <td>
                                 <span className="font-black text-white text-sm">{localizeGrade(cls.className, language)} {tr('sinf', 'класс')}</span>
+                              </td>
+                              <td>
+                                {cls.tutorName ? (
+                                  <div className="text-xs">
+                                    <div className="font-bold text-purple-300">{cls.tutorName}</div>
+                                    <div className="text-[10px] text-amber-300 font-mono">{cls.tutorCoins ?? 0} 💎</div>
+                                  </div>
+                                ) : (
+                                  <span className="text-[11px] text-slate-500 italic">{tr('Biriktirilmagan', 'Не назначен')}</span>
+                                )}
                               </td>
                               <td className="text-xs text-slate-300">
                                 {cls.studentsCount || 0} {tr('nafar', 'уч.')} ({cls.activeStudentsCount ?? 0} {tr('faol', 'акт.')})
@@ -3810,7 +4788,7 @@ export default function AdminPortal() {
 
                         {classesCoinStats.length === 0 && (
                           <tr>
-                            <td colSpan={7} className="text-center py-8 text-slate-400 text-xs">
+                            <td colSpan={8} className="text-center py-8 text-slate-400 text-xs">
                               {tr("Sinflar ma'lumoti mavjud emas.", 'Данные о классах отсутствуют.')}
                             </td>
                           </tr>
@@ -4271,6 +5249,22 @@ export default function AdminPortal() {
                             <span>{tr('Xona:', 'Кабинет:')} <strong className="text-white">{roomDisplay}</strong></span>
                             <span className="text-emerald-400 font-bold">{cls.rating || tr("Natija yo'q", 'Нет оценок')}</span>
                           </div>
+
+                          <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between gap-2">
+                            <span className="truncate">
+                              {tr('Tyuter:', 'Тьютор:')}{' '}
+                              {cls.tutorName ? (
+                                <strong className="text-purple-300">{cls.tutorName}</strong>
+                              ) : (
+                                <span className="text-amber-300/80 italic">{tr('Biriktirilmagan', 'Не назначен')}</span>
+                              )}
+                            </span>
+                            {cls.tutorName && (
+                              <span className="text-amber-300 font-bold font-mono flex-shrink-0">
+                                {cls.tutorCoins ?? 0} 💎
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         <div className="flex items-center justify-between pt-3 border-t border-slate-800/80 gap-1.5 flex-wrap">
@@ -4298,7 +5292,15 @@ export default function AdminPortal() {
                           </button>
                           <button
                             type="button"
-                            className="btn-icon-red p-1.5 ml-auto"
+                            className="btn-icon text-cyan-400 hover:bg-cyan-500/20 p-1.5 rounded-lg transition-colors ml-auto"
+                            onClick={() => handleOpenEditClass(cls)}
+                            title={tr('Sinf va tyuterni tahrirlash', 'Редактировать класс и тьютора')}
+                          >
+                            <Edit size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-icon-red p-1.5"
                             onClick={() => handleDeleteClass(cls)}
                             title={tr("Sinfni o'chirish", 'Удалить класс')}
                           >
@@ -4851,17 +5853,28 @@ export default function AdminPortal() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="input-label">{tr('Sinfi *', 'Класс *')}</label>
-                  <select
-                    className="clean-select"
-                    value={studentForm.grade}
-                    onChange={(e) => setStudentForm({ ...studentForm, grade: e.target.value })}
-                  >
-                    {availableGrades.map((g) => (
-                      <option key={g} value={g}>
-                        {localizeGrade(g, language)}
-                      </option>
-                    ))}
-                  </select>
+                  {availableGrades.length > 0 ? (
+                    <select
+                      className="clean-select"
+                      value={availableGrades.includes(studentForm.grade) ? studentForm.grade : availableGrades[0]}
+                      onChange={(e) => setStudentForm({ ...studentForm, grade: e.target.value })}
+                    >
+                      {availableGrades.map((g) => (
+                        <option key={g} value={g}>
+                          {localizeGrade(g, language)}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      className="clean-input"
+                      placeholder={tr('Masalan: 9-A', 'Например: 9-A')}
+                      value={studentForm.grade}
+                      onChange={(e) => setStudentForm({ ...studentForm, grade: e.target.value })}
+                      required
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="input-label">{tr('Telefon (ota-onasi)', 'Телефон (родителей)')}</label>
@@ -4885,6 +5898,639 @@ export default function AdminPortal() {
                 </button>
                 <button type="submit" className="btn btn-diamond-cyan btn-sm font-bold">
                   {tr("Qo'shish", 'Добавить')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ADD TUTOR */}
+      {isAddTutorOpen && (
+        <div className="modal-backdrop" onClick={() => setIsAddTutorOpen(false)}>
+          <div className="modal-content animate-scale-in max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title flex items-center gap-2">
+                <UserCheck className="text-purple-400" size={20} /> {tr("Yangi Tyuter Qo'shish", 'Добавить нового тьютора')}
+              </h3>
+              <button type="button" className="modal-close-btn" onClick={() => setIsAddTutorOpen(false)}>
+                &times;
+              </button>
+            </div>
+            <form onSubmit={handleCreateTutor} className="modal-body space-y-3.5 pt-3">
+              {/* Optional Avatar Upload */}
+              <div className="flex items-center gap-4 p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+                <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-800 border border-purple-400/50 flex items-center justify-center flex-shrink-0">
+                  {tutorAvatarPreview ? (
+                    <img src={tutorAvatarPreview} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <Camera size={22} className="text-slate-400" />
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <div className="text-xs font-bold text-white">{tr('Tyuter Surati (ixtiyoriy)', 'Фото тьютора (необязательно)')}</div>
+                  <label className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/40 text-purple-200 text-[11px] font-bold cursor-pointer">
+                    <Camera size={13} />
+                    <span>{tutorAvatarFile ? tr('Rasmni almashtirish', 'Заменить фото') : tr('Rasm yuklash', 'Загрузить фото')}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        e.target.value = '';
+                        if (!file) return;
+                        if (file.size > 5 * 1024 * 1024) {
+                          showToast(tr('Rasm hajmi 5MB dan oshmasligi kerak!', 'Размер фото не должен превышать 5 МБ!'), 'warning');
+                          return;
+                        }
+                        setTutorAvatarFile(file);
+                        const reader = new FileReader();
+                        reader.onload = (ev) => setTutorAvatarPreview(ev.target.result);
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="input-label">{tr("F.I.SH (To'liq ism) *", 'Ф.И.О. (Полное имя) *')}</label>
+                <input
+                  type="text"
+                  className="clean-input"
+                  placeholder={tr('Masalan: Madina Azizova', 'Например: Мадина Азизова')}
+                  value={tutorForm.fullName}
+                  onChange={(e) => setTutorForm({ ...tutorForm, fullName: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/25 flex items-center justify-between gap-2 text-[11px] text-purple-200">
+                <span>
+                  {tr(
+                    'Tyuterga kirish logini va parolini Administrator beradi.',
+                    'Логин и пароль для входа тьютора выдаёт администратор.'
+                  )}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setTutorForm((prev) => ({
+                      ...prev,
+                      username: prev.username.trim() || buildSuggestedTutorUsername(prev.fullName),
+                      password: buildRandomPassword(8),
+                    }))
+                  }
+                  className="px-2.5 py-1 rounded-lg bg-purple-500/25 hover:bg-purple-500/40 border border-purple-400/50 text-purple-100 font-bold flex items-center gap-1 flex-shrink-0"
+                >
+                  <KeyRound size={12} /> {tr('Avto-yaratish', 'Сгенерировать')}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="input-label">{tr('Login (username) *', 'Логин (username) *')}</label>
+                  <input
+                    type="text"
+                    className="clean-input font-mono"
+                    placeholder="madina_tyuter"
+                    value={tutorForm.username}
+                    onChange={(e) => setTutorForm({ ...tutorForm, username: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="input-label">{tr('Parol *', 'Пароль *')}</label>
+                  <input
+                    type="text"
+                    className="clean-input font-mono"
+                    placeholder="Dm74k9x2"
+                    value={tutorForm.password}
+                    onChange={(e) => setTutorForm({ ...tutorForm, password: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="input-label">{tr('Telefon raqam', 'Номер телефона')}</label>
+                <input
+                  type="text"
+                  className="clean-input"
+                  placeholder="+998 90 123 45 67"
+                  value={tutorForm.phone}
+                  onChange={(e) => setTutorForm({ ...tutorForm, phone: e.target.value })}
+                />
+              </div>
+
+              {/* Multi-select classes */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="input-label mb-0">{tr('Biriktiriladigan Sinflar', 'Назначаемые классы')}</label>
+                  <div className="flex items-center gap-2 text-[11px]">
+                    <button
+                      type="button"
+                      className="text-purple-300 hover:text-purple-200 font-bold"
+                      onClick={() => setTutorForm((prev) => ({ ...prev, assignedClasses: classesList.map((c) => c.name) }))}
+                    >
+                      {tr('Barchasi', 'Все')}
+                    </button>
+                    {tutorForm.assignedClasses.length > 0 && (
+                      <button
+                        type="button"
+                        className="text-rose-300 hover:text-rose-200 font-bold"
+                        onClick={() => setTutorForm((prev) => ({ ...prev, assignedClasses: [] }))}
+                      >
+                        {tr('Tozalash', 'Очистить')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="max-h-36 overflow-y-auto grid grid-cols-3 sm:grid-cols-4 gap-1.5 p-2 rounded-xl bg-slate-950/60 border border-slate-800">
+                  {classesList.map((cls) => {
+                    const checked = tutorForm.assignedClasses.includes(cls.name);
+                    return (
+                      <button
+                        key={cls.id}
+                        type="button"
+                        onClick={() =>
+                          setTutorForm((prev) => ({
+                            ...prev,
+                            assignedClasses: checked
+                              ? prev.assignedClasses.filter((n) => n !== cls.name)
+                              : [...prev.assignedClasses, cls.name],
+                          }))
+                        }
+                        className={`px-2 py-1.5 rounded-lg text-[11px] font-bold border text-center transition-all ${
+                          checked
+                            ? 'bg-purple-500/25 border-purple-400 text-purple-100'
+                            : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-600'
+                        }`}
+                      >
+                        {localizeGrade(cls.name, language)}
+                      </button>
+                    );
+                  })}
+                  {classesList.length === 0 && (
+                    <div className="col-span-full text-center py-2 text-[11px] text-slate-400">
+                      {tr('Hali sinflar yaratilmagan', 'Классы ещё не созданы')}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="input-label">{tr("Qisqacha ma'lumot / bio", 'Краткая информация / био')}</label>
+                <textarea
+                  rows={2}
+                  className="clean-input text-xs"
+                  value={tutorForm.bio}
+                  onChange={(e) => setTutorForm({ ...tutorForm, bio: e.target.value })}
+                />
+              </div>
+
+              <div className="modal-footer flex justify-end gap-2 pt-3 border-t border-slate-800">
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setIsAddTutorOpen(false)}>
+                  {tr('Bekor qilish', 'Отмена')}
+                </button>
+                <button type="submit" disabled={savingAddTutor} className="btn btn-diamond-cyan btn-sm font-bold flex items-center gap-1.5">
+                  {savingAddTutor && <Loader2 size={14} className="animate-spin" />}
+                  <span>{tr("Qo'shish", 'Добавить')}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDIT TUTOR */}
+      {editingTutor && (
+        <div className="modal-backdrop" onClick={() => setEditingTutor(null)}>
+          <div className="modal-content animate-scale-in max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title flex items-center gap-2">
+                <UserCheck className="text-purple-400" size={20} /> {tr('Tyuter Profilini va Sinflarini Tahrirlash', 'Редактировать тьютора и классы')}
+              </h3>
+              <button type="button" className="modal-close-btn" onClick={() => setEditingTutor(null)}>
+                &times;
+              </button>
+            </div>
+            <form onSubmit={handleSaveEditTutor} className="modal-body space-y-3.5 pt-3">
+              <div className="flex items-center gap-4 p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+                <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-800 border-2 border-purple-400/60 flex items-center justify-center flex-shrink-0">
+                  {editTutorForm.avatarPreview ? (
+                    <img src={editTutorForm.avatarPreview} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-xl font-black text-purple-300">{(editTutorForm.fullName || 'T')[0]}</span>
+                  )}
+                </div>
+                <div className="space-y-1.5 flex-1">
+                  <div className="text-xs font-bold text-white truncate">
+                    {editTutorForm.fullName || editingTutor.fullName}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <label className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/40 text-purple-200 text-[11px] font-bold cursor-pointer">
+                      <Camera size={13} />
+                      <span>{tr("Rasm yuklash / o'zgartirish", 'Загрузить / сменить фото')}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          e.target.value = '';
+                          if (!file) return;
+                          if (file.size > 5 * 1024 * 1024) {
+                            showToast(tr('Rasm hajmi 5MB dan oshmasligi kerak!', 'Максимум 5 МБ!'), 'warning');
+                            return;
+                          }
+                          const reader = new FileReader();
+                          reader.onload = (ev) =>
+                            setEditTutorForm((prev) => ({
+                              ...prev,
+                              avatarFile: file,
+                              avatarPreview: ev.target.result,
+                              clearAvatar: false,
+                            }));
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </label>
+                    {(editTutorForm.hasCustomAvatar || editTutorForm.avatarFile) && !editTutorForm.clearAvatar && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const seed = (editTutorForm.fullName || editTutorForm.username || 'T').slice(0, 2).toUpperCase();
+                          setEditTutorForm((prev) => ({
+                            ...prev,
+                            avatarFile: null,
+                            clearAvatar: true,
+                            avatarPreview: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(seed)}&backgroundColor=7c3aed`,
+                          }));
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-rose-500/15 border border-rose-500/35 text-rose-300 text-[11px] font-bold"
+                      >
+                        {tr("O'chirish", 'Удалить')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="input-label">{tr("F.I.SH (To'liq ism) *", 'Ф.И.О. *')}</label>
+                <input
+                  type="text"
+                  className="clean-input"
+                  value={editTutorForm.fullName}
+                  onChange={(e) => setEditTutorForm({ ...editTutorForm, fullName: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="input-label">{tr('Login (username) *', 'Логин (username) *')}</label>
+                  <input
+                    type="text"
+                    className="clean-input font-mono"
+                    value={editTutorForm.username}
+                    onChange={(e) => setEditTutorForm({ ...editTutorForm, username: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="input-label flex items-center justify-between gap-2">
+                    <span>{tr('Yangi parol', 'Новый пароль')}</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditTutorForm((prev) => ({ ...prev, password: buildRandomPassword(8) }));
+                          setShowEditTutorPw(true);
+                        }}
+                        className="text-[10px] text-purple-300 hover:text-purple-200 font-bold"
+                      >
+                        {tr('Avto-parol', 'Сгенерировать')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowEditTutorPw((v) => !v)}
+                        className="text-[10px] text-cyan-400"
+                      >
+                        {showEditTutorPw ? tr('Yashirish', 'Скрыть') : tr("Ko'rsatish", 'Показать')}
+                      </button>
+                    </div>
+                  </label>
+                  <input
+                    type={showEditTutorPw ? 'text' : 'password'}
+                    className="clean-input font-mono"
+                    placeholder={tr("O'zgartirmaslik uchun bo'sh", 'Оставьте пустым')}
+                    value={editTutorForm.password}
+                    onChange={(e) => setEditTutorForm({ ...editTutorForm, password: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {/* Account Status Control (Admin Nazorati) */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/70 border border-slate-800">
+                <div className="text-xs">
+                  <div className="font-bold text-white flex items-center gap-1.5">
+                    {editTutorForm.isActive ? (
+                      <ShieldCheck size={14} className="text-emerald-400" />
+                    ) : (
+                      <ShieldOff size={14} className="text-rose-400" />
+                    )}
+                    <span>{tr('Hisob holati (Admin nazorati)', 'Статус аккаунта (Контроль админа)')}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    {editTutorForm.isActive
+                      ? tr('Tyuter portaliga kirish huquqi ochiq.', 'Доступ к порталу тьютора открыт.')
+                      : tr('Hisob bloklangan — tyuter tizimga kira olmaydi.', 'Аккаунт заблокирован — вход запрещён.')}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditTutorForm((prev) => ({ ...prev, isActive: !prev.isActive }))}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold border transition-all ${
+                    editTutorForm.isActive
+                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25'
+                      : 'bg-rose-500/15 border-rose-500/40 text-rose-300 hover:bg-rose-500/25'
+                  }`}
+                >
+                  {editTutorForm.isActive ? tr('Faol (Bloklash)', 'Активен (Заблок.)') : tr('Bloklangan (Ochish)', 'Заблок. (Откр.)')}
+                </button>
+              </div>
+
+              <div>
+                <label className="input-label">{tr('Telefon raqam', 'Номер телефона')}</label>
+                <input
+                  type="text"
+                  className="clean-input"
+                  value={editTutorForm.phone}
+                  onChange={(e) => setEditTutorForm({ ...editTutorForm, phone: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="input-label mb-0">{tr('Biriktirilgan Sinflar', 'Назначенные классы')}</label>
+                  <div className="flex items-center gap-2 text-[11px]">
+                    <button
+                      type="button"
+                      className="text-purple-300 hover:text-purple-200 font-bold"
+                      onClick={() => setEditTutorForm((prev) => ({ ...prev, assignedClasses: classesList.map((c) => c.name) }))}
+                    >
+                      {tr('Barchasi', 'Все')}
+                    </button>
+                    {editTutorForm.assignedClasses.length > 0 && (
+                      <button
+                        type="button"
+                        className="text-rose-300 hover:text-rose-200 font-bold"
+                        onClick={() => setEditTutorForm((prev) => ({ ...prev, assignedClasses: [] }))}
+                      >
+                        {tr('Tozalash', 'Очистить')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="max-h-36 overflow-y-auto grid grid-cols-3 sm:grid-cols-4 gap-1.5 p-2 rounded-xl bg-slate-950/60 border border-slate-800">
+                  {classesList.map((cls) => {
+                    const checked = editTutorForm.assignedClasses.includes(cls.name);
+                    return (
+                      <button
+                        key={cls.id}
+                        type="button"
+                        onClick={() =>
+                          setEditTutorForm((prev) => ({
+                            ...prev,
+                            assignedClasses: checked
+                              ? prev.assignedClasses.filter((n) => n !== cls.name)
+                              : [...prev.assignedClasses, cls.name],
+                          }))
+                        }
+                        className={`px-2 py-1.5 rounded-lg text-[11px] font-bold border text-center transition-all ${
+                          checked
+                            ? 'bg-purple-500/25 border-purple-400 text-purple-100'
+                            : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-600'
+                        }`}
+                      >
+                        {localizeGrade(cls.name, language)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="input-label">{tr("Qisqacha ma'lumot / bio", 'Краткая информация / био')}</label>
+                <textarea
+                  rows={2}
+                  className="clean-input text-xs"
+                  value={editTutorForm.bio}
+                  onChange={(e) => setEditTutorForm({ ...editTutorForm, bio: e.target.value })}
+                />
+              </div>
+
+              <div className="modal-footer flex justify-end gap-2 pt-3 border-t border-slate-800">
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditingTutor(null)}>
+                  {tr('Bekor qilish', 'Отмена')}
+                </button>
+                <button type="submit" disabled={savingEditTutor} className="btn btn-diamond-cyan btn-sm font-bold flex items-center gap-1.5">
+                  {savingEditTutor ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  <span>{tr('Saqlash', 'Сохранить')}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDIT STUDENT */}
+      {editingStudent && (
+        <div className="modal-backdrop" onClick={() => setEditingStudent(null)}>
+          <div className="modal-content animate-scale-in" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title flex items-center gap-2">
+                <GraduationCap className="text-sky-400" size={20} /> {tr("O'quvchini Tahrirlash", 'Редактировать ученика')}
+              </h3>
+              <button type="button" className="modal-close-btn" onClick={() => setEditingStudent(null)}>
+                &times;
+              </button>
+            </div>
+            <form onSubmit={handleSaveEditStudent} className="modal-body space-y-3.5 pt-3">
+              <div>
+                <label className="input-label">{tr("O'quvchi F.I.SH *", 'Ф.И.О. ученика *')}</label>
+                <input
+                  type="text"
+                  className="clean-input"
+                  value={editStudentForm.fullName}
+                  onChange={(e) => setEditStudentForm({ ...editStudentForm, fullName: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="input-label">{tr('Login (username) *', 'Логин (username) *')}</label>
+                  <input
+                    type="text"
+                    className="clean-input font-mono"
+                    value={editStudentForm.username}
+                    onChange={(e) => setEditStudentForm({ ...editStudentForm, username: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="input-label flex items-center justify-between">
+                    <span>{tr('Yangi parol', 'Новый пароль')}</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowEditStudentPw((v) => !v)}
+                      className="text-[10px] text-cyan-400"
+                    >
+                      {showEditStudentPw ? tr('Yashirish', 'Скрыть') : tr("Ko'rsatish", 'Показать')}
+                    </button>
+                  </label>
+                  <input
+                    type={showEditStudentPw ? 'text' : 'password'}
+                    className="clean-input"
+                    placeholder={tr("O'zgartirmaslik uchun bo'sh", 'Оставьте пустым')}
+                    value={editStudentForm.password}
+                    onChange={(e) => setEditStudentForm({ ...editStudentForm, password: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="input-label">{tr('Sinfi *', 'Класс *')}</label>
+                  <select
+                    className="clean-select"
+                    value={editStudentForm.grade}
+                    onChange={(e) => setEditStudentForm({ ...editStudentForm, grade: e.target.value })}
+                  >
+                    {(availableGrades.includes(editStudentForm.grade)
+                      ? availableGrades
+                      : [editStudentForm.grade, ...availableGrades].filter(Boolean)
+                    ).map((g) => (
+                      <option key={g} value={g}>
+                        {localizeGrade(g, language)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">{tr('Telefon (ota-onasi)', 'Телефон (родителей)')}</label>
+                  <input
+                    type="text"
+                    className="clean-input"
+                    value={editStudentForm.phone}
+                    onChange={(e) => setEditStudentForm({ ...editStudentForm, phone: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer flex justify-end gap-2 pt-3 border-t border-slate-800">
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditingStudent(null)}>
+                  {tr('Bekor qilish', 'Отмена')}
+                </button>
+                <button type="submit" disabled={savingEditStudent} className="btn btn-diamond-cyan btn-sm font-bold flex items-center gap-1.5">
+                  {savingEditStudent ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  <span>{tr('Saqlash', 'Сохранить')}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDIT CLASS & ASSIGN TUTOR */}
+      {editingClass && (
+        <div className="modal-backdrop" onClick={() => setEditingClass(null)}>
+          <div className="modal-content animate-scale-in" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title flex items-center gap-2">
+                <School className="text-cyan-400" size={20} /> {tr('Sinfni va Tyuterni Tahrirlash', 'Редактировать класс и тьютора')}
+              </h3>
+              <button type="button" className="modal-close-btn" onClick={() => setEditingClass(null)}>
+                &times;
+              </button>
+            </div>
+            <form onSubmit={handleSaveEditClass} className="modal-body space-y-3.5 pt-3">
+              <div>
+                <label className="input-label">{tr('Sinf Nomi *', 'Название класса *')}</label>
+                <input
+                  type="text"
+                  className="clean-input"
+                  value={editClassForm.name}
+                  onChange={(e) => setEditClassForm({ ...editClassForm, name: e.target.value.toUpperCase() })}
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="input-label">{tr('Sinf Bosqichi (Parallel) *', 'Ступень *')}</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={11}
+                    className="clean-input"
+                    value={editClassForm.gradeLevel}
+                    onChange={(e) => setEditClassForm({ ...editClassForm, gradeLevel: Number(e.target.value) })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="input-label">{tr("Ta'lim Tili *", 'Язык обучения *')}</label>
+                  <select
+                    className="clean-select"
+                    value={editClassForm.language}
+                    onChange={(e) => setEditClassForm({ ...editClassForm, language: e.target.value })}
+                  >
+                    <option value="uz">{tr("O'zbek tili", 'Узбекский язык')}</option>
+                    <option value="ru">{tr('Rus tili', 'Русский язык')}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="input-label">{tr('Biriktirilgan Tyuter', 'Назначенный тьютор')}</label>
+                  <select
+                    className="clean-select"
+                    value={editClassForm.tutorId}
+                    onChange={(e) => setEditClassForm({ ...editClassForm, tutorId: e.target.value })}
+                  >
+                    <option value="">{tr('Tyuter biriktirilmagan', 'Тьютор не назначен')}</option>
+                    {tutors.map((tut) => (
+                      <option key={tut.id} value={String(tut.id)}>
+                        {tut.fullName} (@{tut.username})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">{tr('Xona', 'Кабинет')}</label>
+                  <input
+                    type="text"
+                    className="clean-input"
+                    placeholder="204"
+                    value={editClassForm.room}
+                    onChange={(e) => setEditClassForm({ ...editClassForm, room: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer flex justify-end gap-2 pt-3 border-t border-slate-800">
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditingClass(null)}>
+                  {tr('Bekor qilish', 'Отмена')}
+                </button>
+                <button type="submit" disabled={savingEditClass} className="btn btn-diamond-cyan btn-sm font-bold flex items-center gap-1.5">
+                  {savingEditClass ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  <span>{tr('Saqlash', 'Сохранить')}</span>
                 </button>
               </div>
             </form>
@@ -4941,6 +6587,22 @@ export default function AdminPortal() {
                     <option value="ru">{tr('Rus tili', 'Русский язык')}</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="input-label">{tr('Biriktiriladigan Tyuter (ixtiyoriy)', 'Назначаемый тьютор (необязательно)')}</label>
+                <select
+                  className="clean-select"
+                  value={classForm.tutorId}
+                  onChange={(e) => setClassForm({ ...classForm, tutorId: e.target.value })}
+                >
+                  <option value="">{tr('Tyuter biriktirilmagan', 'Тьютор не назначен')}</option>
+                  {tutors.map((tut) => (
+                    <option key={tut.id} value={String(tut.id)}>
+                      {tut.fullName} (@{tut.username})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="modal-footer flex justify-end gap-2 pt-3 border-t border-slate-800">
@@ -5046,22 +6708,49 @@ export default function AdminPortal() {
                   </select>
 
                   {selectedCls && (
-                    <div className="grid grid-cols-4 gap-2 mt-2 p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 text-center">
-                      <div>
-                        <div className="text-xs font-black text-cyan-300">{totalStCount} {tr('nafar', 'уч.')}</div>
-                        <div className="text-[10px] text-slate-400">{tr("Jami o'quvchi", 'Всего уч.')}</div>
+                    <div className="space-y-2 mt-2">
+                      <div className="grid grid-cols-4 gap-2 p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 text-center">
+                        <div>
+                          <div className="text-xs font-black text-cyan-300">{totalStCount} {tr('nafar', 'уч.')}</div>
+                          <div className="text-[10px] text-slate-400">{tr("Jami o'quvchi", 'Всего уч.')}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs font-black text-emerald-400">{activeCount} {tr('nafar', 'уч.')}</div>
+                          <div className="text-[10px] text-slate-400">{tr('Faol qatnashchi', 'Активных')}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs font-black text-purple-300">{selectedCls.classBonusCoins ?? 0} 💎</div>
+                          <div className="text-[10px] text-slate-400">{tr('Sinf fondi', 'Фонд класса')}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs font-black text-amber-400">{selectedCls.studentCoins ?? 0} 💎</div>
+                          <div className="text-[10px] text-slate-400">{tr("O'quvchilar coini", 'Койны уч.')}</div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="text-xs font-black text-emerald-400">{activeCount} {tr('nafar', 'уч.')}</div>
-                        <div className="text-[10px] text-slate-400">{tr('Faol qatnashchi', 'Активных')}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs font-black text-purple-300">{selectedCls.classBonusCoins ?? 0} 💎</div>
-                        <div className="text-[10px] text-slate-400">{tr('Sinf fondi', 'Фонд класса')}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs font-black text-amber-400">{selectedCls.studentCoins ?? 0} 💎</div>
-                        <div className="text-[10px] text-slate-400">{tr("O'quvchilar coini", 'Койны уч.')}</div>
+                      <div className={`px-3 py-2 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+                        selectedCls.tutorName
+                          ? 'bg-purple-500/10 border-purple-500/35 text-purple-200'
+                          : 'bg-amber-500/10 border-amber-500/30 text-amber-200'
+                      }`}>
+                        <span className="flex items-center gap-1.5">
+                          <UserCheck size={14} className={selectedCls.tutorName ? 'text-purple-400' : 'text-amber-400'} />
+                          {selectedCls.tutorName ? (
+                            <span>
+                              {tr('Biriktirilgan tyuter:', 'Назначенный тьютор:')}{' '}
+                              <strong>{selectedCls.tutorName}</strong> —{' '}
+                              {tr('sinf fondi coinlari tyuter hisobiga ham yoziladi', 'койны фонда класса также начислятся тьютору')}
+                            </span>
+                          ) : (
+                            <span>
+                              {tr('Bu sinfga tyuter biriktirilmagan (faqat sinf fondiga yoziladi)', 'К этому классу не привязан тьютор')}
+                            </span>
+                          )}
+                        </span>
+                        {selectedCls.tutorName && (
+                          <span className="font-black text-amber-300 font-mono flex-shrink-0">
+                            {selectedCls.tutorCoins ?? 0} 💎
+                          </span>
+                        )}
                       </div>
                     </div>
                   )}

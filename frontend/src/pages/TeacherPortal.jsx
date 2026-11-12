@@ -4,7 +4,13 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { api } from '../api/endpoints';
 import MathRenderer from '../components/MathRenderer';
-import { localizeSubject, localizeGrade, localizeUserFullName, getTeacherLessonPresets } from '../i18n/portalUtils';
+import {
+  localizeSubject,
+  localizeGrade,
+  localizeUserFullName,
+  getTeacherLessonPresets,
+  getTeacherDeductPresets,
+} from '../i18n/portalUtils';
 import {
   ScoreTierDonutChart,
   VerticalBarDiagram,
@@ -42,9 +48,10 @@ import {
   AlertTriangle,
   Layers,
   Target,
+  GraduationCap,
 } from 'lucide-react';
 
-const TEACHER_VALID_TABS = ['tests', 'stats', 'results', 'coins', 'profile'];
+const TEACHER_VALID_TABS = ['tests', 'students', 'stats', 'results', 'coins', 'profile'];
 const testMatchesClassFilter = (t, selectedClass, includeAllTests = true) => {
   if (!selectedClass || selectedClass === 'all') return true;
   const raw = (t?.grade || '').trim();
@@ -70,15 +77,21 @@ const DEFAULT_SUBJECTS = [
   'Ona tili va Adabiyot',
 ];
 
+const AWARD_DEFAULT_REASON_UZ = 'Darsdagi namunali faollik uchun';
+const AWARD_DEFAULT_REASON_RU = 'За образцовую активность на уроке';
+const DEDUCT_DEFAULT_REASON_UZ = 'Dars intizomini buzgani uchun';
+const DEDUCT_DEFAULT_REASON_RU = 'За нарушение дисциплины на уроке';
+
 export default function TeacherPortal() {
   const { user, login, updateProfile, language, tr } = useAuth();
   const { showToast } = useToast();
   const lessonPresets = useMemo(() => getTeacherLessonPresets(language), [language]);
+  const deductPresets = useMemo(() => getTeacherDeductPresets(language), [language]);
   const profileFileInputRef = useRef(null);
 
   // Auth gate state
-  const [gateUsername, setGateUsername] = useState('anvar_muallim');
-  const [gatePassword, setGatePassword] = useState('123');
+  const [gateUsername, setGateUsername] = useState('');
+  const [gatePassword, setGatePassword] = useState('');
   const [gateLoading, setGateLoading] = useState(false);
   const [gateError, setGateError] = useState('');
   const [showGatePassword, setShowGatePassword] = useState(false);
@@ -167,19 +180,26 @@ export default function TeacherPortal() {
   // Computed metrics for active class & coins
   const [coinSelectedGrade, setCoinSelectedGrade] = useState('9-A');
   const [classStudents, setClassStudents] = useState([]);
+  const [coinMode, setCoinMode] = useState('award'); // 'award' | 'deduct'
   const [coinAmount, setCoinAmount] = useState(5);
   const [coinReason, setCoinReason] = useState(() =>
     (localStorage.getItem('diamond_lang') || 'uz') === 'ru'
-      ? 'За образцовую активность на уроке'
-      : 'Darsdagi namunali faollik uchun'
+      ? AWARD_DEFAULT_REASON_RU
+      : AWARD_DEFAULT_REASON_UZ
   );
   useEffect(() => {
     setCoinReason((prev) => {
-      if (language === 'ru' && prev === 'Darsdagi namunali faollik uchun') {
-        return 'За образцовую активность на уроке';
+      if (language === 'ru' && prev === AWARD_DEFAULT_REASON_UZ) {
+        return AWARD_DEFAULT_REASON_RU;
       }
-      if (language !== 'ru' && prev === 'За образцовую активность на уроке') {
-        return 'Darsdagi namunali faollik uchun';
+      if (language !== 'ru' && prev === AWARD_DEFAULT_REASON_RU) {
+        return AWARD_DEFAULT_REASON_UZ;
+      }
+      if (language === 'ru' && prev === DEDUCT_DEFAULT_REASON_UZ) {
+        return DEDUCT_DEFAULT_REASON_RU;
+      }
+      if (language !== 'ru' && prev === DEDUCT_DEFAULT_REASON_RU) {
+        return DEDUCT_DEFAULT_REASON_UZ;
       }
       return prev;
     });
@@ -193,6 +213,12 @@ export default function TeacherPortal() {
   const [editCoinAmount, setEditCoinAmount] = useState(1);
   const [editCoinReason, setEditCoinReason] = useState('');
   const [savingEditCoin, setSavingEditCoin] = useState(false);
+
+  // Read-only Students Directory state (Teacher can only view students)
+  const [studentViewList, setStudentViewList] = useState([]);
+  const [studentViewGrade, setStudentViewGrade] = useState('all');
+  const [studentViewSearch, setStudentViewSearch] = useState('');
+  const [loadingStudentView, setLoadingStudentView] = useState(false);
 
   const isTeacher = user && (user.role === 'teacher' || user.role === 'admin');
   // Teacher Portal har doim o'qituvchi qoidalari asosida ishlaydi (har bir sinf uchun kuniga max 5 coin, faqat dars faolligi)
@@ -229,16 +255,72 @@ export default function TeacherPortal() {
   );
   const canAwardToSelectedClass = coinsRemainingToday > 0;
 
-  // Keep selected amounts within remaining teacher daily cap (never > 5)
+  // Load read-only students directory when teacher opens 'students' tab
   useEffect(() => {
+    if (!isTeacher || activeTab !== 'students') return;
+    let cancelled = false;
+    setLoadingStudentView(true);
+    api.teacher
+      .getAllStudents(studentViewGrade, studentViewSearch)
+      .then((res) => {
+        if (!cancelled) {
+          setStudentViewList(Array.isArray(res?.students) ? res.students : []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setStudentViewList([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingStudentView(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isTeacher, activeTab, studentViewGrade, studentViewSearch]);
+
+  // Keep selected amounts within remaining teacher daily cap in award mode (never > 5)
+  useEffect(() => {
+    if (coinMode !== 'award') return;
     const cap = coinsRemainingToday > 0 ? Math.min(maxCoinsPerDay, coinsRemainingToday) : maxCoinsPerDay;
     if (Number(coinAmount) > cap) {
       setCoinAmount(cap);
     }
-  }, [coinsRemainingToday, maxCoinsPerDay]);
+  }, [coinsRemainingToday, maxCoinsPerDay, coinMode]);
+
+  const handleSwitchCoinMode = (nextMode) => {
+    if (nextMode === coinMode) return;
+    setCoinMode(nextMode);
+    if (nextMode === 'deduct' && selectedStudentForCoin === '__ALL__') {
+      setSelectedStudentForCoin('');
+    }
+    const isDefaultReason =
+      !coinReason.trim() ||
+      coinReason === AWARD_DEFAULT_REASON_UZ ||
+      coinReason === AWARD_DEFAULT_REASON_RU ||
+      coinReason === DEDUCT_DEFAULT_REASON_UZ ||
+      coinReason === DEDUCT_DEFAULT_REASON_RU;
+    if (isDefaultReason) {
+      if (nextMode === 'deduct') {
+        setCoinReason(language === 'ru' ? DEDUCT_DEFAULT_REASON_RU : DEDUCT_DEFAULT_REASON_UZ);
+      } else {
+        setCoinReason(language === 'ru' ? AWARD_DEFAULT_REASON_RU : AWARD_DEFAULT_REASON_UZ);
+      }
+    }
+    if (nextMode === 'deduct') {
+      const numericAmt = Math.min(maxCoinsPerDay, Math.max(1, Number(coinAmount) || 1));
+      setCoinAmount(numericAmt);
+    } else {
+      const cap = coinsRemainingToday > 0 ? Math.min(maxCoinsPerDay, coinsRemainingToday) : maxCoinsPerDay;
+      setCoinAmount((prev) => Math.min(cap, Math.max(1, Number(prev) || 1)));
+    }
+  };
 
   // Computed metrics for active class & coins
   const classStudentsList = useMemo(() => (Array.isArray(classStudents) ? classStudents : []), [classStudents]);
+  const selectedCoinStudentObj = useMemo(
+    () => classStudentsList.find((s) => String(s.id) === String(selectedStudentForCoin)) || null,
+    [classStudentsList, selectedStudentForCoin]
+  );
   const classTotalCoins = useMemo(() => classStudentsList.reduce((acc, s) => acc + (Number(s.coins) || 0), 0), [classStudentsList]);
   const classTopStudent = useMemo(() => {
     if (!classStudentsList.length) return null;
@@ -838,11 +920,16 @@ export default function TeacherPortal() {
     }
   };
 
-  // Award Coins for classroom activity to student or whole class
+  // Award or Deduct Coins for classroom activity/discipline
   const handleAwardCoinToStudent = async (e) => {
     e.preventDefault();
     if (!selectedStudentForCoin) {
-      showToast(tr("O'quvchini yoki butun sinfni tanlang!", 'Выберите ученика или весь класс!'), 'warning');
+      showToast(
+        coinMode === 'deduct'
+          ? tr("Coin olinadigan o'quvchini tanlang!", 'Выберите ученика для снятия койнов!')
+          : tr("O'quvchini yoki butun sinfni tanlang!", 'Выберите ученика или весь класс!'),
+        'warning'
+      );
       return;
     }
     const amt = Number(coinAmount);
@@ -851,6 +938,50 @@ export default function TeacherPortal() {
       return;
     }
     if (!checkTeacherLessonReason(coinReason)) return;
+
+    if (coinMode === 'deduct') {
+      if (selectedStudentForCoin === '__ALL__') {
+        showToast(tr("Butun sinfdan birvarakayiga coin olib bo'lmaydi, aniq o'quvchini tanlang!", 'Нельзя снять койны сразу со всего класса, выберите ученика!'), 'warning');
+        return;
+      }
+      if (amt > maxCoinsPerDay) {
+        showToast(
+          tr(`Bir urinishda ko'pi bilan ${maxCoinsPerDay} Coin olish mumkin!`, `За один раз можно снять не более ${maxCoinsPerDay} койнов!`),
+          'warning'
+        );
+        return;
+      }
+      const stBal = Number(selectedCoinStudentObj?.coins ?? 0);
+      if (selectedCoinStudentObj && amt > stBal) {
+        showToast(
+          tr(
+            `${selectedCoinStudentObj.fullName || selectedCoinStudentObj.full_name} hisobida yetarli coin yo'q (Mavjud: ${stBal} 💎)!`,
+            `У ученика ${selectedCoinStudentObj.fullName || selectedCoinStudentObj.full_name} недостаточно койнов (Доступно: ${stBal} 💎)!`
+          ),
+          'warning'
+        );
+        return;
+      }
+      try {
+        const res = await api.teacher.awardCoins({
+          studentId: selectedStudentForCoin,
+          amount: -amt,
+          reason: coinReason.trim(),
+          activityType: 'lesson_activity',
+        });
+        if (res?.dailyCoinStatus) setDailyCoinStatus(res.dailyCoinStatus);
+        showToast(
+          res?.message || tr(`-${amt} coin muvaffaqiyatli olindi!`, `-${amt} койнов успешно снято!`),
+          'success'
+        );
+        setSelectedStudentForCoin('');
+        await refreshCoinTabData(coinSelectedGrade);
+      } catch (err) {
+        showToast(err.message || tr('Coin olishda xatolik!', 'Ошибка при снятии койнов!'), 'error');
+      }
+      return;
+    }
+
     if (!checkTeacherDailyCap(coinSelectedGrade, amt)) return;
 
     try {
@@ -940,6 +1071,45 @@ export default function TeacherPortal() {
     }
   };
 
+  // Quick Deduct direct from student class card
+  const handleQuickDeduct = async (student, amt, reasonText) => {
+    const stCoins = Number(student.coins) || 0;
+    if (stCoins < amt) {
+      showToast(
+        tr(
+          `${student.fullName || student.full_name} hisobida yetarli coin yo'q (Mavjud: ${stCoins} 💎)!`,
+          `У ${student.fullName || student.full_name} недостаточно койнов (Доступно: ${stCoins} 💎)!`
+        ),
+        'warning'
+      );
+      return;
+    }
+    const effectiveReason = (
+      reasonText || tr(`Dars intizomini buzgani uchun (-${amt} coin)`, `За нарушение дисциплины на уроке (-${amt} койн.)`)
+    ).trim();
+    if (!checkTeacherLessonReason(effectiveReason)) return;
+    try {
+      const res = await api.teacher.awardCoins({
+        studentId: student.id,
+        amount: -amt,
+        reason: effectiveReason,
+        activityType: 'lesson_activity',
+      });
+      if (res?.dailyCoinStatus) setDailyCoinStatus(res.dailyCoinStatus);
+      showToast(
+        res?.message ||
+          tr(
+            `${student.fullName || student.full_name} hisobidan -${amt} coin olindi!`,
+            `С баланса ${student.fullName || student.full_name} снято -${amt} койнов!`
+          ),
+        'success'
+      );
+      await refreshCoinTabData(coinSelectedGrade);
+    } catch (err) {
+      showToast(err.message || tr('Coin olishda xatolik!', 'Ошибка при снятии койнов!'), 'error');
+    }
+  };
+
   // Open / Save Edit Coin Transaction Modal
   const handleOpenEditCoinTx = (tx) => {
     if (isTeacherRestricted && !tx.isClassroom) {
@@ -953,13 +1123,14 @@ export default function TeacherPortal() {
       return;
     }
     setEditingCoinTx(tx);
-    setEditCoinAmount(Math.max(1, Number(tx.amount) || 1));
+    setEditCoinAmount(Math.min(maxCoinsPerDay, Math.max(1, Math.abs(Number(tx.amount) || 1))));
     setEditCoinReason(tx.reason || '');
   };
 
   const handleSaveEditCoinTx = async (e) => {
     e.preventDefault();
     if (!editingCoinTx) return;
+    const isDeductTx = Number(editingCoinTx.amount) < 0;
     const amt = Number(editCoinAmount);
     const trimmedReason = editCoinReason.trim();
     if (!amt || amt <= 0) {
@@ -974,7 +1145,7 @@ export default function TeacherPortal() {
     setSavingEditCoin(true);
     try {
       const res = await api.teacher.editCoinTx(editingCoinTx.id, {
-        amount: amt,
+        amount: isDeductTx ? -amt : amt,
         reason: trimmedReason,
       });
       if (res?.dailyCoinStatus) setDailyCoinStatus(res.dailyCoinStatus);
@@ -1058,35 +1229,6 @@ export default function TeacherPortal() {
             </p>
           </div>
 
-          {/* Demo credentials helper chip */}
-          <div className="demo-creds-box">
-            <div className="demo-title">
-              <ChalkboardTeacher size={13} style={{ color: '#22d3ee' }} /> {tr('Test uchun ustoz akkauntlari:', 'Демо-аккаунты учителей:')}
-            </div>
-            <div className="demo-chips-row">
-              <button
-                type="button"
-                className="demo-chip-btn"
-                onClick={() => {
-                  setGateUsername('anvar_muallim');
-                  setGatePassword('123');
-                }}
-              >
-                <span>👨‍🏫 anvar_muallim / 123</span>
-              </button>
-              <button
-                type="button"
-                className="demo-chip-btn"
-                onClick={() => {
-                  setGateUsername('dilnoza_ustoz');
-                  setGatePassword('123');
-                }}
-              >
-                <span>👩‍🏫 dilnoza_ustoz / 123</span>
-              </button>
-            </div>
-          </div>
-
           {gateError && (
             <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2 mb-4">
               <AlertCircle size={16} /> <span>{gateError}</span>
@@ -1103,7 +1245,7 @@ export default function TeacherPortal() {
                   className="clean-input"
                   value={gateUsername}
                   onChange={(e) => setGateUsername(e.target.value)}
-                  placeholder="anvar_muallim"
+                  placeholder={tr('Loginni kiriting', 'Введите логин')}
                   required
                 />
               </div>
@@ -1328,6 +1470,18 @@ export default function TeacherPortal() {
               </div>
               <span className="portal-nav-label">{tr('Fan Testlari', 'Тесты предмета')}</span>
               <span className="portal-nav-badge">{tests.length}</span>
+            </button>
+
+            <button
+              type="button"
+              className={`portal-nav-btn ${activeTab === 'students' ? 'active' : ''}`}
+              onClick={() => setActiveTab('students')}
+            >
+              <div className="portal-nav-icon">
+                <GraduationCap size={18} />
+              </div>
+              <span className="portal-nav-label">{tr("O'quvchilar", 'Ученики')}</span>
+              <span className="portal-nav-badge">{tr("Ko'rish", 'Просмотр')}</span>
             </button>
 
             <button
@@ -1627,6 +1781,130 @@ export default function TeacherPortal() {
                       )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* TAB 1.5: READ-ONLY STUDENTS DIRECTORY (Teacher view-only) */}
+          {activeTab === 'students' && (
+            <div className="space-y-4 animate-fade-in">
+              <div className="p-3.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-2.5 text-xs text-cyan-200">
+                  <Eye size={18} className="text-cyan-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-bold text-white text-sm">
+                      {tr("Maktab O'quvchilari Ro'yxati (Faqat ko'rish rejimi)", 'Список учеников школы (Только просмотр)')}
+                    </div>
+                    <p className="text-slate-300 mt-0.5">
+                      {tr(
+                        "O'qituvchi o'quvchilarni faqat ko'rishi mumkin. O'quvchi qo'shish, tahrirlash va o'chirish faqat Tyuter hamda Administrator tomonidan amalga oshiriladi.",
+                        'Учитель может только просматривать список учеников. Добавление, редактирование и удаление выполняются только тьютором или администратором.'
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-950/70 border border-cyan-500/35 text-cyan-300 text-[11px] font-bold flex-shrink-0">
+                  <Lock size={12} /> {tr("Faqat ko'rish", 'Только чтение')}
+                </span>
+              </div>
+
+              <div className="admin-search-strip flex-col sm:flex-row">
+                <div className="flex flex-wrap items-center gap-2.5 flex-1 w-full">
+                  <div className="input-with-icon flex-1 min-w-[210px] max-w-md">
+                    <Search size={16} className="input-icon" />
+                    <input
+                      type="text"
+                      className="clean-input text-xs"
+                      placeholder={tr("O'quvchi ismi yoki logini bo'yicha qidiruv...", 'Поиск по имени или логину ученика...')}
+                      value={studentViewSearch}
+                      onChange={(e) => setStudentViewSearch(e.target.value)}
+                    />
+                  </div>
+
+                  <select
+                    aria-label={tr('Sinf filtri', 'Фильтр класса')}
+                    className="clean-select text-xs w-auto min-w-[170px]"
+                    value={studentViewGrade}
+                    onChange={(e) => setStudentViewGrade(e.target.value)}
+                  >
+                    <option value="all">{tr('Barcha sinflar', 'Все классы')}</option>
+                    {availableTestClasses.map((cls) => (
+                      <option key={cls} value={cls}>
+                        {localizeGrade(cls, language)} {tr('sinf', 'класс')}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="text-xs text-slate-300 font-semibold flex items-center gap-2 flex-shrink-0">
+                  {loadingStudentView && <Loader2 size={14} className="animate-spin text-cyan-400" />}
+                  <span>
+                    {tr('Jami:', 'Всего:')} <strong className="text-white">{studentViewList.length}</strong> {tr('nafar', 'уч.')}
+                  </span>
+                </div>
+              </div>
+
+              <div className="table-responsive bg-slate-900/70 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+                <table className="diamond-table w-full text-left">
+                  <thead>
+                    <tr>
+                      <th>{tr("O'quvchi", 'Ученик')}</th>
+                      <th>{tr('Sinfi', 'Класс')}</th>
+                      <th>{tr('Login', 'Логин')}</th>
+                      <th>{tr('Telefon', 'Телефон')}</th>
+                      <th>{tr('Diamond Coins', 'Diamond-койны')}</th>
+                      <th>{tr('Testlar & Natija', 'Тесты и результат')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {studentViewList.map((std) => (
+                      <tr key={std.id}>
+                        <td>
+                          <div className="flex items-center gap-2.5">
+                            <img
+                              src={
+                                std.avatarUrl ||
+                                `https://api.dicebear.com/7.x/initials/svg?seed=${std.username}&backgroundColor=0284c7`
+                              }
+                              alt=""
+                              className="w-8 h-8 rounded-lg object-cover border border-cyan-500/35 flex-shrink-0"
+                            />
+                            <div className="font-bold text-white text-xs">{std.fullName}</div>
+                          </div>
+                        </td>
+                        <td>
+                          <span className="badge badge-info text-[11px] font-semibold">
+                            {localizeGrade(std.grade || '-', language)}
+                          </span>
+                        </td>
+                        <td className="font-mono text-xs text-slate-300">{std.username}</td>
+                        <td className="text-xs text-slate-400">{std.phone || '-'}</td>
+                        <td>
+                          <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold">
+                            <Coins size={12} />
+                            <span>{std.coins || 0}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="text-xs">
+                            <span className="font-bold text-emerald-400">{std.avgScore || 0}%</span>
+                            <span className="text-slate-400 text-[11px] ml-1.5">
+                              ({std.testsPassed || 0} {tr('ta test', 'тест.')})
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+
+                    {!loadingStudentView && studentViewList.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="text-center py-10 text-slate-400 text-xs">
+                          {tr("Tanlangan filtr bo'yicha o'quvchilar topilmadi.", 'Ученики по выбранному фильтру не найдены.')}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
@@ -3150,42 +3428,73 @@ export default function TeacherPortal() {
                 </div>
               </div>
 
-              {/* 3. Luxury Award Card */}
-              <div className="teacher-award-card space-y-4">
+              {/* 3. Luxury Award / Deduct Card */}
+              <div className={`teacher-award-card space-y-4 ${coinMode === 'deduct' ? 'is-deduct' : ''}`}>
                 <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800/90">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Sparkles className="text-amber-400" size={18} />
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <Sparkles className={coinMode === 'deduct' ? 'text-rose-400' : 'text-amber-400'} size={18} />
                     <h4 className="text-sm font-black text-white uppercase tracking-wider">
-                      {tr("Yangi Coin Rag'bati Taqdim Etish", 'Начислить новые койны за активность')}
+                      {coinMode === 'deduct'
+                        ? tr("O'quvchidan Coin Olish (Jarima)", 'Снять койны с ученика (Штраф)')
+                        : tr("Yangi Coin Rag'bati Taqdim Etish", 'Начислить новые койны за активность')}
                     </h4>
+
+                    <div className="teacher-mode-toggle" role="tablist" aria-label={tr('Coin amal turi', 'Режим операции с койнами')}>
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={coinMode === 'award'}
+                        className={`teacher-mode-btn is-award ${coinMode === 'award' ? 'active' : ''}`}
+                        onClick={() => handleSwitchCoinMode('award')}
+                      >
+                        <span>💎</span>
+                        <span>{tr('Coin Berish (+)', 'Начислить (+)')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={coinMode === 'deduct'}
+                        className={`teacher-mode-btn is-deduct ${coinMode === 'deduct' ? 'active' : ''}`}
+                        onClick={() => handleSwitchCoinMode('deduct')}
+                      >
+                        <span>🔻</span>
+                        <span>{tr('Coin Olish (-)', 'Снять (-)')}</span>
+                      </button>
+                    </div>
+
                     <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-cyan-500/15 border border-cyan-500/35 text-cyan-300 font-bold">
-                      📚 {tr(`Faqat darsdagi faollik • Maks. ${maxCoinsPerDay} Coin`, `Только активность на уроке • Макс. ${maxCoinsPerDay} койнов`)}
+                      {coinMode === 'deduct'
+                        ? tr(`⚠️ Dars intizomi • Urinishda maks. -${maxCoinsPerDay} Coin`, `⚠️ Дисциплина на уроке • Макс. -${maxCoinsPerDay} койнов`)
+                        : `📚 ${tr(`Faqat darsdagi faollik • Maks. ${maxCoinsPerDay} Coin`, `Только активность на уроке • Макс. ${maxCoinsPerDay} койнов`)}`}
                     </span>
                   </div>
 
-                  {/* Quick amounts chips (strictly 1..5 for Teacher Portal) */}
+                  {/* Quick amounts chips (1..5 for award, -1..-5 for deduct) */}
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-[11px] text-slate-400 font-semibold mr-1 hidden sm:inline">{tr('Miqdor:', 'Кол-во:')}</span>
                     {[1, 2, 3, 5].map((amt) => {
                       const chipDisabled =
-                        !canAwardToSelectedClass ||
-                        classStudentsList.length === 0 ||
-                        amt > coinsRemainingToday;
+                        coinMode === 'deduct'
+                          ? classStudentsList.length === 0 ||
+                            (selectedCoinStudentObj && amt > (Number(selectedCoinStudentObj.coins) || 0))
+                          : !canAwardToSelectedClass ||
+                            classStudentsList.length === 0 ||
+                            amt > coinsRemainingToday;
                       return (
                         <button
                           key={amt}
                           type="button"
                           disabled={chipDisabled}
-                          className={`teacher-coin-amount-chip ${Number(coinAmount) === amt ? 'active' : ''} ${
-                            chipDisabled ? 'opacity-40 cursor-not-allowed' : ''
-                          }`}
+                          className={`teacher-coin-amount-chip ${coinMode === 'deduct' ? 'is-deduct' : ''} ${
+                            Number(coinAmount) === amt ? 'active' : ''
+                          } ${chipDisabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                           onClick={() => setCoinAmount(amt)}
                         >
-                          +{amt}
+                          {coinMode === 'deduct' ? `-${amt}` : `+${amt}`}
                         </button>
                       );
                     })}
-                    {canAwardToSelectedClass && coinsRemainingToday > 0 && classStudentsList.length > 0 && (
+                    {coinMode === 'award' && canAwardToSelectedClass && coinsRemainingToday > 0 && classStudentsList.length > 0 && (
                       <button
                         type="button"
                         onClick={handleQuickAwardWholeClass}
@@ -3201,8 +3510,8 @@ export default function TeacherPortal() {
                   </div>
                 </div>
 
-                {/* Inline guidance notice when selected class limit is exhausted or class is empty */}
-                {(coinsRemainingToday <= 0 || classStudentsList.length === 0) && (
+                {/* Inline guidance notice */}
+                {coinMode === 'award' && (coinsRemainingToday <= 0 || classStudentsList.length === 0) && (
                   <div
                     className={`px-3.5 py-2.5 rounded-xl border text-xs flex flex-wrap items-center justify-between gap-2 ${
                       coinsRemainingToday <= 0
@@ -3215,12 +3524,34 @@ export default function TeacherPortal() {
                       <span>
                         {coinsRemainingToday <= 0
                           ? tr(
-                              `Bugun ${coinSelectedGrade} sinfi uchun kunlik ${maxCoinsPerDay} Coin limiti to'liq ishlatilgan. Boshqa sinfni tanlab coin berishingiz mumkin!`,
-                              `Сегодня для класса ${localizeGrade(coinSelectedGrade, language)} дневной лимит (${maxCoinsPerDay} койнов) полностью исчерпан. Вы можете выбрать другой класс!`
+                              `Bugun ${coinSelectedGrade} sinfi uchun kunlik ${maxCoinsPerDay} Coin limiti to'liq ishlatilgan. Boshqa sinfni tanlab coin berishingiz yoki "Coin Olish (-)" rejimidan foydalanishingiz mumkin!`,
+                              `Сегодня для класса ${localizeGrade(coinSelectedGrade, language)} дневной лимит (${maxCoinsPerDay} койнов) полностью исчерпан. Вы можете выбрать другой класс или переключиться в режим «Снять (-)»!`
                             )
                           : tr(
                               `${coinSelectedGrade} sinfida ro'yxatdan o'tgan o'quvchi yo'q. Sinf ro'yxatidan o'quvchilari bor sinfni tanlang.`,
                               `В классе ${localizeGrade(coinSelectedGrade, language)} нет зарегистрированных учеников. Выберите класс с учениками.`
+                            )}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {coinMode === 'deduct' && (
+                  classStudentsList.length === 0 ||
+                  (selectedCoinStudentObj && (Number(selectedCoinStudentObj.coins) || 0) < Number(coinAmount))
+                ) && (
+                  <div className="px-3.5 py-2.5 rounded-xl border text-xs flex flex-wrap items-center justify-between gap-2 bg-rose-500/10 border-rose-500/30 text-rose-200">
+                    <div className="flex items-center gap-2">
+                      {classStudentsList.length === 0 ? <Users size={14} className="flex-shrink-0" /> : <AlertTriangle size={14} className="flex-shrink-0" />}
+                      <span>
+                        {classStudentsList.length === 0
+                          ? tr(
+                              `${coinSelectedGrade} sinfida ro'yxatdan o'tgan o'quvchi yo'q. Sinf ro'yxatidan o'quvchilari bor sinfni tanlang.`,
+                              `В классе ${localizeGrade(coinSelectedGrade, language)} нет зарегистрированных учеников. Выберите класс с учениками.`
+                            )
+                          : tr(
+                              `${selectedCoinStudentObj.fullName || selectedCoinStudentObj.full_name} hisobida hozir ${selectedCoinStudentObj.coins || 0} 💎 bor — ko'pi bilan ${selectedCoinStudentObj.coins || 0} Coin olish mumkin.`,
+                              `У ${selectedCoinStudentObj.fullName || selectedCoinStudentObj.full_name} сейчас ${selectedCoinStudentObj.coins || 0} 💎 — можно снять не более ${selectedCoinStudentObj.coins || 0} койнов.`
                             )}
                       </span>
                     </div>
@@ -3274,13 +3605,13 @@ export default function TeacherPortal() {
                     {/* Student select filtered by selected class (4 cols) */}
                     <div className="md:col-span-4">
                       <label className="input-label text-xs font-bold text-slate-300">
-                        {tr('Kimga beriladi?', 'Кому начислить?')} ({localizeGrade(coinSelectedGrade, language)}) *
+                        {coinMode === 'deduct' ? tr('Kimdan olinadi?', 'У кого снять?') : tr('Kimga beriladi?', 'Кому начислить?')} ({localizeGrade(coinSelectedGrade, language)}) *
                       </label>
                       <select
                         className="clean-select text-xs"
                         value={selectedStudentForCoin}
                         onChange={(e) => setSelectedStudentForCoin(e.target.value)}
-                        disabled={!canAwardToSelectedClass || classStudentsList.length === 0}
+                        disabled={coinMode === 'deduct' ? classStudentsList.length === 0 : !canAwardToSelectedClass || classStudentsList.length === 0}
                         required
                       >
                         {classStudentsList.length === 0 ? (
@@ -3288,12 +3619,14 @@ export default function TeacherPortal() {
                         ) : (
                           <>
                             <option value="">{tr(`-- ${coinSelectedGrade} o'quvchisini tanlang --`, `-- Выберите ученика (${localizeGrade(coinSelectedGrade, language)}) --`)}</option>
-                            <option value="__ALL__">
-                              {tr(
-                                `✨ ${coinSelectedGrade} barcha ${classStudentsList.length} nafar o'quvchiga (har biriga max ${Math.min(maxCoinsPerDay, coinsRemainingToday || maxCoinsPerDay)} coin)`,
-                                `✨ Всем ${classStudentsList.length} уч. класса ${localizeGrade(coinSelectedGrade, language)} (макс. ${Math.min(maxCoinsPerDay, coinsRemainingToday || maxCoinsPerDay)} койн.)`
-                              )}
-                            </option>
+                            {coinMode === 'award' && (
+                              <option value="__ALL__">
+                                {tr(
+                                  `✨ ${coinSelectedGrade} barcha ${classStudentsList.length} nafar o'quvchiga (har biriga max ${Math.min(maxCoinsPerDay, coinsRemainingToday || maxCoinsPerDay)} coin)`,
+                                  `✨ Всем ${classStudentsList.length} уч. класса ${localizeGrade(coinSelectedGrade, language)} (макс. ${Math.min(maxCoinsPerDay, coinsRemainingToday || maxCoinsPerDay)} койн.)`
+                                )}
+                              </option>
+                            )}
                             {classStudentsList.map((s) => (
                               <option key={s.id} value={s.id}>
                                 {s.fullName || s.full_name} ({s.coins || 0} {tr('coin mavjud', 'койнов')})
@@ -3307,15 +3640,24 @@ export default function TeacherPortal() {
                     {/* Amount input strictly capped at 5 (2 cols) */}
                     <div className="md:col-span-2">
                       <label className="input-label text-xs font-bold text-slate-300">
-                        {tr('Coin', 'Койны')} ({tr('maks.', 'макс.')} {coinsRemainingToday > 0 ? Math.min(maxCoinsPerDay, coinsRemainingToday) : maxCoinsPerDay}) *
+                        {coinMode === 'deduct'
+                          ? `${tr('Olinadigan coin', 'Снять')} (${tr('maks.', 'макс.')} ${maxCoinsPerDay}) *`
+                          : `${tr('Coin', 'Койны')} (${tr('maks.', 'макс.')} ${coinsRemainingToday > 0 ? Math.min(maxCoinsPerDay, coinsRemainingToday) : maxCoinsPerDay}) *`}
                       </label>
-                      <div className={`coin-amount-flex-box ${!canAwardToSelectedClass || classStudentsList.length === 0 ? 'is-disabled' : ''}`}>
-                        <span className="text-sm select-none">💎</span>
+                      <div
+                        className={`coin-amount-flex-box ${coinMode === 'deduct' ? 'is-deduct' : ''} ${
+                          (coinMode === 'deduct' ? classStudentsList.length === 0 : !canAwardToSelectedClass || classStudentsList.length === 0)
+                            ? 'is-disabled'
+                            : ''
+                        }`}
+                      >
+                        <span className="text-sm select-none">{coinMode === 'deduct' ? '🔻' : '💎'}</span>
+                        {coinMode === 'deduct' && <span className="text-sm font-black text-rose-300 select-none">-</span>}
                         <input
                           type="number"
                           min={1}
-                          max={Math.max(1, Math.min(maxCoinsPerDay, coinsRemainingToday || maxCoinsPerDay))}
-                          disabled={!canAwardToSelectedClass || classStudentsList.length === 0}
+                          max={coinMode === 'deduct' ? maxCoinsPerDay : Math.max(1, Math.min(maxCoinsPerDay, coinsRemainingToday || maxCoinsPerDay))}
+                          disabled={coinMode === 'deduct' ? classStudentsList.length === 0 : !canAwardToSelectedClass || classStudentsList.length === 0}
                           className="coin-amount-native-input"
                           value={coinAmount}
                           onChange={(e) => {
@@ -3326,11 +3668,19 @@ export default function TeacherPortal() {
                             }
                             const n = Math.floor(Number(raw));
                             if (Number.isNaN(n)) return;
-                            const allowedCap = Math.max(1, Math.min(maxCoinsPerDay, coinsRemainingToday || maxCoinsPerDay));
+                            const allowedCap =
+                              coinMode === 'deduct'
+                                ? maxCoinsPerDay
+                                : Math.max(1, Math.min(maxCoinsPerDay, coinsRemainingToday || maxCoinsPerDay));
                             if (n > allowedCap) {
                               setCoinAmount(allowedCap);
                               showToast(
-                                coinsRemainingToday > 0 && coinsRemainingToday < maxCoinsPerDay
+                                coinMode === 'deduct'
+                                  ? tr(
+                                      `Bir urinishda ko'pi bilan ${maxCoinsPerDay} Coin olish mumkin!`,
+                                      `За один раз можно снять не более ${maxCoinsPerDay} койнов!`
+                                    )
+                                  : coinsRemainingToday > 0 && coinsRemainingToday < maxCoinsPerDay
                                   ? tr(
                                       `Bugun yana ko'pi bilan ${coinsRemainingToday} Coin berishingiz mumkin!`,
                                       `Сегодня вы можете выдать ещё не более ${coinsRemainingToday} койнов!`
@@ -3354,6 +3704,34 @@ export default function TeacherPortal() {
                     {/* Submit button (3 cols) */}
                     <div className="md:col-span-3">
                       {(() => {
+                        if (coinMode === 'deduct') {
+                          const hasInsufficientBal =
+                            selectedCoinStudentObj && Number(coinAmount) > (Number(selectedCoinStudentObj.coins) || 0);
+                          const submitDisabled =
+                            classStudentsList.length === 0 ||
+                            !coinAmount ||
+                            Number(coinAmount) <= 0 ||
+                            Number(coinAmount) > maxCoinsPerDay ||
+                            hasInsufficientBal;
+                          const btnLabel =
+                            classStudentsList.length === 0
+                              ? tr("Sinfda O'quvchi Yo'q", 'В классе нет учеников')
+                              : hasInsufficientBal
+                              ? tr("Coin Yetarli Emas", 'Недостаточно койнов')
+                              : tr(`-${coinAmount || 0} Coin Olish`, `Снять -${coinAmount || 0} койнов`);
+                          return (
+                            <button
+                              type="submit"
+                              disabled={submitDisabled}
+                              className={`teacher-award-submit-btn is-deduct w-full ${
+                                submitDisabled ? 'is-locked opacity-75 cursor-not-allowed' : ''
+                              }`}
+                            >
+                              <AlertTriangle size={15} />
+                              <span>{btnLabel}</span>
+                            </button>
+                          );
+                        }
                         const submitDisabled =
                           coinsRemainingToday <= 0 ||
                           classStudentsList.length === 0 ||
@@ -3386,25 +3764,35 @@ export default function TeacherPortal() {
 
                   {/* Reason row */}
                   <div>
-                    <label className="input-label text-xs font-bold text-slate-300">{tr('Darsdagi faollik sababi *', 'Причина активности на уроке *')}</label>
+                    <label className="input-label text-xs font-bold text-slate-300">
+                      {coinMode === 'deduct'
+                        ? tr('Dars intizomi / coin olish sababi *', 'Причина снятия койнов *')
+                        : tr('Darsdagi faollik sababi *', 'Причина активности на уроке *')}
+                    </label>
                     <input
                       type="text"
                       className="clean-input text-xs"
                       value={coinReason}
                       onChange={(e) => setCoinReason(e.target.value)}
-                      placeholder={tr('Masalan: Darsda faol qatnashdi, doskada misol yechdi', 'Например: Активно участвовал на уроке, решил задачу у доски')}
+                      placeholder={
+                        coinMode === 'deduct'
+                          ? tr("Masalan: Dars intizomini buzdi, telefonda chalg'idi", 'Например: Нарушил дисциплину на уроке, отвлекался на телефон')
+                          : tr('Masalan: Darsda faol qatnashdi, doskada misol yechdi', 'Например: Активно участвовал на уроке, решил задачу у доски')
+                      }
                       required
                     />
                   </div>
 
-                  {/* Quick preset reason tags (lesson activity only) */}
+                  {/* Quick preset reason tags */}
                   <div className="flex flex-wrap items-center gap-2 pt-1">
                     <span className="text-[11px] text-slate-400 font-bold">{tr('Tezkor izohlar:', 'Быстрые шаблоны:')}</span>
-                    {lessonPresets.map((preset) => (
+                    {(coinMode === 'deduct' ? deductPresets : lessonPresets).map((preset) => (
                       <button
                         key={preset}
                         type="button"
-                        className={`teacher-quick-reason-pill ${coinReason === preset ? 'active' : ''}`}
+                        className={`teacher-quick-reason-pill ${coinMode === 'deduct' ? 'is-deduct' : ''} ${
+                          coinReason === preset ? 'active' : ''
+                        }`}
                         onClick={() => setCoinReason(preset)}
                       >
                         {preset}
@@ -3527,6 +3915,59 @@ export default function TeacherPortal() {
                               })}
                             </div>
                           </div>
+
+                          {/* Fast 1-click deduct buttons (discipline / negative coins) */}
+                          <div className="pt-2 border-t border-slate-800/60">
+                            <div className="text-[10px] text-slate-400 font-bold mb-1.5 flex items-center justify-between">
+                              <span>{tr('Coin olish:', 'Снять койны:')}</span>
+                              <span className="text-rose-400/85 font-mono">
+                                {tr('balans:', 'баланс:')} {st.coins || 0} 💎
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              {[
+                                {
+                                  amt: 1,
+                                  label: tr('Intizom', 'Дисц.'),
+                                  reason: tr('Dars intizomini buzgani uchun', 'За нарушение дисциплины на уроке'),
+                                },
+                                {
+                                  amt: 2,
+                                  label: tr('Tayyor emas', 'Не готов'),
+                                  reason: tr('Darsga tayyorgarliksiz kelgani uchun', 'За неготовность к уроку'),
+                                },
+                                {
+                                  amt: 5,
+                                  label: tr("Qo'pol", 'Грубо'),
+                                  reason: tr('Dars jarayoniga xalaqit bergani uchun', 'Мешал проведению урока'),
+                                },
+                              ].map((btn) => {
+                                const stCoins = Number(st.coins) || 0;
+                                const deductDisabled = stCoins < btn.amt;
+                                const deductTooltip = deductDisabled
+                                  ? tr(
+                                      `${st.fullName || st.full_name} hisobida yetarli coin yo'q (Mavjud: ${stCoins} 💎)`,
+                                      `У ${st.fullName || st.full_name} недостаточно койнов (Доступно: ${stCoins} 💎)`
+                                    )
+                                  : `${btn.reason} (-${btn.amt} ${tr('coin', 'койнов')})`;
+                                return (
+                                  <button
+                                    key={btn.amt}
+                                    type="button"
+                                    disabled={deductDisabled}
+                                    className={`student-card-btn-pill btn-deduct ${
+                                      deductDisabled ? 'opacity-40 cursor-not-allowed' : ''
+                                    }`}
+                                    onClick={() => handleQuickDeduct(st, btn.amt, btn.reason)}
+                                    title={deductTooltip}
+                                  >
+                                    <span>-{btn.amt}</span>
+                                    <span className="text-[9px] opacity-80">{btn.label}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
                         </div>
                       );
                     })}
@@ -3583,7 +4024,7 @@ export default function TeacherPortal() {
                   <div className="flex items-center gap-2">
                     <Clock size={18} className="text-amber-400" />
                     <h4 className="text-sm font-bold text-white uppercase tracking-wider">
-                      {tr(`Oxirgi Berilgan Coinlar Tarixi (${filteredCoinHistory.length} ta)`, `История начисления койнов (${filteredCoinHistory.length})`)}
+                      {tr(`Oxirgi Coin Operatsiyalari Tarixi (${filteredCoinHistory.length} ta)`, `История операций с койнами (${filteredCoinHistory.length})`)}
                     </h4>
                   </div>
 
@@ -3673,10 +4114,18 @@ export default function TeacherPortal() {
                             </span>
                           </td>
                           <td>
-                            <span className="tx-amount-badge">
-                              <span>💎</span>
-                              <span>+{tx.amount} {tr('Coin', 'Койн')}</span>
-                            </span>
+                            {(() => {
+                              const numericAmt = Number(tx.amount) || 0;
+                              const isDeduct = numericAmt < 0;
+                              return (
+                                <span className={`tx-amount-badge ${isDeduct ? 'is-deduct' : ''}`}>
+                                  <span>{isDeduct ? '🔻' : '💎'}</span>
+                                  <span>
+                                    {numericAmt > 0 ? `+${numericAmt}` : numericAmt} {tr('Coin', 'Койн')}
+                                  </span>
+                                </span>
+                              );
+                            })()}
                           </td>
                           <td>
                             <div className="flex items-start gap-2.5">
@@ -4160,16 +4609,22 @@ export default function TeacherPortal() {
       )}
 
       {/* EDIT COIN TRANSACTION MODAL */}
-      {editingCoinTx && (
+      {editingCoinTx && (() => {
+        const isEditingDeductTx = Number(editingCoinTx.amount) < 0;
+        return (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
-          <div className="bg-slate-900 border border-amber-500/35 rounded-2xl max-w-md w-full shadow-2xl overflow-hidden">
+          <div className={`bg-slate-900 border ${isEditingDeductTx ? 'border-rose-500/40' : 'border-amber-500/35'} rounded-2xl max-w-md w-full shadow-2xl overflow-hidden`}>
             <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/35 flex items-center justify-center text-amber-400">
+                <div className={`w-9 h-9 rounded-xl ${isEditingDeductTx ? 'bg-rose-500/15 border-rose-500/35 text-rose-400' : 'bg-amber-500/15 border-amber-500/35 text-amber-400'} border flex items-center justify-center`}>
                   <Edit size={17} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-white">{tr('Coin Tranzaksiyasini Tahrirlash', 'Редактировать транзакцию')}</h3>
+                  <h3 className="text-sm font-black text-white">
+                    {isEditingDeductTx
+                      ? tr('Coin Olish Tranzaksiyasini Tahrirlash', 'Редактировать снятие койнов')
+                      : tr('Coin Tranzaksiyasini Tahrirlash', 'Редактировать транзакцию')}
+                  </h3>
                   <p className="text-[11px] text-slate-400">
                     {editingCoinTx.student_name || editingCoinTx.studentName} •{' '}
                     {editingCoinTx.grade && editingCoinTx.grade !== '-'
@@ -4190,17 +4645,25 @@ export default function TeacherPortal() {
             <form onSubmit={handleSaveEditCoinTx} className="p-4 sm:p-5 space-y-4">
               {isTeacherRestricted && (
                 <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/25 text-[11px] text-cyan-200 leading-relaxed">
-                  {tr(
-                    `O'qituvchi sifatida faqat darsdagi faollik coinlari miqdorini (1 dan ${maxCoinsPerDay} Coin oralig'ida) va sababini tahrirlashingiz mumkin (o'chirish taqiqlangan).`,
-                    `В роли учителя можно изменять только количество койнов за активность на уроке (от 1 до ${maxCoinsPerDay}) и причину (удаление запрещено).`
-                  )}
+                  {isEditingDeductTx
+                    ? tr(
+                        `O'qituvchi sifatida dars intizomi bo'yicha olingan coin miqdorini (-1 dan -${maxCoinsPerDay} Coin oralig'ida) va sababini tahrirlashingiz mumkin (o'chirish taqiqlangan).`,
+                        `В роли учителя можно изменять только количество снятых за дисциплину койнов (от -1 до -${maxCoinsPerDay}) и причину (удаление запрещено).`
+                      )
+                    : tr(
+                        `O'qituvchi sifatida faqat darsdagi faollik coinlari miqdorini (1 dan ${maxCoinsPerDay} Coin oralig'ida) va sababini tahrirlashingiz mumkin (o'chirish taqiqlangan).`,
+                        `В роли учителя можно изменять только количество койнов за активность на уроке (от 1 до ${maxCoinsPerDay}) и причину (удаление запрещено).`
+                      )}
                 </div>
               )}
 
               <div>
-                <label className="input-label text-xs font-bold text-slate-300">{tr('Coin Miqdori *', 'Количество койнов *')}</label>
-                <div className="coin-amount-flex-box">
-                  <span className="text-sm select-none">💎</span>
+                <label className="input-label text-xs font-bold text-slate-300">
+                  {isEditingDeductTx ? tr('Olinadigan Coin Miqdori *', 'Снимаемое количество койнов *') : tr('Coin Miqdori *', 'Количество койнов *')}
+                </label>
+                <div className={`coin-amount-flex-box ${isEditingDeductTx ? 'is-deduct' : ''}`}>
+                  <span className="text-sm select-none">{isEditingDeductTx ? '🔻' : '💎'}</span>
+                  {isEditingDeductTx && <span className="text-sm font-black text-rose-300 select-none">-</span>}
                   <input
                     type="number"
                     min={1}
@@ -4236,14 +4699,18 @@ export default function TeacherPortal() {
 
               <div>
                 <label className="input-label text-xs font-bold text-slate-300">
-                  {isTeacherRestricted ? tr('Darsdagi faollik sababi *', 'Причина активности на уроке *') : tr('Izoh / Sabab *', 'Причина / Комментарий *')}
+                  {isTeacherRestricted
+                    ? isEditingDeductTx
+                      ? tr('Dars intizomi / coin olish sababi *', 'Причина снятия койнов *')
+                      : tr('Darsdagi faollik sababi *', 'Причина активности на уроке *')
+                    : tr('Izoh / Sabab *', 'Причина / Комментарий *')}
                 </label>
                 <input
                   type="text"
                   className="clean-input text-xs"
                   value={editCoinReason}
                   onChange={(e) => setEditCoinReason(e.target.value)}
-                  placeholder={isTeacherRestricted ? tr('Darsdagi faollik sababini kiriting...', 'Укажите причину активности на уроке...') : tr('Sababni kiriting...', 'Введите причину...')}
+                  placeholder={isTeacherRestricted ? tr('Darsdagi faollik yoki intizom sababini kiriting...', 'Укажите причину активности или дисциплины...') : tr('Sababni kiriting...', 'Введите причину...')}
                   required
                 />
               </div>
@@ -4259,7 +4726,7 @@ export default function TeacherPortal() {
                 <button
                   type="submit"
                   disabled={savingEditCoin}
-                  className="btn btn-warning btn-xs font-bold text-slate-950 px-4 flex items-center gap-1.5"
+                  className={`btn ${isEditingDeductTx ? 'bg-rose-500 hover:bg-rose-400 text-white' : 'btn-warning text-slate-950'} btn-xs font-bold px-4 flex items-center gap-1.5`}
                 >
                   {savingEditCoin ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                   <span>{tr('Saqlash', 'Сохранить')}</span>
@@ -4268,7 +4735,8 @@ export default function TeacherPortal() {
             </form>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

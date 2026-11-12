@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Presentation as ChalkboardTeacher,
   GraduationCap,
+  UserCheck,
   Settings,
   LogOut,
 } from 'lucide-react';
@@ -43,6 +44,7 @@ export default function Navbar() {
   const adminHomeTarget = getPortalLinkTarget('admin', '', { portalMode });
   const adminTestsTarget = getPortalLinkTarget('admin', '?tab=tests', { portalMode });
   const teacherPortalTarget = getPortalLinkTarget('teacher', '', { portalMode });
+  const tutorPortalTarget = getPortalLinkTarget('tutor', '', { portalMode });
   const studentPortalTarget = getPortalLinkTarget('student', '', { portalMode });
 
   return (
@@ -134,6 +136,28 @@ export default function Navbar() {
                   <span className="text-xs font-bold text-white">{user.fullName || tr('Ustoz', 'Учитель')}</span>
                   <span className="text-[10px] text-cyan-400 font-bold">
                     {user.subject ? localizeSubject(user.subject, language) : tr("O'qituvchi", 'Учитель')}
+                  </span>
+                </div>
+              </PortalNavItem>
+            )}
+
+            {user.role === 'tutor' && (
+              <PortalNavItem
+                target={tutorPortalTarget}
+                className="navbar-user-chip"
+                title={tr("Tyuter Portaliga o'tish", 'Перейти на портал тьютора')}
+              >
+                <div className="navbar-user-avatar overflow-hidden" style={{ background: 'linear-gradient(135deg, #7c3aed, #a855f7)' }}>
+                  {user.hasCustomAvatar && user.avatarUrl ? (
+                    <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <UserCheck size={16} />
+                  )}
+                </div>
+                <div className="hidden sm:flex flex-col text-left">
+                  <span className="text-xs font-bold text-white">{user.fullName || tr('Tyuter', 'Тьютор')}</span>
+                  <span className="text-[10px] text-purple-300 font-bold">
+                    💎 {user.coins || 0} {tr('Coins', 'коинов')}
                   </span>
                 </div>
               </PortalNavItem>

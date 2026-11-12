@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { api } from '../api/endpoints';
 import { localizeSubject } from '../i18n/portalUtils';
-import { Eye, EyeOff, Camera, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, Camera, Trash2, Lock, ShieldCheck } from 'lucide-react';
 
 const DEFAULT_SUBJECTS = [
   'Matematika',
@@ -67,6 +67,8 @@ export default function ProfileModal() {
 
   if (!profileModalOpen || !user) return null;
 
+  const isTutorRestricted = user.role === 'tutor';
+
   const handleAvatarChange = (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -104,7 +106,7 @@ export default function ProfileModal() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (newPassword || confirmPassword || oldPassword) {
+    if (!isTutorRestricted && (newPassword || confirmPassword || oldPassword)) {
       if (newPassword && newPassword.trim().length < 3) {
         showToast(
           tr(
@@ -139,7 +141,7 @@ export default function ProfileModal() {
     try {
       const formData = new FormData();
       formData.append('fullName', fullName.trim());
-      if (username.trim()) formData.append('username', username.trim());
+      if (!isTutorRestricted && username.trim()) formData.append('username', username.trim());
       formData.append('phone', phone.trim());
       formData.append('bio', bio.trim());
       if (user.role === 'teacher' && subject) {
@@ -151,7 +153,7 @@ export default function ProfileModal() {
       if (avatarFile) {
         formData.append('avatar', avatarFile);
       }
-      if (newPassword) {
+      if (!isTutorRestricted && newPassword) {
         if (oldPassword) formData.append('oldPassword', oldPassword);
         formData.append('newPassword', newPassword.trim());
       }
@@ -263,13 +265,22 @@ export default function ProfileModal() {
               />
             </div>
             <div>
-              <label className="input-label">{tr('Login (username) *', 'Логин (username) *')}</label>
+              <label className="input-label flex items-center justify-between gap-2">
+                <span>{tr('Login (username) *', 'Логин (username) *')}</span>
+                {isTutorRestricted && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-500/20 border border-purple-500/40 text-purple-200 text-[10px] font-bold">
+                    <Lock size={10} /> {tr('Admin belgilaydi', 'Назначает админ')}
+                  </span>
+                )}
+              </label>
               <input
                 type="text"
-                className="clean-input text-xs"
+                className={`clean-input text-xs ${isTutorRestricted ? 'opacity-65 cursor-not-allowed bg-slate-900/70' : ''}`}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                required
+                disabled={isTutorRestricted}
+                readOnly={isTutorRestricted}
+                required={!isTutorRestricted}
               />
             </div>
           </div>
@@ -316,47 +327,65 @@ export default function ProfileModal() {
           </div>
 
           {/* Password update section */}
-          <div style={{ marginTop: '0.75rem', paddingTop: '0.85rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
-            <div className="flex items-center justify-between mb-2">
-              <span style={{ fontSize: '0.78rem', color: '#f59e0b', fontWeight: 700 }}>
-                <i className="fa-solid fa-lock"></i> {tr('Parolni yangilash (ixtiyoriy)', 'Смена пароля (необязательно)')}
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowPasswords(!showPasswords)}
-                className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1"
-              >
-                {showPasswords ? <EyeOff size={13} /> : <Eye size={13} />}
-                <span>{showPasswords ? tr('Yashirish', 'Скрыть') : tr("Ko'rsatish", 'Показать')}</span>
-              </button>
+          {isTutorRestricted ? (
+            <div
+              className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/30 space-y-1.5"
+              style={{ marginTop: '0.75rem' }}
+            >
+              <div className="flex items-center gap-2 text-xs font-extrabold text-purple-200">
+                <ShieldCheck size={15} className="text-purple-400 flex-shrink-0" />
+                <span>{tr('Login va parol Administrator nazoratida', 'Логин и пароль под контролем администратора')}</span>
+              </div>
+              <p className="text-[11px] text-slate-300 leading-relaxed m-0">
+                {tr(
+                  "Tyuter hisobi uchun login va parol faqat Administrator tomonidan beriladi va o'zgartiriladi. Kirish ma'lumotlarini yangilash uchun maktab administratoriga murojaat qiling.",
+                  'Логин и пароль для аккаунта тьютора выдаются и изменяются только администратором. Для смены данных входа обратитесь к администратору.'
+                )}
+              </p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <input
-                type={showPasswords ? 'text' : 'password'}
-                className="clean-input text-xs"
-                style={{ padding: '8px 10px' }}
-                placeholder={tr('Eski parol', 'Старый пароль')}
-                value={oldPassword}
-                onChange={(e) => setOldPassword(e.target.value)}
-              />
-              <input
-                type={showPasswords ? 'text' : 'password'}
-                className="clean-input text-xs"
-                style={{ padding: '8px 10px' }}
-                placeholder={tr('Yangi parol', 'Новый пароль')}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-              />
-              <input
-                type={showPasswords ? 'text' : 'password'}
-                className="clean-input text-xs"
-                style={{ padding: '8px 10px' }}
-                placeholder={tr('Takrorlang', 'Повторите')}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
+          ) : (
+            <div style={{ marginTop: '0.75rem', paddingTop: '0.85rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+              <div className="flex items-center justify-between mb-2">
+                <span style={{ fontSize: '0.78rem', color: '#f59e0b', fontWeight: 700 }}>
+                  <i className="fa-solid fa-lock"></i> {tr('Parolni yangilash (ixtiyoriy)', 'Смена пароля (необязательно)')}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowPasswords(!showPasswords)}
+                  className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1"
+                >
+                  {showPasswords ? <EyeOff size={13} /> : <Eye size={13} />}
+                  <span>{showPasswords ? tr('Yashirish', 'Скрыть') : tr("Ko'rsatish", 'Показать')}</span>
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <input
+                  type={showPasswords ? 'text' : 'password'}
+                  className="clean-input text-xs"
+                  style={{ padding: '8px 10px' }}
+                  placeholder={tr('Eski parol', 'Старый пароль')}
+                  value={oldPassword}
+                  onChange={(e) => setOldPassword(e.target.value)}
+                />
+                <input
+                  type={showPasswords ? 'text' : 'password'}
+                  className="clean-input text-xs"
+                  style={{ padding: '8px 10px' }}
+                  placeholder={tr('Yangi parol', 'Новый пароль')}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+                <input
+                  type={showPasswords ? 'text' : 'password'}
+                  className="clean-input text-xs"
+                  style={{ padding: '8px 10px' }}
+                  placeholder={tr('Takrorlang', 'Повторите')}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
             <button type="button" className="btn btn-secondary btn-sm" onClick={closeProfileModal}>

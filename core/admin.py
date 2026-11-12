@@ -85,7 +85,7 @@ class CustomUserAdmin(UserAdmin):
     )
 
     def coins_badge(self, obj):
-        if obj.role == 'student':
+        if obj.role in ('student', 'tutor'):
             return format_html('<span style="background: rgba(245, 158, 11, 0.15); color: #b45309; padding: 3px 8px; border-radius: 6px; font-weight: 800;">🪙 {} Coins</span>', obj.coins)
         return "-"
     coins_badge.short_description = "Coinlar"
@@ -102,6 +102,7 @@ class CustomUserAdmin(UserAdmin):
         colors = {
             'admin': ('#dc2626', '#fee2e2'),
             'teacher': ('#0284c7', '#e0f2fe'),
+            'tutor': ('#7c3aed', '#ede9fe'),
             'student': ('#10b981', '#dcfce7')
         }
         fg, bg = colors.get(obj.role, ('#475569', '#f1f5f9'))
@@ -114,6 +115,9 @@ class CustomUserAdmin(UserAdmin):
     def grade_or_subject(self, obj):
         if obj.role == 'teacher':
             return f"Fan: {obj.subject or 'Belgilanmagan'}"
+        elif obj.role == 'tutor':
+            classes = list(obj.tutor_classes.filter(is_active=True).values_list('name', flat=True))
+            return f"Sinflari: {', '.join(classes) if classes else 'Biriktirilmagan'}"
         elif obj.role == 'student':
             return f"Sinf: {obj.grade or 'Belgilanmagan'}"
         return "Boshqaruv"
@@ -227,10 +231,10 @@ class SiteSettingAdmin(admin.ModelAdmin):
 
 @admin.register(SchoolClass)
 class SchoolClassAdmin(admin.ModelAdmin):
-    list_display = ('name', 'grade_level', 'language_badge', 'bonus_coins', 'room', 'head_teacher', 'is_active', 'created_at')
-    list_filter = ('language', 'grade_level', 'is_active')
-    search_fields = ('name', 'head_teacher', 'room')
-    list_editable = ('is_active', 'head_teacher', 'room')
+    list_display = ('name', 'grade_level', 'language_badge', 'bonus_coins', 'tutor', 'room', 'head_teacher', 'is_active', 'created_at')
+    list_filter = ('language', 'grade_level', 'is_active', 'tutor')
+    search_fields = ('name', 'head_teacher', 'room', 'tutor__full_name', 'tutor__username')
+    list_editable = ('is_active', 'head_teacher', 'room', 'tutor')
     ordering = ('grade_level', 'language', 'name')
 
     def language_badge(self, obj):
@@ -242,9 +246,9 @@ class SchoolClassAdmin(admin.ModelAdmin):
 
 @admin.register(ClassCoinTransaction)
 class ClassCoinTransactionAdmin(admin.ModelAdmin):
-    list_display = ('school_class', 'amount_badge', 'reason', 'given_by', 'created_at')
-    list_filter = ('created_at', 'school_class')
-    search_fields = ('school_class__name', 'reason', 'given_by__full_name')
+    list_display = ('school_class', 'tutor', 'amount_badge', 'reason', 'given_by', 'created_at')
+    list_filter = ('created_at', 'school_class', 'tutor')
+    search_fields = ('school_class__name', 'tutor__full_name', 'reason', 'given_by__full_name')
     ordering = ('-created_at',)
 
     def amount_badge(self, obj):

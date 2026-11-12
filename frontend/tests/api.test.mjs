@@ -175,4 +175,25 @@ test('endpoints map cleanly to backend routes and methods', async () => {
 
   await api.student.getTests('all');
   assert.equal(calls.at(-1).url, '/api/student/tests/');
+
+  await api.admin.getTutors();
+  assert.equal(calls.at(-1).url, '/api/admin/tutors/');
+
+  await api.tutor.getDashboard();
+  assert.equal(calls.at(-1).url, '/api/tutor/dashboard/');
+
+  await api.tutor.createStudent({ fullName: 'Ali', username: 'ali1', password: '123', grade: '7-A' });
+  assert.equal(calls.at(-1).url, '/api/tutor/students/');
+  assert.equal(calls.at(-1).init.method, 'POST');
+
+  await api.tutor.updateStudent(9, { fullName: 'Ali Updated' });
+  assert.equal(calls.at(-1).url, '/api/tutor/students/9/');
+  assert.equal(calls.at(-1).init.method, 'PUT');
+
+  await api.tutor.deleteStudent(9);
+  assert.equal(calls.at(-1).url, '/api/tutor/students/9/');
+  assert.equal(calls.at(-1).init.method, 'DELETE');
+
+  await api.teacher.getAllStudents('7-A', 'Ali');
+  assert.equal(calls.at(-1).url, '/api/teacher/class-students/?portal=teacher&grade=7-A&search=Ali');
 });
