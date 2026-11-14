@@ -626,9 +626,10 @@ export default function AdminTestBuilder({
         imageUrl: q.imageUrl || '',
         explanation: (q.explanation || '').trim(),
         correctIndex: correctIdx,
-        options: opts.map((o) =>
-          typeof o === 'object' ? (o.text || '').trim() : String(o).trim()
-        ),
+        options: opts.map((o, oIdx) => ({
+          text: typeof o === 'object' ? (o.text || '').trim() : String(o).trim(),
+          isCorrect: oIdx === correctIdx,
+        })),
       };
     });
 

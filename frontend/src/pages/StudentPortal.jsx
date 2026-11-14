@@ -37,10 +37,12 @@ import {
   Unlock,
   RefreshCw,
   Calendar,
+  LogOut,
+  ShieldCheck,
 } from 'lucide-react';
 
 export default function StudentPortal() {
-  const { user, login, refreshUser, language, tr } = useAuth();
+  const { user, login, logout, refreshUser, language, tr } = useAuth();
   const { showToast } = useToast();
 
   // Gate state
@@ -162,7 +164,14 @@ export default function StudentPortal() {
     setGateError('');
     setGateLoading(true);
     try {
-      const loggedUser = await login(gateUsername, gatePassword, 'student');
+      const cleanUname = (gateUsername || '').trim();
+      const cleanPw = (gatePassword || '').trim();
+      if (!cleanUname || !cleanPw) {
+        setGateError(tr("Login va parolni to'liq kiriting!", 'Введите логин и пароль!'));
+        setGateLoading(false);
+        return;
+      }
+      const loggedUser = await login(cleanUname, cleanPw, 'student');
       showToast(
         tr(
           `Xush kelibsiz, ${loggedUser.fullName || loggedUser.username}!`,
@@ -172,7 +181,7 @@ export default function StudentPortal() {
       );
     } catch (err) {
       setGateError(
-        err.message || tr('Login yoki parol xato!', 'Неверный логин или пароль!')
+        err.message || tr("Login yoki parol noto'g'ri! Iltimos, admin/tyuter bergan ma'lumotlarni tekshiring.", 'Неверный логин или пароль! Пожалуйста, проверьте данные входа.')
       );
     } finally {
       setGateLoading(false);
@@ -487,6 +496,37 @@ export default function StudentPortal() {
 
   return (
     <div className="student-portal-wrapper space-y-6 pb-12">
+      {/* Admin/Teacher Preview Notice Banner */}
+      {user && user.role !== 'student' && (
+        <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/35 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-md">
+          <div className="flex items-center gap-2.5 text-amber-200">
+            <ShieldCheck size={20} className="text-amber-400 shrink-0" />
+            <div>
+              <span className="font-extrabold text-amber-300">
+                {tr("Sinov rejimi (Administrator/Ustoz):", "Режим предпросмотра (Администратор/Учитель):")}
+              </span>{' '}
+              <span>
+                {tr(
+                  `Hozirda tizimga ${localizeRole(user.role, language)} (${user.fullName || user.username}) sifatida kirdingiz. O'quvchi kabinetiga uning shaxsiy hisobi orqali kirish uchun tizimdan chiqing.`,
+                  `Вы вошли как ${localizeRole(user.role, language)} (${user.fullName || user.username}). Чтобы войти как ученик, выйдите из системы.`
+                )}
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              await logout();
+              showToast(tr("Tizimdan chiqildi. Endi o'quvchi logini bilan kiring!", "Вы вышли. Теперь войдите под логином ученика!"), 'info');
+            }}
+            className="btn btn-xs bg-amber-500/25 hover:bg-amber-500/40 border border-amber-400/60 text-amber-100 font-bold shrink-0 self-start sm:self-auto flex items-center gap-1.5"
+          >
+            <LogOut size={13} />
+            <span>{tr("O'quvchi hisobiga o'tish (Chiqish)", "Войти как ученик (Выйти)")}</span>
+          </button>
+        </div>
+      )}
+
       {/* Student Welcome Header & Badges */}
       <div className="dashboard-header flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

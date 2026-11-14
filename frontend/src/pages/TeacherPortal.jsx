@@ -137,18 +137,23 @@ export default function TeacherPortal() {
   const [showProfilePasswords, setShowProfilePasswords] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
 
-  // Daily teacher coin limit status (har bir sinf uchun kuniga max 5 coin)
+  // Hourly teacher coin limit status (har bir sinf uchun 1 soatda max 5 coin)
   const [dailyCoinStatus, setDailyCoinStatus] = useState({
     isLimited: true,
     isPerClassLimit: true,
+    limitType: 'hourly',
     maxClassesPerDay: null,
     maxCoinsPerDay: 5,
+    maxCoinsPerHour: 5,
     awardedClassToday: null,
     awardedClassesToday: [],
     perClassStatus: {},
     totalCoinsUsedAllClassesToday: 0,
     coinsUsedToday: 0,
     coinsRemainingToday: 5,
+    coinsUsedThisHour: 0,
+    coinsRemainingThisHour: 5,
+    cooldownMinutesLeft: 0,
     canAwardToday: true,
   });
 
@@ -853,7 +858,7 @@ export default function TeacherPortal() {
     return true;
   };
 
-  // Validate per-class teacher daily limit locally before API call (backend enforces strictly too)
+  // Validate per-class teacher hourly limit locally before API call (backend enforces strictly too)
   const checkTeacherDailyCap = (targetGrade, amt) => {
     if (!isTeacherRestricted) return true;
     const numericAmt = Number(amt) || 0;
@@ -866,18 +871,21 @@ export default function TeacherPortal() {
     if (numericAmt <= 0 || numericAmt > maxCoinsPerDay) {
       showToast(
         tr(
-          `O'qituvchi har bir sinf uchun kuniga ko'pi bilan ${maxCoinsPerDay} ta coin berishi mumkin!`,
-          `Учитель может выдать не более ${maxCoinsPerDay} койнов в день для каждого класса!`
+          `O'qituvchi har bir sinf uchun 1 soatda (darsda) ko'pi bilan ${maxCoinsPerDay} ta coin berishi mumkin!`,
+          `Учитель может выдать не более ${maxCoinsPerDay} койнов в час (за урок) для каждого класса!`
         ),
         'warning'
       );
       return false;
     }
     if (clsRemaining <= 0) {
+      const waitMins = selectedClassDailyInfo?.cooldownMinutesLeft || perClassStatusMap[clsName]?.cooldownMinutesLeft || 0;
+      const waitSuffixUz = waitMins > 0 ? ` Yana ${waitMins} daqiqadan so'ng (keyingi darsda) yangi limit ochiladi.` : '';
+      const waitSuffixRu = waitMins > 0 ? ` Новый лимит откроется через ${waitMins} мин.` : '';
       showToast(
         tr(
-          `Bugun '${clsName}' sinfi uchun kunlik ${maxCoinsPerDay} coin limiti to'liq ishlatilgan. Boshqa sinfga berishingiz mumkin!`,
-          `Сегодня дневной лимит (${maxCoinsPerDay} койнов) для класса '${clsName}' исчерпан. Вы можете выбрать другой класс!`
+          `Oxirgi 1 soatda '${clsName}' sinfi uchun ${maxCoinsPerDay} coin limiti to'liq ishlatilgan.${waitSuffixUz} Boshqa sinfga berishingiz mumkin!`,
+          `За последний час лимит (${maxCoinsPerDay} койнов) для класса '${clsName}' исчерпан.${waitSuffixRu} Вы можете выбрать другой класс!`
         ),
         'warning'
       );
@@ -1033,7 +1041,7 @@ export default function TeacherPortal() {
       if (res?.dailyCoinStatus) setDailyCoinStatus(res.dailyCoinStatus);
       showToast(
         tr(
-          `'${coinSelectedGrade}' sinfiga kunlik +${amt} coin muvaffaqiyatli berildi!`,
+          `'${coinSelectedGrade}' sinfiga +${amt} coin muvaffaqiyatli berildi!`,
           `Классу '${coinSelectedGrade}' успешно начислено +${amt} койнов!`
         ),
         'success'
@@ -1335,7 +1343,7 @@ export default function TeacherPortal() {
           <button
             type="button"
             onClick={() => setActiveTab('coins')}
-            title={`${tr(`Har bir sinf uchun kuniga ko'pi bilan ${maxCoinsPerDay} Coin`, `Максимум ${maxCoinsPerDay} койнов в день для каждого класса`)}${awardedClassesToday.length ? ` • ${tr('Bugun', 'Сегодня')} ${awardedClassesToday.length} ${tr('ta sinf', 'кл.')} (${totalCoinsUsedAllClassesToday} ${tr('Coin', 'койнов')})` : ''}`}
+            title={`${tr(`Har bir sinf uchun 1 soatda ko'pi bilan ${maxCoinsPerDay} Coin`, `Максимум ${maxCoinsPerDay} койнов в час для каждого класса`)}${awardedClassesToday.length ? ` • ${tr('Oxirgi 1 soatda', 'За последний час')} ${awardedClassesToday.length} ${tr('ta sinf', 'кл.')} (${totalCoinsUsedAllClassesToday} ${tr('Coin', 'койнов')})` : ''}`}
             className={`px-3.5 py-2 rounded-xl border text-xs font-bold flex items-center gap-2 transition-all ${
               coinsRemainingToday > 0
                 ? 'bg-amber-500/10 border-amber-500/35 text-amber-300 hover:bg-amber-500/20'
@@ -2929,8 +2937,8 @@ export default function TeacherPortal() {
                           <span>{tr('Coin Berish Qoidasi', 'Правило начисления койнов')}</span>
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-black">
                             {tr(
-                              `Faqat darsdagi faollik • Kunlik limit: 1 sinf / ${maxCoinsPerDay} Coin`,
-                              `Только активность на уроке • Дневной лимит: 1 класс / ${maxCoinsPerDay} койнов`
+                              `Faqat darsdagi faollik • Soatlik limit: 1 sinf / ${maxCoinsPerDay} Coin`,
+                              `Только активность на уроке • Почасовой лимит: 1 класс / ${maxCoinsPerDay} койнов`
                             )}
                           </span>
                         </div>
@@ -3269,58 +3277,67 @@ export default function TeacherPortal() {
                     </div>
                     <div className="space-y-1 min-w-0">
                       <div className="text-xs sm:text-sm font-black text-white flex items-center gap-2 flex-wrap">
-                        <span>{tr(`O'qituvchi Kunlik Coin Limiti (${coinSelectedGrade})`, `Дневной лимит учителя (${localizeGrade(coinSelectedGrade, language)})`)}</span>
+                        <span>{tr(`O'qituvchi Soatlik Coin Limiti (${coinSelectedGrade})`, `Почасовой лимит учителя (${localizeGrade(coinSelectedGrade, language)})`)}</span>
                         <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/35 text-amber-300 font-bold">
                           {tr(
-                            `Faqat darsdagi faollik • Har bir sinf uchun kuniga max ${maxCoinsPerDay} Coin`,
-                            `Только активность на уроке • Макс. ${maxCoinsPerDay} койнов в день на класс`
+                            `Faqat darsdagi faollik • Har bir sinf uchun 1 soatda max ${maxCoinsPerDay} Coin`,
+                            `Только активность на уроке • Макс. ${maxCoinsPerDay} койнов в час на класс`
                           )}
                         </span>
                       </div>
                       <p className="text-xs text-slate-300 leading-relaxed">
                         {coinsRemainingToday <= 0 ? (
-                          language === 'ru' ? (
-                            <>
-                              Сегодня для класса <strong className="text-rose-300">{localizeGrade(coinSelectedGrade, language)}</strong> дневной лимит исчерпан (выдано{' '}
-                              {coinsUsedToday} / {maxCoinsPerDay} койнов). Вы можете выдать другим классам ещё до{' '}
-                              <strong className="text-emerald-300">{maxCoinsPerDay} койнов</strong> сегодня!
-                            </>
-                          ) : (
-                            <>
-                              Bugun <strong className="text-rose-300">{coinSelectedGrade} sinfi</strong> uchun kunlik limit tugadi (
-                              {coinsUsedToday} / {maxCoinsPerDay} Coin berildi). Boshqa sinflarga bugun yana{' '}
-                              <strong className="text-emerald-300">{maxCoinsPerDay} Coin</strong> gacha berishingiz mumkin!
-                            </>
-                          )
+                          (() => {
+                            const waitMins = selectedClassDailyInfo?.cooldownMinutesLeft || dailyCoinStatus?.cooldownMinutesLeft || 0;
+                            return language === 'ru' ? (
+                              <>
+                                За последний час для класса <strong className="text-rose-300">{localizeGrade(coinSelectedGrade, language)}</strong> лимит исчерпан (выдано{' '}
+                                {coinsUsedToday} / {maxCoinsPerDay} койнов).
+                                {waitMins > 0 ? (
+                                  <> Новый лимит откроется <strong className="text-amber-300">через {waitMins} мин.</strong> </>
+                                ) : ' '}
+                                Вы можете начислить другим классам ещё до <strong className="text-emerald-300">{maxCoinsPerDay} койнов</strong>!
+                              </>
+                            ) : (
+                              <>
+                                Oxirgi 1 soatda <strong className="text-rose-300">{coinSelectedGrade} sinfi</strong> uchun limit tugadi (
+                                {coinsUsedToday} / {maxCoinsPerDay} Coin berildi).
+                                {waitMins > 0 ? (
+                                  <> Keyingi dars / soat uchun yangi limit <strong className="text-amber-300">yana {waitMins} daqiqadan so'ng</strong> ochiladi. </>
+                                ) : ' '}
+                                Boshqa sinflarga esa yana <strong className="text-emerald-300">{maxCoinsPerDay} Coin</strong> gacha berishingiz mumkin!
+                              </>
+                            );
+                          })()
                         ) : coinsUsedToday > 0 ? (
                           language === 'ru' ? (
                             <>
-                              Сегодня классу <strong className="text-cyan-300">{localizeGrade(coinSelectedGrade, language)}</strong> уже выдано {coinsUsedToday} койнов. Этому классу осталось{' '}
+                              За последний час классу <strong className="text-cyan-300">{localizeGrade(coinSelectedGrade, language)}</strong> уже выдано {coinsUsedToday} койнов. Этому классу осталось{' '}
                               <strong className="text-emerald-300">{coinsRemainingToday} койнов</strong>, а другим классам — до{' '}
                               <strong className="text-cyan-300">{maxCoinsPerDay} койнов</strong>.
                             </>
                           ) : (
                             <>
-                              Bugun <strong className="text-cyan-300">{coinSelectedGrade} sinfiga</strong> {coinsUsedToday} Coin berilgan. Ushbu sinfga yana{' '}
+                              Oxirgi 1 soatda <strong className="text-cyan-300">{coinSelectedGrade} sinfiga</strong> {coinsUsedToday} Coin berilgan. Ushbu sinfga yana{' '}
                               <strong className="text-emerald-300">{coinsRemainingToday} Coin</strong>, boshqa har bir sinfga esa{' '}
                               <strong className="text-cyan-300">{maxCoinsPerDay} Coin</strong> gacha berishingiz mumkin.
                             </>
                           )
                         ) : language === 'ru' ? (
                           <>
-                            Для класса <strong className="text-cyan-300">{localizeGrade(coinSelectedGrade, language)}</strong> дневной лимит полностью открыт. Каждому классу можно начислить до{' '}
-                            <strong className="text-emerald-300">{maxCoinsPerDay} койнов</strong> в день.
+                            Для класса <strong className="text-cyan-300">{localizeGrade(coinSelectedGrade, language)}</strong> часовой лимит полностью открыт. Каждому классу можно начислить до{' '}
+                            <strong className="text-emerald-300">{maxCoinsPerDay} койнов</strong> в час.
                           </>
                         ) : (
                           <>
-                            <strong className="text-cyan-300">{coinSelectedGrade} sinfi</strong> uchun bugungi kunlik limit to'liq ochiq. Har bir sinfga kuniga ko'pi bilan{' '}
+                            <strong className="text-cyan-300">{coinSelectedGrade} sinfi</strong> uchun soatlik limit to'liq ochiq. Har bir sinfga 1 soatda ko'pi bilan{' '}
                             <strong className="text-emerald-300">{maxCoinsPerDay} Coin</strong> gacha rag'batlantirishingiz mumkin.
                           </>
                         )}
                       </p>
                       {awardedClassesToday.length > 0 && (
                         <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[10px]">
-                          <span className="text-slate-400 font-bold">{tr('Bugun coin berilgan sinflar:', 'Классы с начислениями сегодня:')}</span>
+                          <span className="text-slate-400 font-bold">{tr('Oxirgi 1 soatda coin berilgan sinflar:', 'Классы с начислениями за последний час:')}</span>
                           {awardedClassesToday.map((cls) => {
                             const used = perClassStatusMap[cls]?.coinsUsedToday || 0;
                             const full = used >= maxCoinsPerDay;
@@ -3524,8 +3541,8 @@ export default function TeacherPortal() {
                       <span>
                         {coinsRemainingToday <= 0
                           ? tr(
-                              `Bugun ${coinSelectedGrade} sinfi uchun kunlik ${maxCoinsPerDay} Coin limiti to'liq ishlatilgan. Boshqa sinfni tanlab coin berishingiz yoki "Coin Olish (-)" rejimidan foydalanishingiz mumkin!`,
-                              `Сегодня для класса ${localizeGrade(coinSelectedGrade, language)} дневной лимит (${maxCoinsPerDay} койнов) полностью исчерпан. Вы можете выбрать другой класс или переключиться в режим «Снять (-)»!`
+                              `Oxirgi 1 soatda ${coinSelectedGrade} sinfi uchun ${maxCoinsPerDay} Coin limiti to'liq ishlatilgan. Boshqa sinfni tanlab coin berishingiz yoki "Coin Olish (-)" rejimidan foydalanishingiz mumkin!`,
+                              `За последний час для класса ${localizeGrade(coinSelectedGrade, language)} лимит (${maxCoinsPerDay} койнов) полностью исчерпан. Вы можете выбрать другой класс или переключиться в режим «Снять (-)»!`
                             )
                           : tr(
                               `${coinSelectedGrade} sinfida ro'yxatdan o'tgan o'quvchi yo'q. Sinf ro'yxatidan o'quvchilari bor sinfni tanlang.`,
@@ -3888,13 +3905,13 @@ export default function TeacherPortal() {
                                 const tooltipText =
                                   isTeacherRestricted && coinsRemainingToday <= 0
                                     ? tr(
-                                        `Bugun '${localizeGrade(coinSelectedGrade, language)}' sinfi uchun kunlik ${maxCoinsPerDay} coin limiti tugadi`,
-                                        `Сегодня для класса '${localizeGrade(coinSelectedGrade, language)}' дневной лимит (${maxCoinsPerDay} койнов) исчерпан`
+                                        `Oxirgi 1 soatda '${localizeGrade(coinSelectedGrade, language)}' sinfi uchun ${maxCoinsPerDay} coin limiti tugadi`,
+                                        `За последний час для класса '${localizeGrade(coinSelectedGrade, language)}' лимит (${maxCoinsPerDay} койнов) исчерпан`
                                       )
                                     : isTeacherRestricted && btn.amt > coinsRemainingToday
                                     ? tr(
-                                        `Bugun '${localizeGrade(coinSelectedGrade, language)}' sinfiga yana ko'pi bilan ${coinsRemainingToday} coin berish mumkin`,
-                                        `Сегодня классу '${localizeGrade(coinSelectedGrade, language)}' можно выдать ещё макс. ${coinsRemainingToday} койнов`
+                                        `Ushbu soatda '${localizeGrade(coinSelectedGrade, language)}' sinfiga yana ko'pi bilan ${coinsRemainingToday} coin berish mumkin`,
+                                        `В этот час классу '${localizeGrade(coinSelectedGrade, language)}' можно выдать ещё макс. ${coinsRemainingToday} койнов`
                                       )
                                     : `${btn.reason} +${btn.amt} ${tr('coin', 'койнов')}`;
                                 return (

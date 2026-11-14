@@ -3606,3 +3606,29 @@ body.dark-theme, body {
   color: #ffffff;
   transform: scale(1.05);
 }
+
+/* KaTeX Math Formula Enhancements */
+.math-rendered-text {
+  display: inline;
+  vertical-align: middle;
+}
+.katex-inline-wrapper {
+  display: inline-block;
+  vertical-align: middle;
+  margin: 0 0.15em;
+}
+.katex-display-wrapper {
+  display: block;
+  margin: 0.5em 0;
+  text-align: center;
+}
+.katex {
+  font-size: 1.12em !important;
+  color: inherit !important;
+}
+.katex .mord, .katex .mbin, .katex .mrel {
+  color: inherit !important;
+}
+.katex .frac-line {
+  border-bottom-width: 0.08em !important;
+}

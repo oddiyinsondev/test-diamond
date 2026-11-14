@@ -97,6 +97,8 @@ def normalize_math_text(text):
     # Unicode √
     text = re.sub(r'√\s*\(([^)]+)\)', r'\\sqrt{\1}', text)
     text = re.sub(r'√\s*([0-9a-zA-Z]+)', r'\\sqrt{\1}', text)
+    # Oddiy kasrlarni \frac formatiga o'tkazish (masalan: 5/3 -> \frac{5}{3})
+    text = re.sub(r'(^|[\s+\-*=:(])(\d+)\/(\d+)(?=[\s+\-*=:,)]|$)', r'\1\\frac{\2}{\3}', text)
     return text
 
 
@@ -186,14 +188,14 @@ def parse_excel_questions(file_obj):
         correct_idx = 0
         if ans_col < len(r) and r[ans_col] is not None:
             ans_str = str(r[ans_col]).strip().upper()
-            if ans_str in ['A', '1', 'A)', 'A.']:
-                correct_idx = 0
-            elif ans_str in ['B', '2', 'B)', 'B.']:
-                correct_idx = 1
-            elif ans_str in ['C', '3', 'C)', 'C.']:
-                correct_idx = 2
-            elif ans_str in ['D', '4', 'D)', 'D.']:
-                correct_idx = 3
+            ans_map = {
+                'A': 0, 'А': 0, '1': 0, 'A)': 0, 'А)': 0, 'A.': 0, 'А.': 0,
+                'B': 1, 'В': 1, '2': 1, 'B)': 1, 'В)': 1, 'B.': 1, 'В.': 1,
+                'C': 2, 'С': 2, '3': 2, 'C)': 2, 'С)': 2, 'C.': 2, 'С.': 2,
+                'D': 3, 'Д': 3, '4': 3, 'D)': 3, 'Д)': 3, 'D.': 3, 'Д.': 3,
+            }
+            if ans_str in ans_map:
+                correct_idx = ans_map[ans_str]
             else:
                 for idx, opt in enumerate(opts):
                     if opt and (opt.upper() == ans_str or ans_str in opt.upper()):
@@ -203,7 +205,7 @@ def parse_excel_questions(file_obj):
         # Har bir variant oldidagi A) B) larni tozalash va formulalarni normallashtirish
         cleaned_opts = []
         for opt in opts:
-            cleaned = re.sub(r'^[A-Da-d][\.\)]\s*', '', opt)
+            cleaned = re.sub(r'^[*+]?\s*[A-Fa-fА-Да-д0-9][\.\)]\s*', '', opt)
             cleaned = normalize_math_text(cleaned)
             cleaned_opts.append(cleaned)
 
@@ -285,8 +287,8 @@ def parse_word_questions(file_obj):
     current_q = None
 
     q_start_pattern = re.compile(r'^(?:#?\s*)?(\d+)[\.\)]\s*(.+)$')
-    opt_pattern = re.compile(r'^(\*?)\s*([A-Da-d])[\.\)]\s*(.+)$')
-    ans_pattern = re.compile(r'^(?:javob|ответ|to[\'\`\’]g[\'\`\’]ri javob|correct answer|ans)\s*[:=\-]\s*([A-Da-d0-9])', re.IGNORECASE)
+    opt_pattern = re.compile(r'^([*+]?)\s*([A-Fa-fА-Да-д0-9])[\.\)]\s*(.+)$')
+    ans_pattern = re.compile(r'^(?:javob|ответ|to[\'\`\’]g[\'\`\’]ri javob|correct answer|ans)\s*[:=\-]?\s*([*+]?[A-Fa-fА-Да-д0-9])', re.IGNORECASE)
 
     for line in paras:
         q_match = q_start_pattern.match(line)
@@ -308,11 +310,11 @@ def parse_word_questions(file_obj):
 
         opt_match = opt_pattern.match(line)
         if opt_match and current_q:
-            is_star = bool(opt_match.group(1))
+            is_marker = bool(opt_match.group(1))
             opt_letter = opt_match.group(2).upper()
             opt_text = opt_match.group(3).strip()
 
-            if is_star:
+            if is_marker:
                 current_q['correctIndex'] = len(current_q['options'])
 
             current_q['options'].append(opt_text)
@@ -320,11 +322,17 @@ def parse_word_questions(file_obj):
 
         ans_match = ans_pattern.match(line)
         if ans_match and current_q:
-            letter = ans_match.group(1).upper()
-            if letter in ['A', '1']: current_q['correctIndex'] = 0
-            elif letter in ['B', '2']: current_q['correctIndex'] = 1
-            elif letter in ['C', '3']: current_q['correctIndex'] = 2
-            elif letter in ['D', '4']: current_q['correctIndex'] = 3
+            letter = ans_match.group(1).lstrip('*+').upper()
+            letter_map = {
+                'A': 0, 'А': 0, '1': 0,
+                'B': 1, 'В': 1, '2': 1,
+                'C': 2, 'С': 2, '3': 2,
+                'D': 3, 'Д': 3, '4': 3,
+                'E': 4, 'Е': 4, '5': 4,
+                'F': 5, '6': 5,
+            }
+            if letter in letter_map:
+                current_q['correctIndex'] = letter_map[letter]
             continue
 
         if current_q and not current_q['options']:

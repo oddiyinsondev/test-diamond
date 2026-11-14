@@ -934,6 +934,51 @@ class TeacherRestrictionsTests(TestCase):
         self.st_7a.refresh_from_db()
         self.assertEqual(self.st_7a.coins, 10)  # 12 - 3 -> edited to 12 - 2 = 10
 
+    def test_teacher_coin_hourly_rolling_limit(self):
+        cli = Client()
+        cli.login(username='tch_1', password='123')
+
+        # 1. Give 5 coins to 7-A
+        r1 = cli.post(
+            '/api/coins/award/',
+            {'studentId': self.st_7a.id, 'amount': 5, 'reason': 'Darsda juda faol'},
+            content_type='application/json',
+        )
+        self.assertEqual(r1.status_code, 200)
+        self.assertEqual(r1.json()['dailyCoinStatus']['coinsRemainingToday'], 0)
+        self.assertEqual(r1.json()['dailyCoinStatus']['coinsRemainingThisHour'], 0)
+        self.assertGreater(r1.json()['dailyCoinStatus']['cooldownMinutesLeft'], 0)
+
+        # 2. Blocked within the hour for 7-A
+        r_blocked = cli.post(
+            '/api/coins/award/',
+            {'studentId': self.st_7a.id, 'amount': 1, 'reason': 'Yana doskaga chiqdi'},
+            content_type='application/json',
+        )
+        self.assertEqual(r_blocked.status_code, 403)
+        self.assertIn('Soatlik limit', r_blocked.json()['error'])
+
+        # 3. Class 7-B is still available right now (independent class limit)
+        r_7b = cli.post(
+            '/api/coins/award/',
+            {'studentId': self.st_7b.id, 'amount': 5, 'reason': 'Darsda faol'},
+            content_type='application/json',
+        )
+        self.assertEqual(r_7b.status_code, 200)
+
+        # 4. Simulate 1 hour and 5 minutes passing by updating tx.created_at to 65 mins ago
+        past_time = timezone.now() - timedelta(minutes=65)
+        CoinTransaction.objects.filter(student=self.st_7a, given_by=self.teacher1).update(created_at=past_time)
+
+        # 5. Now 7-A has 5 coins available again!
+        r_next_hour = cli.post(
+            '/api/coins/award/',
+            {'studentId': self.st_7a.id, 'amount': 5, 'reason': 'Keyingi darsda juda faol'},
+            content_type='application/json',
+        )
+        self.assertEqual(r_next_hour.status_code, 200)
+        self.assertEqual(r_next_hour.json()['dailyCoinStatus']['coinsRemainingThisHour'], 0)
+
     def test_admin_test_create_detail_edit_and_delete_workflow(self):
         adm = Client()
         adm.login(username='adm_tr', password='123')

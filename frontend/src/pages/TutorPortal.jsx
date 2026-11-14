@@ -30,6 +30,9 @@ import {
   Calendar,
   RefreshCw,
   ShieldCheck,
+  KeyRound,
+  Copy,
+  Check,
 } from 'lucide-react';
 
 const TUTOR_VALID_TABS = ['students', 'coins', 'profile'];
@@ -90,6 +93,11 @@ export default function TutorPortal() {
   });
   const [studentAvatarFile, setStudentAvatarFile] = useState(null);
   const [studentAvatarPreview, setStudentAvatarPreview] = useState('');
+  const [issuedStudentCreds, setIssuedStudentCreds] = useState(null);
+  const [copiedStudentCreds, setCopiedStudentCreds] = useState(false);
+  const [resetPwStudent, setResetPwStudent] = useState(null);
+  const [quickStudentPw, setQuickStudentPw] = useState('');
+  const [savingQuickPw, setSavingQuickPw] = useState(false);
 
   // Edit Student modal state
   const [editingStudent, setEditingStudent] = useState(null);
@@ -312,6 +320,29 @@ export default function TutorPortal() {
     setIsAddStudentOpen(true);
   };
 
+  const handleCopyStudentCredentials = async (creds) => {
+    if (!creds) return;
+    const portalUrl = `${window.location.origin}/student/`;
+    const lines = [
+      `Diamond School — ${tr("O'quvchi kirish maʼlumotlari", 'Данные для входа ученика')}`,
+      `${tr('F.I.Sh', 'Ф.И.О.')}: ${creds.fullName}`,
+      `${tr('Sinf', 'Класс')}: ${creds.grade || '-'}`,
+      `${tr('Portal', 'Портал')}: ${portalUrl}`,
+      `${tr('Login', 'Логин')}: ${creds.username}`,
+      creds.password
+        ? `${tr('Parol', 'Пароль')}: ${creds.password}`
+        : `${tr('Parol', 'Пароль')}: ${tr('(Avvalgi parol saqlangan)', '(Сохранён прежний пароль)')}`,
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(lines);
+      setCopiedStudentCreds(true);
+      showToast(tr("O'quvchi ma'lumotlari nusxalandi!", 'Данные ученика скопированы!'), 'success');
+      setTimeout(() => setCopiedStudentCreds(false), 2200);
+    } catch {
+      showToast(tr('Nusxalash imkoni bo‘lmadi, qo‘lda belgilang.', 'Не удалось скопировать автоматически.'), 'warning');
+    }
+  };
+
   const handleCreateStudent = async (e) => {
     e.preventDefault();
     if (!studentForm.grade) {
@@ -335,6 +366,14 @@ export default function TutorPortal() {
         tr("Yangi o'quvchi muvaffaqiyatli qo'shildi!", 'Новый ученик успешно добавлен!'),
         'success'
       );
+      setIssuedStudentCreds({
+        fullName: studentForm.fullName.trim(),
+        username: studentForm.username.trim(),
+        password: studentForm.password.trim(),
+        grade: studentForm.grade,
+        mode: 'created',
+      });
+      setCopiedStudentCreds(false);
       setIsAddStudentOpen(false);
       setStudentAvatarFile(null);
       setStudentAvatarPreview('');
@@ -402,6 +441,16 @@ export default function TutorPortal() {
           tr("O'quvchi ma'lumotlari yangilandi!", 'Данные ученика обновлены!'),
         'success'
       );
+      if (editStudentForm.password.trim()) {
+        setIssuedStudentCreds({
+          fullName: editStudentForm.fullName.trim(),
+          username: editStudentForm.username.trim(),
+          password: editStudentForm.password.trim(),
+          grade: editStudentForm.grade,
+          mode: 'updated',
+        });
+        setCopiedStudentCreds(false);
+      }
       setEditingStudent(null);
       await loadTutorData();
     } catch (err) {
@@ -412,6 +461,38 @@ export default function TutorPortal() {
       );
     } finally {
       setSavingEditStudent(false);
+    }
+  };
+
+  const handleSaveQuickStudentPw = async (e) => {
+    e.preventDefault();
+    if (!resetPwStudent) return;
+    const cleanPw = quickStudentPw.trim();
+    if (cleanPw.length < 3) {
+      showToast(tr("Parol kamida 3 ta belgidan iborat bo'lishi kerak!", 'Пароль должен содержать минимум 3 символа!'), 'warning');
+      return;
+    }
+    setSavingQuickPw(true);
+    try {
+      const fd = new FormData();
+      fd.append('password', cleanPw);
+      await api.tutor.updateStudent(resetPwStudent.id, fd);
+      showToast(tr("O'quvchi paroli muvaffaqiyatli yangilandi!", 'Пароль ученика успешно обновлен!'), 'success');
+      setIssuedStudentCreds({
+        fullName: resetPwStudent.fullName,
+        username: resetPwStudent.username,
+        password: cleanPw,
+        grade: resetPwStudent.grade,
+        mode: 'updated',
+      });
+      setCopiedStudentCreds(false);
+      setResetPwStudent(null);
+      setQuickStudentPw('');
+      await loadTutorData();
+    } catch (err) {
+      showToast(err.message || tr("Parolni yangilashda xatolik!", 'Ошибка при обновлении пароля!'), 'error');
+    } finally {
+      setSavingQuickPw(false);
     }
   };
 
@@ -1075,6 +1156,67 @@ export default function TutorPortal() {
                 </div>
               )}
 
+              {/* Copyable Issued Student Credentials Banner */}
+              {issuedStudentCreds && (
+                <div
+                  data-testid="tutor-issued-student-credentials-card"
+                  className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/40 space-y-3 shadow-lg"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-purple-300 font-extrabold text-sm">
+                      <KeyRound size={17} />
+                      <span>
+                        {issuedStudentCreds.mode === 'created'
+                          ? tr("O'quvchi qo'shildi — kirish maʼlumotlarini o'quvchiga topshiring", 'Ученик создан — передайте данные для входа')
+                          : tr("O'quvchi kirish maʼlumotlari yangilandi", 'Данные входа ученика обновлены')}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleCopyStudentCredentials(issuedStudentCreds)}
+                        className="btn btn-xs bg-purple-500/20 hover:bg-purple-500/30 border border-purple-400/50 text-purple-200 font-bold flex items-center gap-1.5"
+                      >
+                        {copiedStudentCreds ? <Check size={13} /> : <Copy size={13} />}
+                        <span>{copiedStudentCreds ? tr('Nusxalandi', 'Скопировано') : tr('Nusxa olish', 'Копировать')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIssuedStudentCreds(null)}
+                        className="text-xs text-slate-400 hover:text-white px-2 py-1"
+                        title={tr('Yopish', 'Закрыть')}
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 text-xs">
+                    <div className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800">
+                      <div className="text-[10px] text-slate-400 uppercase font-bold">{tr("O'quvchi", 'Ученик')}</div>
+                      <div className="font-bold text-white truncate">{issuedStudentCreds.fullName}</div>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800">
+                      <div className="text-[10px] text-slate-400 uppercase font-bold">{tr('Sinf', 'Класс')}</div>
+                      <div className="font-bold text-purple-300">{issuedStudentCreds.grade || '-'}</div>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800">
+                      <div className="text-[10px] text-slate-400 uppercase font-bold">{tr('Login', 'Логин')}</div>
+                      <div className="font-mono font-bold text-cyan-300">{issuedStudentCreds.username}</div>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800">
+                      <div className="text-[10px] text-slate-400 uppercase font-bold">{tr('Parol', 'Пароль')}</div>
+                      <div className="font-mono font-bold text-amber-300">
+                        {issuedStudentCreds.password || tr('(O‘zgarmadi)', '(Без изменений)')}
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800">
+                      <div className="text-[10px] text-slate-400 uppercase font-bold">{tr('Portal', 'Портал')}</div>
+                      <div className="font-mono font-bold text-emerald-300">/student/</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Students Table */}
               <div className="table-responsive bg-slate-900/70 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
                 <table className="diamond-table w-full text-left">
@@ -1133,6 +1275,17 @@ export default function TutorPortal() {
                         </td>
                         <td className="text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              className="btn-icon text-amber-400 hover:bg-amber-500/20 p-1.5 rounded-lg transition-colors"
+                              onClick={() => {
+                                setResetPwStudent(std);
+                                setQuickStudentPw('1234');
+                              }}
+                              title={tr("Parolni o'zgartirish", 'Изменить пароль')}
+                            >
+                              <KeyRound size={15} />
+                            </button>
                             <button
                               type="button"
                               className="btn-icon text-cyan-400 hover:bg-cyan-500/20 p-1.5 rounded-lg transition-colors"
@@ -1964,6 +2117,70 @@ export default function TutorPortal() {
                     <Save size={14} />
                   )}
                   <span>{tr('Saqlash', 'Сохранить')}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: QUICK RESET STUDENT PASSWORD */}
+      {resetPwStudent && (
+        <div className="modal-backdrop" onClick={() => setResetPwStudent(null)}>
+          <div className="modal-content animate-scale-in" style={{ maxWidth: '420px', padding: '1.75rem' }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2 text-purple-400 font-extrabold text-base">
+                <KeyRound size={18} />
+                <span>{tr("O'quvchi Parolini Yangilash", 'Обновить пароль ученика')}</span>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setResetPwStudent(null)}
+                style={{ borderRadius: '50%', width: '28px', height: '28px', padding: 0 }}
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveQuickStudentPw} className="space-y-4 pt-4">
+              <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300">
+                <div className="font-bold text-white text-sm mb-1">{resetPwStudent.fullName}</div>
+                <div className="flex items-center gap-3 font-mono text-[11px] text-slate-400">
+                  <span>Login: <b className="text-cyan-300">{resetPwStudent.username}</b></span>
+                  <span>Sinf: <b className="text-purple-300">{resetPwStudent.grade || '-'}</b></span>
+                </div>
+              </div>
+
+              <div>
+                <label className="input-label">{tr("Yangi maxfiy parol kiriting *", "Введите новый пароль *")}</label>
+                <input
+                  type="text"
+                  className="clean-input font-mono"
+                  value={quickStudentPw}
+                  onChange={(e) => setQuickStudentPw(e.target.value)}
+                  placeholder={tr("Kamida 3 ta belgi (masalan: 1234)", "Минимум 3 символа")}
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setResetPwStudent(null)}
+                  disabled={savingQuickPw}
+                >
+                  {tr('Bekor qilish', 'Отмена')}
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-diamond-cyan btn-sm font-bold flex items-center gap-1.5"
+                  disabled={savingQuickPw || !quickStudentPw.trim()}
+                >
+                  {savingQuickPw && <Loader2 size={14} className="animate-spin" />}
+                  <span>{tr('Parolni Saqlash', 'Сохранить пароль')}</span>
                 </button>
               </div>
             </form>

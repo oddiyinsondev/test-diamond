@@ -214,8 +214,10 @@ from core.importer import (
 
 SUBJECTS_LIST = ['Matematika', 'Fizika', 'Informatika', 'Ingliz tili', 'Biologiya', 'Kimyo', 'Tarix', 'Ona tili va Adabiyot']
 
-DAILY_TEACHER_MAX_CLASSES = None  # Cheklovsiz: har bir sinf uchun alohida kunlik limit ishlaydi
-DAILY_TEACHER_MAX_COINS = 5  # Har bir sinf uchun kuniga ko'pi bilan 5 Coin
+TEACHER_COIN_WINDOW_HOURS = 1  # Har bir sinf uchun har 1 soatda (dars oralig'ida) limit
+HOURLY_TEACHER_MAX_COINS = 5  # Har bir sinf uchun 1 soatda ko'pi bilan 5 Coin
+DAILY_TEACHER_MAX_COINS = HOURLY_TEACHER_MAX_COINS  # Eski nom va mavjud testlar bilan to'liq moslik uchun
+DAILY_TEACHER_MAX_CLASSES = None  # Cheklovsiz: har bir sinf uchun alohida soatlik limit ishlaydi
 
 NON_LESSON_COIN_REASON_RE = re.compile(
     r'(?:\btest\w*|\bimti[hx]on\w*|\bolimpiad\w*|\bnazorat\s+ish\w*|\buy(?:ga|dagi)?\s*vazifa\w*|\byakuniy\b|\bchorak\w*\b|\bsinfdoshiga\s+yordam\b|\bтест\w*|\bэкзамен\w*|\bолимпиад\w*|\bдомашн\w*\s+задан\w*|\bконтрольн\w*\s+работ\w*)',
@@ -244,7 +246,7 @@ def is_admin_user(user):
     )
 
 def get_teacher_daily_coin_status(teacher, enforce_for_portal=False, grade=''):
-    """O'qituvchining bugungi (har bir sinf uchun kuniga max 5 coin) kunlik limitini hisoblash"""
+    """O'qituvchining soatlik (har bir sinf uchun 1 soatda max 5 coin) limitini hisoblash"""
     selected_grade = (grade or '').strip()
     if selected_grade.lower() in ('all', 'barchasi'):
         selected_grade = ''
@@ -254,8 +256,12 @@ def get_teacher_daily_coin_status(teacher, enforce_for_portal=False, grade=''):
         return {
             'isLimited': False,
             'isPerClassLimit': False,
+            'limitType': 'hourly',
+            'limitWindowHours': TEACHER_COIN_WINDOW_HOURS,
+            'limitWindowMinutes': TEACHER_COIN_WINDOW_HOURS * 60,
             'maxClassesPerDay': None,
             'maxCoinsPerDay': None,
+            'maxCoinsPerHour': None,
             'selectedClass': selected_grade or None,
             'awardedClassToday': None,
             'awardedClassesToday': [],
@@ -263,18 +269,20 @@ def get_teacher_daily_coin_status(teacher, enforce_for_portal=False, grade=''):
             'totalCoinsUsedAllClassesToday': 0,
             'coinsUsedToday': 0,
             'coinsRemainingToday': 999999,
+            'coinsUsedThisHour': 0,
+            'coinsRemainingThisHour': 999999,
+            'cooldownMinutesLeft': 0,
+            'nextAvailableAtIso': None,
             'canAwardToday': True,
         }
 
-    today = timezone.localdate()
-    tz = timezone.get_current_timezone()
-    start_dt = timezone.make_aware(datetime.combine(today, time.min), tz)
-    end_dt = start_dt + timedelta(days=1)
+    now = timezone.now()
+    window_hours = TEACHER_COIN_WINDOW_HOURS
+    start_dt = now - timedelta(hours=window_hours)
 
     qs = CoinTransaction.objects.filter(
         given_by=teacher,
         created_at__gte=start_dt,
-        created_at__lt=end_dt,
         amount__gt=0,
         test_result__isnull=True,
     )
@@ -286,11 +294,16 @@ def get_teacher_daily_coin_status(teacher, enforce_for_portal=False, grade=''):
     awarded_classes = []
     per_class_batches = {}  # {cls_name: [group_dict, ...]}
     per_class_individual = {}  # {cls_name: int}
+    per_class_earliest_dt = {}  # {cls_name: datetime}
 
     for tx in txs:
         cls_name = (tx.student.grade or '').strip() if tx.student else ''
         if cls_name and cls_name not in awarded_classes:
             awarded_classes.append(cls_name)
+
+        if cls_name:
+            if cls_name not in per_class_earliest_dt or tx.created_at < per_class_earliest_dt[cls_name]:
+                per_class_earliest_dt[cls_name] = tx.created_at
 
         reason_str = tx.reason or ''
         if (
@@ -323,21 +336,44 @@ def get_teacher_daily_coin_status(teacher, enforce_for_portal=False, grade=''):
         b_used = sum(g['amount'] for g in per_class_batches.get(cls_name, []))
         i_used = per_class_individual.get(cls_name, 0)
         c_used = b_used + i_used
-        c_rem = max(0, DAILY_TEACHER_MAX_COINS - c_used)
+        c_rem = max(0, HOURLY_TEACHER_MAX_COINS - c_used)
+
+        mins_left = 0
+        next_iso = None
+        if c_rem <= 0 and cls_name in per_class_earliest_dt:
+            earliest = per_class_earliest_dt[cls_name]
+            unlock_at = earliest + timedelta(hours=window_hours)
+            secs_left = max(0, int((unlock_at - now).total_seconds()))
+            mins_left = (secs_left + 59) // 60 if secs_left > 0 else 0
+            next_iso = unlock_at.isoformat()
+
         per_class_status[cls_name] = {
             'className': cls_name,
             'coinsUsedToday': c_used,
             'coinsRemainingToday': c_rem,
-            'maxCoinsPerDay': DAILY_TEACHER_MAX_COINS,
+            'coinsUsedThisHour': c_used,
+            'coinsRemainingThisHour': c_rem,
+            'maxCoinsPerDay': HOURLY_TEACHER_MAX_COINS,
+            'maxCoinsPerHour': HOURLY_TEACHER_MAX_COINS,
+            'cooldownMinutesLeft': mins_left,
+            'nextAvailableAtIso': next_iso,
             'batchAwardedToday': b_used > 0,
+            'batchAwardedThisHour': b_used > 0,
             'canAwardToday': c_rem > 0,
+            'canAwardThisHour': c_rem > 0,
         }
 
     total_used_all = sum(item['coinsUsedToday'] for item in per_class_status.values())
+    today = timezone.localdate()
+
     if selected_grade:
         sel_info = per_class_status.get(selected_grade, {
             'coinsUsedToday': 0,
-            'coinsRemainingToday': DAILY_TEACHER_MAX_COINS,
+            'coinsRemainingToday': HOURLY_TEACHER_MAX_COINS,
+            'coinsUsedThisHour': 0,
+            'coinsRemainingThisHour': HOURLY_TEACHER_MAX_COINS,
+            'cooldownMinutesLeft': 0,
+            'nextAvailableAtIso': None,
             'batchAwardedToday': False,
             'canAwardToday': True,
         })
@@ -345,19 +381,27 @@ def get_teacher_daily_coin_status(teacher, enforce_for_portal=False, grade=''):
         coins_remaining = sel_info['coinsRemainingToday']
         batch_awarded_today = sel_info['batchAwardedToday']
         can_award_today = sel_info['canAwardToday']
+        cooldown_mins = sel_info.get('cooldownMinutesLeft', 0)
+        next_iso = sel_info.get('nextAvailableAtIso')
     else:
         coins_used = total_used_all
-        coins_remaining = DAILY_TEACHER_MAX_COINS
+        coins_remaining = HOURLY_TEACHER_MAX_COINS
         batch_awarded_today = any(item['batchAwardedToday'] for item in per_class_status.values())
         can_award_today = True
+        cooldown_mins = 0
+        next_iso = None
 
     awarded_class = awarded_classes[0] if awarded_classes else None
 
     return {
         'isLimited': True,
         'isPerClassLimit': True,
+        'limitType': 'hourly',
+        'limitWindowHours': window_hours,
+        'limitWindowMinutes': window_hours * 60,
         'maxClassesPerDay': None,
-        'maxCoinsPerDay': DAILY_TEACHER_MAX_COINS,
+        'maxCoinsPerDay': HOURLY_TEACHER_MAX_COINS,
+        'maxCoinsPerHour': HOURLY_TEACHER_MAX_COINS,
         'date': today.strftime('%d.%m.%Y'),
         'dateIso': today.isoformat(),
         'selectedClass': selected_grade or None,
@@ -367,25 +411,26 @@ def get_teacher_daily_coin_status(teacher, enforce_for_portal=False, grade=''):
         'totalCoinsUsedAllClassesToday': total_used_all,
         'coinsUsedToday': coins_used,
         'coinsRemainingToday': coins_remaining,
+        'coinsUsedThisHour': coins_used,
+        'coinsRemainingThisHour': coins_remaining,
+        'cooldownMinutesLeft': cooldown_mins,
+        'nextAvailableAtIso': next_iso,
         'batchAwardedToday': batch_awarded_today,
         'canAwardToday': can_award_today,
     }
 
 
 def get_teacher_students_today_coin_totals(teacher, student_ids, is_admin_preview=False, exclude_tx_id=None):
-    """Har bir o'quvchi bugun mazkur o'qituvchidan olgan dars faolligi coinlari yig'indisini qaytaradi"""
+    """Har bir o'quvchi oxirgi 1 soatda mazkur o'qituvchidan olgan dars faolligi coinlari yig'indisini qaytaradi"""
     if not teacher or not student_ids:
         return {}
-    today = timezone.localdate()
-    tz = timezone.get_current_timezone()
-    start_dt = timezone.make_aware(datetime.combine(today, time.min), tz)
-    end_dt = start_dt + timedelta(days=1)
+    now = timezone.now()
+    start_dt = now - timedelta(hours=TEACHER_COIN_WINDOW_HOURS)
 
     qs = CoinTransaction.objects.filter(
         given_by=teacher,
         student_id__in=student_ids,
         created_at__gte=start_dt,
-        created_at__lt=end_dt,
         amount__gt=0,
         test_result__isnull=True,
     )
@@ -2415,7 +2460,11 @@ def api_teacher_tests(request):
                     for opt_idx, opt_raw in enumerate(opts):
                         if isinstance(opt_raw, dict):
                             opt_text = (opt_raw.get('text') or '').strip()
-                            is_corr = bool(opt_raw.get('isCorrect') or opt_raw.get('is_correct'))
+                            has_explicit_corr = ('isCorrect' in opt_raw) or ('is_correct' in opt_raw)
+                            if has_explicit_corr:
+                                is_corr = bool(opt_raw.get('isCorrect') or opt_raw.get('is_correct'))
+                            else:
+                                is_corr = (opt_idx == correct_idx)
                         else:
                             opt_text = str(opt_raw).strip()
                             is_corr = (opt_idx == correct_idx)
@@ -2425,6 +2474,14 @@ def api_teacher_tests(request):
                             text=opt_text,
                             is_correct=is_corr
                         )
+
+                    # Agar birorta ham to'g'ri variant belgilanmagan bo'lsa, correct_idx dagi variantni to'g'ri deb belgilash
+                    if not question_obj.options.filter(is_correct=True).exists():
+                        target_opts = list(question_obj.options.order_by('id'))
+                        if target_opts:
+                            idx_to_mark = correct_idx if 0 <= correct_idx < len(target_opts) else 0
+                            target_opts[idx_to_mark].is_correct = True
+                            target_opts[idx_to_mark].save(update_fields=['is_correct'])
 
                 if imm_enabled and imm_amount > 0 and (imm_student_ids or imm_top_count > 0):
                     imm_reason = imm_reason_raw or _msg(
@@ -2660,7 +2717,11 @@ def api_teacher_test_manage(request, test_id):
                         for opt_idx, opt_raw in enumerate(opts):
                             if isinstance(opt_raw, dict):
                                 opt_text = (opt_raw.get('text') or '').strip()
-                                is_corr = bool(opt_raw.get('isCorrect') or opt_raw.get('is_correct'))
+                                has_explicit_corr = ('isCorrect' in opt_raw) or ('is_correct' in opt_raw)
+                                if has_explicit_corr:
+                                    is_corr = bool(opt_raw.get('isCorrect') or opt_raw.get('is_correct'))
+                                else:
+                                    is_corr = (opt_idx == correct_idx)
                             else:
                                 opt_text = str(opt_raw).strip()
                                 is_corr = (opt_idx == correct_idx)
@@ -2670,6 +2731,13 @@ def api_teacher_test_manage(request, test_id):
                                 text=opt_text,
                                 is_correct=is_corr
                             )
+
+                        if not q_obj.options.filter(is_correct=True).exists():
+                            target_opts = list(q_obj.options.order_by('id'))
+                            if target_opts:
+                                idx_to_mark = correct_idx if 0 <= correct_idx < len(target_opts) else 0
+                                target_opts[idx_to_mark].is_correct = True
+                                target_opts[idx_to_mark].save(update_fields=['is_correct'])
 
             return JsonResponse({'success': True, 'message': _msg(lang, 'Test muvaffaqiyatli tahrirlandi va saqlandi!', 'Тест успешно отредактирован и сохранён!')})
         except Exception as e:
@@ -3415,6 +3483,83 @@ def api_student_test_detail(request, test_id):
         return JsonResponse({'error': _msg(lang, 'Test topilmadi!', 'Тест не найден!')}, status=404)
 
 
+def resolve_question_option(question, raw_value):
+    """
+    O'quvchi topshirgan javobdan to'g'ri Option obyektini aniqlash.
+    raw_value quyidagilardan biri bo'lishi mumkin:
+      - Option ID (int yoki raqamli satr: 300, '300')
+      - Option indeksi (0, 1, 2, 3 yoki '0', '1', '2', '3')
+      - 1-asosli indeks (1, 2, 3, 4)
+      - Harf: 'A', 'B', 'C', 'D' (Lotin va Kirill: 'А', 'В', 'С', 'D')
+      - Matn: variant matni bilan to'liq yoki mos keluvchi satr
+    """
+    if raw_value is None:
+        return None
+
+    if isinstance(raw_value, Option):
+        return raw_value
+
+    options = list(question.options.order_by('id'))
+    if not options:
+        return None
+
+    raw_str = str(raw_value).strip()
+    if not raw_str:
+        return None
+
+    # 1. Option ID bo'yicha qidirish (agar butun son bo'lsa)
+    val_int = None
+    try:
+        val_int = int(raw_str)
+        by_id = next((o for o in options if o.id == val_int), None)
+        if by_id:
+            return by_id
+    except (ValueError, TypeError):
+        val_int = None
+
+    # 2. Indeks bo'yicha qidirish (0-asosli yoki 1-asosli)
+    if val_int is not None:
+        if 0 <= val_int < len(options):
+            return options[val_int]
+        if 1 <= val_int <= len(options):
+            return options[val_int - 1]
+
+    # 3. Harf bo'yicha qidirish (Lotin va Kirill harflari)
+    val_upper = raw_str.upper()
+    letter_map = {
+        'A': 0, 'А': 0, '1': 0,
+        'B': 1, 'В': 1, '2': 1,
+        'C': 2, 'С': 2, '3': 2,
+        'D': 3, 'Д': 3, '4': 3,
+        'E': 4, 'Е': 4, '5': 4,
+        'F': 5, '6': 5,
+    }
+    if val_upper in letter_map:
+        idx = letter_map[val_upper]
+        if 0 <= idx < len(options):
+            return options[idx]
+
+    # Harf prefiksi bilan (masalan "A)", "B.", "C - ")
+    for prefix, l_idx in letter_map.items():
+        if val_upper.startswith(prefix + ')') or val_upper.startswith(prefix + '.') or val_upper.startswith(prefix + ' '):
+            if 0 <= l_idx < len(options):
+                return options[l_idx]
+
+    # 4. Matn bo'yicha qidirish
+    cleaned_input = re.sub(r'\s+', ' ', raw_str.lower())
+    for o in options:
+        cleaned_opt = re.sub(r'\s+', ' ', o.text.strip().lower())
+        if cleaned_opt == cleaned_input:
+            return o
+
+    for o in options:
+        cleaned_opt = re.sub(r'\s+', ' ', o.text.strip().lower())
+        if cleaned_input in cleaned_opt or cleaned_opt in cleaned_input:
+            return o
+
+    return None
+
+
 @csrf_exempt
 def api_student_submit_test(request, test_id):
     lang = _req_lang(request)
@@ -3488,13 +3633,14 @@ def api_student_submit_test(request, test_id):
         )
 
         for q in questions:
-            selected_opt_id = answers.get(str(q.id)) or answers.get(q.id)
-            selected_option = None
-            if selected_opt_id:
-                selected_option = Option.objects.filter(id=selected_opt_id, question=q).first()
+            raw_answer = answers.get(str(q.id))
+            if raw_answer is None:
+                raw_answer = answers.get(q.id)
+
+            selected_option = resolve_question_option(q, raw_answer) if raw_answer is not None else None
 
             correct_option = q.options.filter(is_correct=True).first()
-            is_correct = (selected_option is not None) and (selected_option.is_correct)
+            is_correct = (selected_option is not None) and bool(selected_option.is_correct)
 
             if is_correct:
                 correct_count += 1
@@ -4578,20 +4724,20 @@ def api_award_coins(request):
 
             if amount == 0:
                 return JsonResponse({'error': _msg(lang, "Coin miqdori 0 bo'lishi mumkin emas!", "Количество койнов не может быть 0!")}, status=400)
-            if amount > DAILY_TEACHER_MAX_COINS:
+            if amount > HOURLY_TEACHER_MAX_COINS:
                 return JsonResponse({
                     'error': _msg(
                         lang,
-                        f"Kunlik limit: Har bir sinf uchun kuniga ko'pi bilan {DAILY_TEACHER_MAX_COINS} Coin berish mumkin!",
-                        f"Дневной лимит: максимум {DAILY_TEACHER_MAX_COINS} Coin в день для каждого класса!",
+                        f"Soatlik limit: Har bir sinf uchun 1 soatda (dars oralig'ida) ko'pi bilan {HOURLY_TEACHER_MAX_COINS} Coin berish mumkin!",
+                        f"Почасовой лимит: максимум {HOURLY_TEACHER_MAX_COINS} Coin в час (за урок) для каждого класса!",
                     )
                 }, status=403)
-            if amount < -DAILY_TEACHER_MAX_COINS:
+            if amount < -HOURLY_TEACHER_MAX_COINS:
                 return JsonResponse({
                     'error': _msg(
                         lang,
-                        f"Bir urinishda ko'pi bilan {DAILY_TEACHER_MAX_COINS} Coin olish mumkin!",
-                        f"За один раз можно снять не более {DAILY_TEACHER_MAX_COINS} койнов!",
+                        f"Bir urinishda ko'pi bilan {HOURLY_TEACHER_MAX_COINS} Coin olish mumkin!",
+                        f"За один раз можно снять не более {HOURLY_TEACHER_MAX_COINS} койнов!",
                     )
                 }, status=403)
 
@@ -4620,21 +4766,25 @@ def api_award_coins(request):
             if amount > 0:
                 daily_status = get_teacher_daily_coin_status(giver, enforce_for_portal=True, grade=target_class)
                 if not daily_status['canAwardToday'] or daily_status['coinsRemainingToday'] <= 0:
+                    mins_left = daily_status.get('cooldownMinutesLeft', 60)
+                    wait_msg_uz = f" Yana {mins_left} daqiqadan so'ng (keyingi darsda) yangi limit ochiladi." if mins_left > 0 else ""
+                    wait_msg_ru = f" Новый лимит откроется через {mins_left} мин. (к следующему уроку)." if mins_left > 0 else ""
                     return JsonResponse({
                         'error': _msg(
                             lang,
-                            f"Kunlik limit tugadi! Bugun '{target_class}' sinfi uchun kunlik {DAILY_TEACHER_MAX_COINS} coin limiti to'liq berib bo'lindi. Boshqa sinflarga berishingiz mumkin, '{target_class}' sinfi uchun yangi limit ertaga ochiladi.",
-                            f"Дневной лимит исчерпан! На сегодня лимит в {DAILY_TEACHER_MAX_COINS} койнов для класса '{target_class}' полностью использован. Вы можете начислять другим классам, а новый лимит для '{target_class}' откроется завтра.",
+                            f"Soatlik limit tugadi! Oxirgi 1 soatda '{target_class}' sinfi uchun {HOURLY_TEACHER_MAX_COINS} coin limiti to'liq berib bo'lindi.{wait_msg_uz} Boshqa sinflarga esa bemalol berishingiz mumkin.",
+                            f"Почасовой лимит исчерпан! За последний час для класса '{target_class}' лимит в {HOURLY_TEACHER_MAX_COINS} койнов полностью использован.{wait_msg_ru} Вы можете начислять другим классам.",
                         ),
                         'dailyCoinStatus': daily_status
                     }, status=403)
 
                 if amount > daily_status['coinsRemainingToday']:
+                    rem = daily_status['coinsRemainingToday']
                     return JsonResponse({
                         'error': _msg(
                             lang,
-                            f"Kunlik limitdan oshib ketdi! Bugun '{target_class}' sinfi uchun yana ko'pi bilan {daily_status['coinsRemainingToday']} coin berishingiz mumkin.",
-                            f"Превышен дневной лимит! На сегодня для класса '{target_class}' можно начислить не более {daily_status['coinsRemainingToday']} койнов.",
+                            f"Soatlik limitdan oshib ketdi! Ushbu soatda '{target_class}' sinfi uchun yana ko'pi bilan {rem} coin berishingiz mumkin.",
+                            f"Превышен почасовой лимит! В этот час для класса '{target_class}' можно начислить не более {rem} койнов.",
                         ),
                         'dailyCoinStatus': daily_status
                     }, status=403)
@@ -4854,12 +5004,12 @@ def api_award_coins(request):
                     giver, [s.id for s in stds], is_admin_preview=is_admin_preview
                 )
                 for st in stds:
-                    if st_totals.get(st.id, 0) + amount > DAILY_TEACHER_MAX_COINS:
+                    if st_totals.get(st.id, 0) + amount > HOURLY_TEACHER_MAX_COINS:
                         return JsonResponse({
                             'error': _msg(
                                 lang,
-                                f"Limit: {st.full_name} ({resolved_class_name}) bugun allaqachon {st_totals.get(st.id, 0)} coin olgan. Bir bolaga {DAILY_TEACHER_MAX_COINS} coindan ortiq berib bo'lmaydi!",
-                                f"Лимит: {st.full_name} ({resolved_class_name}) сегодня уже получил(а) {st_totals.get(st.id, 0)} койнов. Одному ученику нельзя начислить более {DAILY_TEACHER_MAX_COINS} койнов!",
+                                f"Limit: {st.full_name} ({resolved_class_name}) oxirgi 1 soatda allaqachon {st_totals.get(st.id, 0)} coin olgan. 1 soatda bir bolaga {HOURLY_TEACHER_MAX_COINS} coindan ortiq berib bo'lmaydi!",
+                                f"Лимит: {st.full_name} ({resolved_class_name}) за последний час уже получил(а) {st_totals.get(st.id, 0)} койнов. Одному ученику в час нельзя начислить более {HOURLY_TEACHER_MAX_COINS} койнов!",
                             ),
                             'dailyCoinStatus': get_teacher_daily_coin_status(giver, enforce_for_portal=True, grade=resolved_class_name),
                         }, status=403)
@@ -4908,12 +5058,12 @@ def api_award_coins(request):
                 giver, [student.id], is_admin_preview=is_admin_preview
             )
             already_today = st_totals.get(student.id, 0)
-            if already_today + amount > DAILY_TEACHER_MAX_COINS:
+            if already_today + amount > HOURLY_TEACHER_MAX_COINS:
                 return JsonResponse({
                     'error': _msg(
                         lang,
-                        f"Limit: {student.full_name} bugun {already_today} coin olgan. Har bir o'quvchiga ko'pi bilan {DAILY_TEACHER_MAX_COINS} coin berish mumkin!",
-                        f"Лимит: {student.full_name} сегодня уже получил(а) {already_today} койнов. Одному ученику можно начислить максимум {DAILY_TEACHER_MAX_COINS} койнов!",
+                        f"Limit: {student.full_name} oxirgi 1 soatda {already_today} coin olgan. Har bir o'quvchiga 1 soatda ko'pi bilan {HOURLY_TEACHER_MAX_COINS} coin berish mumkin!",
+                        f"Лимит: {student.full_name} за последний час уже получил(а) {already_today} койнов. Одному ученику в час можно начислить максимум {HOURLY_TEACHER_MAX_COINS} койнов!",
                     ),
                     'dailyCoinStatus': get_teacher_daily_coin_status(giver, enforce_for_portal=True, grade=student_grade),
                 }, status=403)
@@ -5673,12 +5823,12 @@ def api_teacher_test_distribute_coins(request, test_id):
                 amt = int(item.get('amount') or 0)
                 if amt <= 0:
                     return JsonResponse({'error': _msg(lang, "Coin miqdori musbat bo'lishi shart!", "Количество койнов должно быть положительным!")}, status=400)
-                if amt > DAILY_TEACHER_MAX_COINS:
+                if amt > HOURLY_TEACHER_MAX_COINS:
                     return JsonResponse({
                         'error': _msg(
                             lang,
-                            f"Kunlik limit: Har bir sinf uchun kuniga ko'pi bilan {DAILY_TEACHER_MAX_COINS} coin berish mumkin!",
-                            f"Дневной лимит: максимум {DAILY_TEACHER_MAX_COINS} койнов в день для каждого класса!",
+                            f"Soatlik limit: Har bir sinf uchun 1 soatda ko'pi bilan {HOURLY_TEACHER_MAX_COINS} coin berish mumkin!",
+                            f"Почасовой лимит: максимум {HOURLY_TEACHER_MAX_COINS} койнов в час для каждого класса!",
                         )
                     }, status=403)
                 st = CustomUser.objects.filter(id=st_id, role='student').first()
@@ -5689,13 +5839,13 @@ def api_teacher_test_distribute_coins(request, test_id):
                     planned_by_grade[g] = planned_by_grade.get(g, 0) + amt
 
             for g, g_planned in planned_by_grade.items():
-                rem_for_g = per_cls_map.get(g, {}).get('coinsRemainingToday', DAILY_TEACHER_MAX_COINS)
+                rem_for_g = per_cls_map.get(g, {}).get('coinsRemainingToday', HOURLY_TEACHER_MAX_COINS)
                 if g_planned > rem_for_g:
                     return JsonResponse({
                         'error': _msg(
                             lang,
-                            f"'{g}' sinfi uchun kunlik limitdan oshib ketdi! Bugun yana ko'pi bilan {rem_for_g} coin berishingiz mumkin.",
-                            f"Превышен дневной лимит для класса '{g}'! Сегодня можно начислить не более {rem_for_g} койнов.",
+                            f"'{g}' sinfi uchun soatlik limitdan oshib ketdi! Ushbu soatda yana ko'pi bilan {rem_for_g} coin berishingiz mumkin.",
+                            f"Превышен почасовой лимит для класса '{g}'! В этот час можно начислить не более {rem_for_g} койнов.",
                         ),
                         'dailyCoinStatus': get_teacher_daily_coin_status(giver, grade=g)
                     }, status=403)
@@ -6005,21 +6155,21 @@ def api_teacher_coin_edit(request, tx_id):
         target_class = (tx.student.grade or '').strip() if tx.student else ''
         if enforce_teacher_rules:
             if old_amount < 0:
-                if new_amount >= 0 or new_amount < -DAILY_TEACHER_MAX_COINS:
+                if new_amount >= 0 or new_amount < -HOURLY_TEACHER_MAX_COINS:
                     return JsonResponse({
                         'error': _msg(
                             lang,
-                            f"Coin olish tranzaksiyasini -1 dan -{DAILY_TEACHER_MAX_COINS} gacha tahrirlash mumkin!",
-                            f"Транзакцию снятия койнов можно редактировать от -1 до -{DAILY_TEACHER_MAX_COINS}!",
+                            f"Coin olish tranzaksiyasini -1 dan -{HOURLY_TEACHER_MAX_COINS} gacha tahrirlash mumkin!",
+                            f"Транзакцию снятия койнов можно редактировать от -1 до -{HOURLY_TEACHER_MAX_COINS}!",
                         )
                     }, status=403)
             else:
-                if new_amount <= 0 or new_amount > DAILY_TEACHER_MAX_COINS:
+                if new_amount <= 0 or new_amount > HOURLY_TEACHER_MAX_COINS:
                     return JsonResponse({
                         'error': _msg(
                             lang,
-                            f"O'qituvchi beradigan coin miqdori 1 dan {DAILY_TEACHER_MAX_COINS} gacha bo'lishi shart!",
-                            f"Количество койнов, начисляемых учителем, должно быть от 1 до {DAILY_TEACHER_MAX_COINS}!",
+                            f"O'qituvchi beradigan coin miqdori 1 dan {HOURLY_TEACHER_MAX_COINS} gacha bo'lishi shart!",
+                            f"Количество койнов, начисляемых учителем, должно быть от 1 до {HOURLY_TEACHER_MAX_COINS}!",
                         )
                     }, status=403)
                 if diff > 0:
@@ -6032,19 +6182,19 @@ def api_teacher_coin_edit(request, tx_id):
                         return JsonResponse({
                             'error': _msg(
                                 lang,
-                                f"'{cls_disp}' sinfi uchun kunlik {DAILY_TEACHER_MAX_COINS} coin limitidan oshib ketish mumkin emas!",
-                                f"Для класса '{cls_disp}' нельзя превысить дневной лимит в {DAILY_TEACHER_MAX_COINS} койнов!",
+                                f"'{cls_disp}' sinfi uchun 1 soatlik {HOURLY_TEACHER_MAX_COINS} coin limitidan oshib ketish mumkin emas!",
+                                f"Для класса '{cls_disp}' нельзя превысить часовой лимит в {HOURLY_TEACHER_MAX_COINS} койнов!",
                             )
                         }, status=403)
                     st_totals = get_teacher_students_today_coin_totals(
                         giver, [tx.student_id], is_admin_preview=is_admin_preview, exclude_tx_id=tx.id
                     )
-                    if st_totals.get(tx.student_id, 0) + new_amount > DAILY_TEACHER_MAX_COINS:
+                    if st_totals.get(tx.student_id, 0) + new_amount > HOURLY_TEACHER_MAX_COINS:
                         return JsonResponse({
                             'error': _msg(
                                 lang,
-                                f"Limit: Bir o'quvchiga kuniga {DAILY_TEACHER_MAX_COINS} coindan ortiq berib bo'lmaydi!",
-                                f"Лимит: одному ученику нельзя начислить более {DAILY_TEACHER_MAX_COINS} койнов в день!",
+                                f"Limit: Bir o'quvchiga 1 soatda {HOURLY_TEACHER_MAX_COINS} coindan ortiq berib bo'lmaydi!",
+                                f"Лимит: одному ученику нельзя начислить более {HOURLY_TEACHER_MAX_COINS} койнов в час!",
                             )
                         }, status=403)
 
