@@ -922,7 +922,15 @@ def api_login(request):
 
     user = authenticate(request, username=username, password=password)
     if not user:
-        existing_user = CustomUser.objects.filter(username=username).first()
+        # Fallback for case-insensitive username or full_name match
+        found_user = CustomUser.objects.filter(username__iexact=username).first()
+        if not found_user:
+            found_user = CustomUser.objects.filter(full_name__iexact=username).first()
+        if found_user:
+            user = authenticate(request, username=found_user.username, password=password)
+
+    if not user:
+        existing_user = CustomUser.objects.filter(username__iexact=username).first()
         if existing_user and not existing_user.is_active and existing_user.check_password(password):
             return JsonResponse({
                 'error': _msg(
