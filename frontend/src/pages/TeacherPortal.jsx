@@ -271,7 +271,7 @@ export default function TeacherPortal() {
     0,
     Math.min(maxCoinsPerDay, Number(selectedClassDailyInfo?.coinsRemainingToday ?? (maxCoinsPerDay - coinsUsedToday)))
   );
-  const scheduleStatus = dailyCoinStatus?.scheduleStatus || null;
+  const scheduleStatus = dailyCoinStatus?.scheduleStatus || teacherScheduleData?.scheduleStatus || null;
   const isScheduleEnforced = Boolean(scheduleStatus?.enforced);
   const isAllowedBySchedule = !isScheduleEnforced || Boolean(scheduleStatus?.allowed);
   const activeScheduleClasses = Array.isArray(scheduleStatus?.activeClasses)
@@ -814,9 +814,9 @@ export default function TeacherPortal() {
     setCoinSelectedGrade(grade);
   };
 
-  // Auto-select active scheduled class (or populated class) on initial visit
+  // Auto-select active scheduled class (or populated class when schedule enforcement is off)
   useEffect(() => {
-    if (!isTeacher || activeTab !== 'coins' || hasManualGradePickRef.current) return;
+    if (!isTeacher || activeTab !== 'coins') return;
     if (isScheduleEnforced && activeScheduleClasses.length > 0) {
       if (!activeScheduleClasses.includes(coinSelectedGrade)) {
         const liveWithStudents =
@@ -824,11 +824,14 @@ export default function TeacherPortal() {
             classesMeta.some((c) => c.name === cls && Number(c.studentsCount) > 0)
           ) || activeScheduleClasses[0];
         if (liveWithStudents && liveWithStudents !== coinSelectedGrade) {
+          setSelectedStudentForCoin('');
           setCoinSelectedGrade(liveWithStudents);
           return;
         }
       }
+      return;
     }
+    if (hasManualGradePickRef.current) return;
     if (classesMeta.length > 0) {
       const currentMeta = classesMeta.find((c) => c.name === coinSelectedGrade);
       if (!currentMeta || Number(currentMeta.studentsCount) === 0) {
@@ -2070,15 +2073,26 @@ export default function TeacherPortal() {
             onClick={() => setActiveTab('coins')}
             title={`${tr(`Har bir sinf uchun 1 soatda ko'pi bilan ${maxCoinsPerDay} Coin`, `Максимум ${maxCoinsPerDay} койнов в час для каждого класса`)}${awardedClassesToday.length ? ` • ${tr('Oxirgi 1 soatda', 'За последний час')} ${awardedClassesToday.length} ${tr('ta sinf', 'кл.')} (${totalCoinsUsedAllClassesToday} ${tr('Coin', 'койнов')})` : ''}`}
             className={`px-3.5 py-2 rounded-xl border text-xs font-bold flex items-center gap-2 transition-all ${
-              coinsRemainingToday > 0
+              isScheduleEnforced && activeScheduleClasses.length === 0
+                ? 'bg-slate-900/80 border-slate-700 text-slate-300 hover:border-cyan-400/50'
+                : coinsRemainingToday > 0
                 ? 'bg-amber-500/10 border-amber-500/35 text-amber-300 hover:bg-amber-500/20'
                 : 'bg-rose-500/10 border-rose-500/35 text-rose-300'
             }`}
           >
-            <Coins size={15} />
-            <span>
-              {localizeGrade(coinSelectedGrade, language)}: {coinsUsedToday} / {maxCoinsPerDay} {tr('Coin', 'койнов')}
-            </span>
+            {isScheduleEnforced && activeScheduleClasses.length === 0 ? (
+              <>
+                <Lock size={14} className="text-rose-400" />
+                <span>{tr('Dars vaqti emas', 'Нет активного урока')}</span>
+              </>
+            ) : (
+              <>
+                <Coins size={15} />
+                <span>
+                  {localizeGrade(coinSelectedGrade, language)}: {coinsUsedToday} / {maxCoinsPerDay} {tr('Coin', 'койнов')}
+                </span>
+              </>
+            )}
           </button>
           {loadingData && (
             <span className="inline-flex items-center px-2 py-2 text-cyan-400" title={tr('Yuklanmoqda...', 'Загрузка...')}>
@@ -3933,48 +3947,88 @@ export default function TeacherPortal() {
                     </div>
                   </div>
 
-                  <div className="teacher-class-selector-pill">
-                    <span className="text-xs text-slate-400 font-bold whitespace-nowrap">{tr('Sinfni tanlang:', 'Выберите класс:')}</span>
-                    <select
-                      value={coinSelectedGrade}
-                      onChange={(e) => handleSelectCoinGrade(e.target.value, true)}
-                    >
-                      {classesMeta.length > 0 ? (
-                        <>
-                          {populatedClasses.length > 0 && (
-                            <optgroup label={tr("O'quvchilari bor sinflar", 'Классы с учениками')}>
-                              {populatedClasses.map((c) => {
-                                const clsUsed = perClassStatusMap[c.name]?.coinsUsedToday || 0;
-                                return (
+                  {isScheduleEnforced ? (
+                    activeScheduleClasses.length === 1 ? (
+                      <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/50 text-emerald-200 text-xs font-extrabold flex-shrink-0">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>{tr('Hozirgi dars:', 'Текущий урок:')}</span>
+                        <span className="text-white">{localizeGrade(activeScheduleClasses[0], language)}</span>
+                      </div>
+                    ) : activeScheduleClasses.length > 1 ? (
+                      <div className="teacher-class-selector-pill">
+                        <span className="text-xs text-emerald-300 font-bold whitespace-nowrap">
+                          ● {tr('Faol darslar:', 'Активные уроки:')}
+                        </span>
+                        <select
+                          value={coinSelectedGrade}
+                          onChange={(e) => handleSelectCoinGrade(e.target.value, true)}
+                        >
+                          {activeScheduleClasses.map((cls) => (
+                            <option key={cls} value={cls}>
+                              {localizeGrade(cls, language)} {tr('sinf', 'класс')}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-500/15 border border-rose-500/35 text-rose-200 text-xs font-extrabold">
+                          <Lock size={13} />
+                          <span>{tr("Hozir faol dars yo'q", 'Сейчас нет активного урока')}</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('schedule')}
+                          className="btn btn-secondary btn-sm text-xs font-bold flex items-center gap-1.5"
+                        >
+                          <Calendar size={14} /> {tr('Dars Jadvalim', 'Моё расписание')}
+                        </button>
+                      </div>
+                    )
+                  ) : (
+                    <div className="teacher-class-selector-pill">
+                      <span className="text-xs text-slate-400 font-bold whitespace-nowrap">{tr('Sinfni tanlang:', 'Выберите класс:')}</span>
+                      <select
+                        value={coinSelectedGrade}
+                        onChange={(e) => handleSelectCoinGrade(e.target.value, true)}
+                      >
+                        {classesMeta.length > 0 ? (
+                          <>
+                            {populatedClasses.length > 0 && (
+                              <optgroup label={tr("O'quvchilari bor sinflar", 'Классы с учениками')}>
+                                {populatedClasses.map((c) => {
+                                  const clsUsed = perClassStatusMap[c.name]?.coinsUsedToday || 0;
+                                  return (
+                                    <option key={c.name} value={c.name}>
+                                      {localizeGrade(c.name, language)} {tr('sinf', 'класс')} ({c.studentsCount} {tr("o'quvchi", 'уч.')}){clsUsed > 0 ? ` • ${clsUsed}/${maxCoinsPerDay} ★` : ''}
+                                    </option>
+                                  );
+                                })}
+                              </optgroup>
+                            )}
+                            {emptyClasses.length > 0 && (
+                              <optgroup label={tr("Bo'sh sinflar (0 o'quvchi)", 'Пустые классы (0 уч.)')}>
+                                {emptyClasses.map((c) => (
                                   <option key={c.name} value={c.name}>
-                                    {localizeGrade(c.name, language)} {tr('sinf', 'класс')} ({c.studentsCount} {tr("o'quvchi", 'уч.')}){clsUsed > 0 ? ` • ${clsUsed}/${maxCoinsPerDay} ★` : ''}
+                                    {localizeGrade(c.name, language)} {tr('sinf', 'класс')} (0 {tr("o'quvchi", 'уч.')})
                                   </option>
-                                );
-                              })}
-                            </optgroup>
-                          )}
-                          {emptyClasses.length > 0 && (
-                            <optgroup label={tr("Bo'sh sinflar (0 o'quvchi)", 'Пустые классы (0 уч.)')}>
-                              {emptyClasses.map((c) => (
-                                <option key={c.name} value={c.name}>
-                                  {localizeGrade(c.name, language)} {tr('sinf', 'класс')} (0 {tr("o'quvchi", 'уч.')})
-                                </option>
-                              ))}
-                            </optgroup>
-                          )}
-                        </>
-                      ) : (
-                        classesList.map((cls) => (
-                          <option key={cls} value={cls}>
-                            {localizeGrade(cls, language)} {tr('sinf', 'класс')}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                  </div>
+                                ))}
+                              </optgroup>
+                            )}
+                          </>
+                        ) : (
+                          classesList.map((cls) => (
+                            <option key={cls} value={cls}>
+                              {localizeGrade(cls, language)} {tr('sinf', 'класс')}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </div>
+                  )}
                 </div>
 
-                {populatedClasses.length > 0 && (
+                {!isScheduleEnforced && populatedClasses.length > 0 && (
                   <div className="teacher-class-chips-bar">
                     <span className="text-[11px] font-bold text-slate-400 mr-1">{tr('Faol sinflar:', 'Активные классы:')}</span>
                     {populatedClasses.map((c) => {
@@ -4089,6 +4143,35 @@ export default function TeacherPortal() {
                 </div>
               )}
 
+              {isScheduleEnforced && activeScheduleClasses.length === 0 ? (
+                <div className="p-6 sm:p-8 rounded-2xl bg-slate-900/75 border border-slate-800 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-800/90 border border-slate-700 text-slate-400 flex items-center justify-center mx-auto">
+                    <Clock size={22} />
+                  </div>
+                  <h4 className="text-sm sm:text-base font-extrabold text-white">
+                    {tr(
+                      "Dars vaqtingiz boshlanganda sinf o'quvchilari avtomatik ochiladi",
+                      'Список учеников класса откроется автоматически с началом вашего урока'
+                    )}
+                  </h4>
+                  <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+                    {tr(
+                      "Ish reja nazorati yoqilgan — sinfni qo'lda tanlash shart emas. Sizning dars vaqtingiz kelishi bilan shu sinf va coin berish/olish bo'limi o'zi ochiladi.",
+                      'Контроль расписания включён — вручную выбирать класс не нужно. Как только начнётся ваш урок, нужный класс и форма начисления откроются автоматически.'
+                    )}
+                  </p>
+                  <div className="pt-1 flex items-center justify-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('schedule')}
+                      className="btn btn-diamond-cyan btn-sm font-bold flex items-center gap-1.5"
+                    >
+                      <Calendar size={14} /> {tr("Dars Jadvalimni Ko'rish", 'Открыть моё расписание')}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
               {isTeacherRestricted && (
                 <div
                   className={`teacher-daily-limit-banner ${
@@ -4411,44 +4494,67 @@ export default function TeacherPortal() {
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                     {/* Class select inside award form (3 cols) */}
                     <div className="md:col-span-3">
-                      <label className="input-label text-xs font-bold text-slate-300">{tr('Sinfni tanlang *', 'Выберите класс *')}</label>
-                      <select
-                        className="clean-select text-xs font-bold"
-                        value={coinSelectedGrade}
-                        onChange={(e) => handleSelectCoinGrade(e.target.value, true)}
-                      >
-                        {classesMeta.length > 0 ? (
-                          <>
-                            {populatedClasses.length > 0 && (
-                              <optgroup label={tr('Faol sinflar', 'Активные классы')}>
-                                {populatedClasses.map((c) => {
-                                  const clsUsed = perClassStatusMap[c.name]?.coinsUsedToday || 0;
-                                  return (
-                                    <option key={c.name} value={c.name}>
-                                      {localizeGrade(c.name, language)} {tr('sinf', 'класс')} ({c.studentsCount} {tr('nafar', 'уч.')}){clsUsed > 0 ? ` • ${clsUsed}/${maxCoinsPerDay} ★` : ''}
-                                    </option>
-                                  );
-                                })}
-                              </optgroup>
-                            )}
-                            {emptyClasses.length > 0 && (
-                              <optgroup label={tr("Bo'sh sinflar", 'Пустые классы')}>
-                                {emptyClasses.map((c) => (
-                                  <option key={c.name} value={c.name}>
-                                    {localizeGrade(c.name, language)} {tr('sinf', 'класс')} (0 {tr('nafar', 'уч.')})
-                                  </option>
-                                ))}
-                              </optgroup>
-                            )}
-                          </>
-                        ) : (
-                          classesList.map((cls) => (
+                      <label className="input-label text-xs font-bold text-slate-300">
+                        {isScheduleEnforced ? tr('Faol dars sinfi', 'Класс текущего урока') : tr('Sinfni tanlang *', 'Выберите класс *')}
+                      </label>
+                      {isScheduleEnforced && activeScheduleClasses.length <= 1 ? (
+                        <div className="clean-input text-xs font-extrabold text-emerald-300 flex items-center gap-2 bg-emerald-500/10 border-emerald-500/35">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
+                          <span className="truncate">
+                            {localizeGrade(coinSelectedGrade, language)} {tr('sinf', 'класс')}
+                          </span>
+                        </div>
+                      ) : isScheduleEnforced ? (
+                        <select
+                          className="clean-select text-xs font-bold"
+                          value={coinSelectedGrade}
+                          onChange={(e) => handleSelectCoinGrade(e.target.value, true)}
+                        >
+                          {activeScheduleClasses.map((cls) => (
                             <option key={cls} value={cls}>
                               {localizeGrade(cls, language)} {tr('sinf', 'класс')}
                             </option>
-                          ))
-                        )}
-                      </select>
+                          ))}
+                        </select>
+                      ) : (
+                        <select
+                          className="clean-select text-xs font-bold"
+                          value={coinSelectedGrade}
+                          onChange={(e) => handleSelectCoinGrade(e.target.value, true)}
+                        >
+                          {classesMeta.length > 0 ? (
+                            <>
+                              {populatedClasses.length > 0 && (
+                                <optgroup label={tr('Faol sinflar', 'Активные классы')}>
+                                  {populatedClasses.map((c) => {
+                                    const clsUsed = perClassStatusMap[c.name]?.coinsUsedToday || 0;
+                                    return (
+                                      <option key={c.name} value={c.name}>
+                                        {localizeGrade(c.name, language)} {tr('sinf', 'класс')} ({c.studentsCount} {tr('nafar', 'уч.')}){clsUsed > 0 ? ` • ${clsUsed}/${maxCoinsPerDay} ★` : ''}
+                                      </option>
+                                    );
+                                  })}
+                                </optgroup>
+                              )}
+                              {emptyClasses.length > 0 && (
+                                <optgroup label={tr("Bo'sh sinflar", 'Пустые классы')}>
+                                  {emptyClasses.map((c) => (
+                                    <option key={c.name} value={c.name}>
+                                      {localizeGrade(c.name, language)} {tr('sinf', 'класс')} (0 {tr('nafar', 'уч.')})
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                            </>
+                          ) : (
+                            classesList.map((cls) => (
+                              <option key={cls} value={cls}>
+                                {localizeGrade(cls, language)} {tr('sinf', 'класс')}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      )}
                     </div>
 
                     {/* Student select filtered by selected class (4 cols) */}
@@ -4853,7 +4959,7 @@ export default function TeacherPortal() {
                         )}
                       </p>
                     </div>
-                    {populatedClasses.length > 0 && (
+                    {!isScheduleEnforced && populatedClasses.length > 0 && (
                       <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
                         {populatedClasses.map((c) => {
                           const clsUsed = perClassStatusMap[c.name]?.coinsUsedToday || 0;
@@ -4879,6 +4985,8 @@ export default function TeacherPortal() {
                   </div>
                 )}
               </div>
+                </>
+              )}
 
               {/* 5. Luxury Transaction History Table */}
               <div className="space-y-3.5">
