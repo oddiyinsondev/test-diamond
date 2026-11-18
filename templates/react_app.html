@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/static/img/diamond_icon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
@@ -16,13 +16,13 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
     <!-- React SPA Styles (includes full Tailwind + Diamond School dark suite) -->
-    <link rel="stylesheet" href="/static/dist/assets/index.css?v=20261118_v47">
+    <link rel="stylesheet" href="/static/dist/assets/index.css?v=20261118_v48">
   </head>
   <body class="dark-theme">
     <div id="root"></div>
     {% if spa_config %}
     {{ spa_config|json_script:"diamond-spa-config" }}
     {% endif %}
-    <script type="module" src="/static/dist/assets/index.js?v=20261118_v47"></script>
+    <script type="module" src="/static/dist/assets/index.js?v=20261118_v48"></script>
   </body>
 </html>

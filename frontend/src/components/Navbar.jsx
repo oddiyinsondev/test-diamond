@@ -54,8 +54,8 @@ export default function Navbar() {
   const studentPortalTarget = getPortalLinkTarget('student', '', { portalMode });
 
   return (
-    <header className="navbar">
-      <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+    <header className={`navbar ${isPortalPage ? 'navbar-portal' : ''}`}>
+      <div className="flex items-center gap-2 sm:gap-3.5 min-w-0">
         <PortalNavItem target={homeTarget} className="diamond-brand-lockup">
           <img src="/static/img/diamond_icon.png" alt="Diamond School" className="diamond-brand-gem" />
           <div className="diamond-brand-names">

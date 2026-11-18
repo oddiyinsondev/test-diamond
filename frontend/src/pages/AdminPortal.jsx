@@ -2101,13 +2101,13 @@ export default function AdminPortal() {
   return (
     <div className="admin-portal-wrapper space-y-6 pb-12">
       {/* Header with Title and Quick KPI Cards */}
-      <div className="dashboard-header flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-2.5">
-            <ShieldCheck className="text-amber-400" size={28} />
-            {tr('Administrator Paneli', 'Панель администратора')}
+      <div className="dashboard-header flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-3xl font-black text-white flex items-center gap-2">
+            <ShieldCheck className="text-amber-400 flex-shrink-0" size={24} />
+            <span className="truncate">{tr('Administrator Paneli', 'Панель администратора')}</span>
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400">
+          <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
             {tr(
               "Maktab o'quv jarayoni, pedagoglar jamoasi va barcha sinflar to'liq nazorati",
               'Полный контроль учебного процесса школы, команды педагогов и всех классов'
@@ -2412,12 +2412,12 @@ export default function AdminPortal() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
                     <label className="text-xs text-slate-400 font-semibold whitespace-nowrap hidden sm:inline">
                       {tr('Test:', 'Тест:')}
                     </label>
                     <select
-                      className="clean-select text-xs font-semibold min-w-[220px] w-auto"
+                      className="clean-select text-xs font-semibold w-full sm:w-auto sm:min-w-[220px]"
                       value={selectedAdminTestForResults?.id || ''}
                       onChange={(e) => {
                         const t = adminTests.find((item) => String(item.id) === e.target.value);
@@ -3181,7 +3181,7 @@ export default function AdminPortal() {
               </div>
 
               {/* Teachers Table */}
-              <div className="table-responsive bg-slate-900/60 rounded-xl border border-slate-800/80 overflow-hidden">
+              <div className="table-responsive bg-slate-900/60 rounded-xl border border-slate-800/80 overflow-x-auto">
                 <table className="diamond-table w-full text-left">
                   <thead>
                     <tr>
@@ -3627,7 +3627,7 @@ export default function AdminPortal() {
               </div>
 
               {/* Tutors Table */}
-              <div className="table-responsive bg-slate-900/60 rounded-xl border border-slate-800/80 overflow-hidden">
+              <div className="table-responsive bg-slate-900/60 rounded-xl border border-slate-800/80 overflow-x-auto">
                 <table className="diamond-table w-full text-left">
                   <thead>
                     <tr>
@@ -3803,8 +3803,8 @@ export default function AdminPortal() {
           {activeTab === 'students' && (
             <div className="space-y-4 animate-fade-in">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/70 p-4 rounded-xl border border-slate-800">
-                <div className="flex flex-wrap items-center gap-2 flex-1">
-                  <div className="input-with-icon flex-1 min-w-[200px] max-w-xs">
+                <div className="flex flex-wrap items-center gap-2 flex-1 w-full">
+                  <div className="input-with-icon flex-1 w-full sm:min-w-[200px] sm:max-w-xs">
                     <Search size={16} className="input-icon" />
                     <input
                       type="text"
@@ -3816,7 +3816,7 @@ export default function AdminPortal() {
                   </div>
 
                   <select
-                    className="clean-select text-xs w-auto"
+                    className="clean-select text-xs w-full sm:w-auto"
                     value={selectedGradeFilter}
                     onChange={(e) => setSelectedGradeFilter(e.target.value)}
                   >
@@ -3934,7 +3934,7 @@ export default function AdminPortal() {
               )}
 
               {/* Students Table */}
-              <div className="table-responsive bg-slate-900/60 rounded-xl border border-slate-800/80 overflow-hidden">
+              <div className="table-responsive bg-slate-900/60 rounded-xl border border-slate-800/80 overflow-x-auto">
                 <table className="diamond-table w-full text-left">
                   <thead>
                     <tr>
@@ -5097,7 +5097,7 @@ export default function AdminPortal() {
               {/* ============================================================ */}
               {coinSubTab === 'history' && (
                 <div className="space-y-4 animate-fade-in">
-                  <div className="table-responsive bg-slate-900/70 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+                  <div className="table-responsive bg-slate-900/70 rounded-2xl border border-slate-800 overflow-x-auto shadow-xl">
                     <table className="diamond-table w-full text-left">
                       <thead>
                         <tr>
@@ -5158,7 +5158,7 @@ export default function AdminPortal() {
               {/* ============================================================ */}
               {coinSubTab === 'classes' && (
                 <div className="space-y-4 animate-fade-in">
-                  <div className="table-responsive bg-slate-900/70 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+                  <div className="table-responsive bg-slate-900/70 rounded-2xl border border-slate-800 overflow-x-auto shadow-xl">
                     <table className="diamond-table w-full text-left">
                       <thead>
                         <tr>
@@ -8142,7 +8142,7 @@ export default function AdminPortal() {
 
                   {selectedCls && (
                     <div className="space-y-2 mt-2">
-                      <div className="grid grid-cols-4 gap-2 p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 text-center">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 text-center">
                         <div>
                           <div className="text-xs font-black text-cyan-300">{totalStCount} {tr('nafar', 'уч.')}</div>
                           <div className="text-[10px] text-slate-400">{tr("Jami o'quvchi", 'Всего уч.')}</div>

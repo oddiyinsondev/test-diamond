@@ -2030,20 +2030,22 @@ export default function TeacherPortal() {
   return (
     <div className="teacher-portal-wrapper space-y-6 pb-12">
       {/* Header */}
-      <div className="dashboard-header flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-2.5">
+      <div className="dashboard-header flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-3xl font-black text-white flex items-center gap-2">
             {user?.role === 'admin' ? (
               <>
-                <ShieldCheck className="text-amber-400" size={28} />
-                {tr('Testlar va Imtihonlar Nazorati', 'Контроль тестов и экзаменов')}
+                <ShieldCheck className="text-amber-400 flex-shrink-0" size={24} />
+                <span className="truncate">{tr('Testlar va Imtihonlar Nazorati', 'Контроль тестов и экзаменов')}</span>
               </>
             ) : (
               <>
-                <ChalkboardTeacher className="text-cyan-400" size={28} />
-                {language === 'ru'
-                  ? `Портал: ${user?.fullName || 'Учитель'}`
-                  : `${user?.fullName || 'Ustoz'} Portali`}
+                <ChalkboardTeacher className="text-cyan-400 flex-shrink-0" size={24} />
+                <span className="truncate">
+                  {language === 'ru'
+                    ? `Портал: ${user?.fullName || 'Учитель'}`
+                    : `${user?.fullName || 'Ustoz'} Portali`}
+                </span>
               </>
             )}
           </h1>
@@ -2596,7 +2598,7 @@ export default function TeacherPortal() {
                 </div>
               </div>
 
-              <div className="table-responsive bg-slate-900/70 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+              <div className="table-responsive bg-slate-900/70 rounded-2xl border border-slate-800 overflow-x-auto shadow-xl">
                 <table className="diamond-table w-full text-left">
                   <thead>
                     <tr>
@@ -4915,7 +4917,7 @@ export default function TeacherPortal() {
                     </div>
 
                     {/* History Search input */}
-                    <div className="teacher-history-search-box min-w-[260px] flex-1 sm:w-80">
+                    <div className="teacher-history-search-box w-full sm:min-w-[240px] flex-1 sm:w-80">
                       <Search size={15} className="text-slate-400 flex-shrink-0" />
                       <input
                         type="text"

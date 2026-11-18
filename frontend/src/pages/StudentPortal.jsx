@@ -528,13 +528,13 @@ export default function StudentPortal() {
       )}
 
       {/* Student Welcome Header & Badges */}
-      <div className="dashboard-header flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-2.5">
-            <GraduationCap className="text-sky-400" size={28} />
-            {tr('Xush kelibsiz,', 'Добро пожаловать,')} {user?.fullName || tr("O'quvchi", 'Ученик')}!
+      <div className="dashboard-header flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-3xl font-black text-white flex items-center gap-2">
+            <GraduationCap className="text-sky-400 flex-shrink-0" size={24} />
+            <span className="break-words">{tr('Xush kelibsiz,', 'Добро пожаловать,')} {user?.fullName || tr("O'quvchi", 'Ученик')}!</span>
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400">
+          <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
             {tr(
               "Sinfingiz testlarini yeching, yangi bilimlarni egallang va maktab reytingida yetakchi bo'ling",
               'Решайте тесты своего класса, получайте знания и станьте лидером школьного рейтинга'
@@ -607,10 +607,10 @@ export default function StudentPortal() {
 
       {/* TEST RUNNER INTERFACE (When a test is active) */}
       {activeTab === 'runner' && currentTest && (
-        <div className="active-test-runner space-y-6 animate-scale-in">
+        <div className="active-test-runner space-y-4 sm:space-y-6 animate-scale-in">
           {/* Top Bar with Timer and Progress */}
-          <div className="sticky top-20 z-40 p-4 rounded-2xl bg-slate-900/95 border border-cyan-500/30 backdrop-blur-md shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
+          <div className="sticky top-14 sm:top-20 z-40 p-3 sm:p-4 rounded-2xl bg-slate-900/95 border border-cyan-500/30 backdrop-blur-md shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
+            <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-1.5 mb-1">
                 <span className="badge badge-primary text-[10px] uppercase font-bold">
                   {localizeSubject(currentTest.subject, language)}
@@ -621,12 +621,12 @@ export default function StudentPortal() {
                   </span>
                 )}
               </div>
-              <h2 className="text-base sm:text-lg font-bold text-white line-clamp-1">
+              <h2 className="text-sm sm:text-lg font-bold text-white line-clamp-1">
                 {currentTest.title}
               </h2>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center justify-between sm:justify-end gap-2.5 sm:gap-4 w-full sm:w-auto">
               {/* Countdown Timer */}
               <div
                 className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-mono text-sm font-black border ${
@@ -682,7 +682,7 @@ export default function StudentPortal() {
             if (!currentQ) return null;
 
             return (
-              <div className="p-6 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-6">
+              <div className="p-4 sm:p-6 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-4 sm:space-y-6">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                   <span className="text-xs font-black text-cyan-400 uppercase tracking-widest">
                     {tr('Savol', 'Вопрос')} {currentQuestionIdx + 1} / {currentTest.questions.length}
@@ -776,8 +776,8 @@ export default function StudentPortal() {
 
       {/* RESULT VIEW (After finishing a test) */}
       {activeTab === 'result' && testResultData && (
-        <div className="test-result-wrapper space-y-6 animate-scale-in">
-          <div className="p-8 rounded-2xl bg-slate-900/90 border border-cyan-500/30 text-center space-y-4 shadow-2xl">
+        <div className="test-result-wrapper space-y-5 sm:space-y-6 animate-scale-in">
+          <div className="p-5 sm:p-8 rounded-2xl bg-slate-900/90 border border-cyan-500/30 text-center space-y-4 shadow-2xl">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-cyan-500 to-emerald-400 flex items-center justify-center text-slate-950 mx-auto shadow-lg shadow-cyan-500/25">
               <Sparkles size={36} />
             </div>
@@ -1389,7 +1389,7 @@ export default function StudentPortal() {
                   </span>
                 </div>
 
-                <div className="table-responsive bg-slate-900/60 rounded-xl border border-slate-800/80 overflow-hidden">
+                <div className="table-responsive bg-slate-900/60 rounded-xl border border-slate-800/80 overflow-x-auto">
                   <table className="diamond-table w-full text-left">
                     <thead>
                       <tr>
@@ -1479,7 +1479,7 @@ export default function StudentPortal() {
                   </p>
                 </div>
 
-                <div className="table-responsive bg-slate-900/60 rounded-xl border border-slate-800/80 overflow-hidden">
+                <div className="table-responsive bg-slate-900/60 rounded-xl border border-slate-800/80 overflow-x-auto">
                   <table className="diamond-table w-full text-left">
                     <thead>
                       <tr>

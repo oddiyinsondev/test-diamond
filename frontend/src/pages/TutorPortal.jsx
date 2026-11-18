@@ -778,13 +778,13 @@ export default function TutorPortal() {
   return (
     <div className="admin-portal-wrapper space-y-6 pb-12">
       {/* Header */}
-      <div className="dashboard-header flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-2.5">
-            <UserCheck className="text-purple-400" size={28} />
-            {tr('Tyuter Boshqaruv Portali', 'Портал управления тьютора')}
+      <div className="dashboard-header flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-3xl font-black text-white flex items-center gap-2">
+            <UserCheck className="text-purple-400 flex-shrink-0" size={24} />
+            <span className="truncate">{tr('Tyuter Boshqaruv Portali', 'Портал управления тьютора')}</span>
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400">
+          <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
             {tr(
               "Biriktirilgan sinf o'quvchilarini qo'shish, tahrirlash, o'chirish va admin sinf coinlarini kuzatish markazi",
               'Центр добавления, редактирования и удаления учеников классов, а также отслеживания классных койнов'
@@ -792,11 +792,11 @@ export default function TutorPortal() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap w-full md:w-auto">
           {user?.role === 'admin' && adminTutorsList.length > 0 && (
             <select
               aria-label={tr('Tyuter tanlash', 'Выбор тьютора')}
-              className="clean-select text-xs font-bold w-auto min-w-[200px]"
+              className="clean-select text-xs font-bold w-full sm:w-auto sm:min-w-[200px]"
               value={selectedTutorFilterId}
               onChange={(e) => setSelectedTutorFilterId(e.target.value)}
             >
@@ -1085,7 +1085,7 @@ export default function TutorPortal() {
               {/* Search & Action Strip */}
               <div className="admin-search-strip flex-col sm:flex-row">
                 <div className="flex flex-wrap items-center gap-2.5 flex-1 w-full">
-                  <div className="input-with-icon flex-1 min-w-[200px] max-w-sm">
+                  <div className="input-with-icon flex-1 w-full sm:min-w-[200px] sm:max-w-sm">
                     <Search size={16} className="input-icon" />
                     <input
                       type="text"
@@ -1098,7 +1098,7 @@ export default function TutorPortal() {
 
                   <select
                     aria-label={tr('Sinf filtri', 'Фильтр класса')}
-                    className="clean-select text-xs w-auto min-w-[160px]"
+                    className="clean-select text-xs w-full sm:w-auto sm:min-w-[160px]"
                     value={gradeFilter}
                     onChange={(e) => setGradeFilter(e.target.value)}
                   >
@@ -1218,7 +1218,7 @@ export default function TutorPortal() {
               )}
 
               {/* Students Table */}
-              <div className="table-responsive bg-slate-900/70 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+              <div className="table-responsive bg-slate-900/70 rounded-2xl border border-slate-800 overflow-x-auto shadow-xl">
                 <table className="diamond-table w-full text-left">
                   <thead>
                     <tr>
@@ -1448,9 +1448,9 @@ export default function TutorPortal() {
                     {tr('Sinflarga Berilgan Coinlar Tarixi', 'История начислений койнов классам')} ({filteredCoinHistory.length})
                   </h4>
 
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                     <select
-                      className="clean-select text-xs w-auto"
+                      className="clean-select text-xs w-full sm:w-auto"
                       value={coinHistoryClassFilter}
                       onChange={(e) => setCoinHistoryClassFilter(e.target.value)}
                     >
@@ -1461,7 +1461,7 @@ export default function TutorPortal() {
                         </option>
                       ))}
                     </select>
-                    <div className="input-with-icon min-w-[210px]">
+                    <div className="input-with-icon w-full sm:w-auto sm:min-w-[210px]">
                       <Search size={14} className="input-icon" />
                       <input
                         type="text"
@@ -1474,7 +1474,7 @@ export default function TutorPortal() {
                   </div>
                 </div>
 
-                <div className="table-responsive bg-slate-900/70 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+                <div className="table-responsive bg-slate-900/70 rounded-2xl border border-slate-800 overflow-x-auto shadow-xl">
                   <table className="diamond-table w-full text-left">
                     <thead>
                       <tr>

@@ -3621,14 +3621,528 @@ body.dark-theme, body {
   display: block;
   margin: 0.5em 0;
   text-align: center;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 .katex {
   font-size: 1.12em !important;
   color: inherit !important;
+  max-width: 100%;
 }
 .katex .mord, .katex .mbin, .katex .mrel {
   color: inherit !important;
 }
 .katex .frac-line {
   border-bottom-width: 0.08em !important;
+}
+
+/* ==========================================================================
+   MOBILE & TABLET RESPONSIVE PORTALS SUITE (ADMIN, TEACHER, TUTOR, STUDENT)
+   ========================================================================== */
+
+html,
+body,
+#root,
+.app-wrapper {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.admin-portal-wrapper,
+.teacher-portal-wrapper,
+.student-portal-wrapper,
+.portal-main-area,
+.portal-main-area > * {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.table-responsive,
+.teacher-tx-table-wrap {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+/* Tablet & Mobile Portal Navigation (<= 960px): Sticky Horizontal Swipeable Tab Bar */
+@media (max-width: 960px) {
+  .portal-app-layout {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 14px !important;
+    margin-top: 0.75rem !important;
+  }
+
+  .portal-sidebar {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    position: sticky !important;
+    top: 58px !important;
+    z-index: 45 !important;
+    padding: 0.55rem 0.65rem !important;
+    border-radius: 16px !important;
+    background: rgba(9, 22, 39, 0.96) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.48) !important;
+  }
+
+  .portal-sidebar-userbox {
+    padding: 0.45rem 0.65rem !important;
+    margin-bottom: 0.5rem !important;
+    gap: 10px !important;
+    border-radius: 11px !important;
+  }
+
+  .portal-sidebar-avatar {
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 9px !important;
+    font-size: 0.95rem !important;
+  }
+
+  .portal-sidebar-name {
+    font-size: 0.84rem !important;
+  }
+
+  .portal-sidebar-role {
+    font-size: 0.7rem !important;
+  }
+
+  .portal-sidebar-nav-title {
+    display: none !important;
+  }
+
+  .portal-sidebar-nav {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    gap: 6px !important;
+    padding-bottom: 2px !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    scroll-snap-type: x proximity !important;
+  }
+
+  .portal-sidebar-nav::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .portal-nav-btn {
+    width: auto !important;
+    flex: 0 0 auto !important;
+    white-space: nowrap !important;
+    padding: 7px 11px !important;
+    gap: 7px !important;
+    font-size: 0.78rem !important;
+    border-radius: 10px !important;
+    min-height: 38px !important;
+    scroll-snap-align: start !important;
+  }
+
+  .portal-nav-btn:hover {
+    transform: none !important;
+  }
+
+  .portal-nav-btn .portal-nav-icon {
+    width: 24px !important;
+    height: 24px !important;
+    border-radius: 7px !important;
+    font-size: 0.82rem !important;
+  }
+
+  .portal-nav-btn .portal-nav-icon svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+
+  .portal-nav-badge {
+    margin-left: 2px !important;
+    font-size: 0.65rem !important;
+    padding: 1px 6px !important;
+  }
+
+  .portal-main-area {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+
+/* Mobile Phones (<= 640px) */
+@media (max-width: 640px) {
+  .container {
+    padding: 0 0.75rem !important;
+  }
+
+  /* Compact single-row mobile navbar */
+  .navbar {
+    padding: 0.5rem 0.75rem !important;
+    gap: 8px !important;
+  }
+
+  .navbar.navbar-portal {
+    flex-wrap: nowrap !important;
+  }
+
+  .diamond-brand-lockup {
+    gap: 7px !important;
+    padding: 2px !important;
+    min-width: 0 !important;
+  }
+
+  .diamond-brand-gem {
+    width: 28px !important;
+    height: 28px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .diamond-brand-names .brand-title,
+  .diamond-brand-names .brand-subtitle {
+    font-size: 0.86rem !important;
+    letter-spacing: 0.6px !important;
+  }
+
+  .diamond-brand-names .brand-subtitle {
+    margin-left: 4px !important;
+  }
+
+  .nav-actions {
+    gap: 6px !important;
+  }
+
+  .navbar-user-chip {
+    padding: 3px !important;
+    border-radius: 10px !important;
+    gap: 0 !important;
+  }
+
+  .navbar-user-avatar {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 7px !important;
+  }
+
+  .navbar-logout-btn {
+    padding: 0 !important;
+    width: 32px !important;
+    height: 32px !important;
+    justify-content: center !important;
+    border-radius: 9px !important;
+  }
+
+  .portal-sidebar {
+    top: 52px !important;
+  }
+
+  /* Compact Dashboard Header */
+  .dashboard-header {
+    padding: 0.95rem 1rem !important;
+    border-radius: 16px !important;
+    margin-bottom: 1rem !important;
+    gap: 10px !important;
+  }
+
+  /* 2-column compact KPI grid instead of tall 1-col stack */
+  .admin-kpi-grid,
+  .coin-kpi-grid,
+  .teacher-coins-kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    margin-bottom: 1rem !important;
+  }
+
+  .admin-kpi-card,
+  .teacher-kpi-box {
+    padding: 0.75rem 0.8rem !important;
+    gap: 10px !important;
+    border-radius: 14px !important;
+    min-width: 0 !important;
+  }
+
+  .admin-kpi-card:hover,
+  .teacher-kpi-box:hover {
+    transform: none !important;
+  }
+
+  .admin-kpi-icon,
+  .teacher-kpi-box .kpi-ico {
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 10px !important;
+    font-size: 1rem !important;
+  }
+
+  .admin-kpi-icon svg,
+  .teacher-kpi-box .kpi-ico svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  .admin-kpi-val,
+  .teacher-kpi-box .kpi-val {
+    font-size: 1.15rem !important;
+    line-height: 1.15 !important;
+    word-break: break-word;
+  }
+
+  .admin-kpi-label,
+  .teacher-kpi-box .kpi-lbl {
+    font-size: 0.64rem !important;
+    line-height: 1.25 !important;
+    letter-spacing: 0.25px !important;
+  }
+
+  /* Search & Filter strips stack cleanly full width */
+  .admin-search-strip {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 0.85rem !important;
+    gap: 10px !important;
+    border-radius: 14px !important;
+  }
+
+  .admin-search-strip .input-with-icon,
+  .admin-search-strip .clean-select,
+  .teacher-history-search-box {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  .portal-admin-notice {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    padding: 10px 12px !important;
+    font-size: 0.78rem !important;
+    gap: 8px !important;
+  }
+
+  /* Tables: crisp compact touch-scroll */
+  .table-responsive,
+  .teacher-tx-table-wrap {
+    overflow-x: auto !important;
+    border-radius: 14px !important;
+    max-width: 100% !important;
+  }
+
+  .diamond-table {
+    font-size: 0.78rem !important;
+  }
+
+  .diamond-table th {
+    padding: 9px 10px !important;
+    font-size: 0.66rem !important;
+  }
+
+  .diamond-table td {
+    padding: 9px 10px !important;
+    font-size: 0.76rem !important;
+  }
+
+  /* Cards & Grids */
+  .classes-luxury-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 12px !important;
+  }
+
+  .class-card-luxury,
+  .test-card-luxury,
+  .contact-card,
+  .teacher-coins-banner,
+  .teacher-award-card,
+  .teacher-daily-limit-banner,
+  .test-builder-card {
+    padding: 1rem !important;
+    border-radius: 16px !important;
+  }
+
+  .test-card-title {
+    font-size: 1rem !important;
+  }
+
+  .test-card-header,
+  .test-card-actions {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  .test-meta-grid {
+    gap: 6px !important;
+  }
+
+  .test-meta-chip {
+    padding: 6px 8px !important;
+    font-size: 0.72rem !important;
+    min-width: 0 !important;
+    overflow: hidden;
+  }
+
+  .student-rank-card {
+    padding: 0.85rem !important;
+    border-radius: 14px !important;
+  }
+
+  /* Teacher Coins Mobile Ergonomics */
+  .teacher-class-selector-pill {
+    width: 100% !important;
+    justify-content: space-between !important;
+    box-sizing: border-box !important;
+    padding: 8px 11px !important;
+  }
+
+  .teacher-class-selector-pill select {
+    flex: 1 !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .teacher-mode-toggle {
+    display: flex !important;
+    width: 100% !important;
+  }
+
+  .teacher-mode-btn {
+    flex: 1 !important;
+    justify-content: center !important;
+    padding: 7px 8px !important;
+  }
+
+  .teacher-student-coin-card {
+    padding: 12px !important;
+    border-radius: 14px !important;
+  }
+
+  .student-card-btn-pill {
+    min-height: 36px !important;
+    padding: 6px 6px !important;
+  }
+
+  /* Top 3 Podium on mobile: #1 first! */
+  .coin-podium-wrap {
+    padding: 0.75rem 0 0 0 !important;
+    gap: 12px !important;
+  }
+
+  .podium-card.rank-1 {
+    order: 1 !important;
+    transform: none !important;
+    min-height: auto !important;
+  }
+
+  .podium-card.rank-2 {
+    order: 2 !important;
+    min-height: auto !important;
+  }
+
+  .podium-card.rank-3 {
+    order: 3 !important;
+    min-height: auto !important;
+  }
+
+  /* Student Test Runner & Login Gate */
+  .active-test-runner {
+    padding: 0.85rem !important;
+    border-radius: 16px !important;
+  }
+
+  .test-option-card {
+    padding: 11px 12px !important;
+    gap: 10px !important;
+    font-size: 0.86rem !important;
+  }
+
+  .portal-gate-container {
+    padding: 1.5rem 0.25rem !important;
+    min-height: 60vh !important;
+  }
+
+  .login-card {
+    padding: 1.5rem 1.1rem !important;
+    border-radius: 20px !important;
+  }
+
+  /* Modals & Toasts: never clipped or pushed off screen */
+  .modal-backdrop {
+    padding: 10px !important;
+    align-items: center !important;
+  }
+
+  .modal-content {
+    padding: 1.15rem !important;
+    border-radius: 18px !important;
+    max-width: 100% !important;
+    max-height: 92dvh !important;
+    overflow-y: auto !important;
+    box-sizing: border-box !important;
+  }
+
+  .modal-header {
+    margin-bottom: 0.9rem !important;
+    padding-bottom: 0.7rem !important;
+  }
+
+  .modal-title {
+    font-size: 1.02rem !important;
+  }
+
+  .modal-footer {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  .toast-container {
+    left: 12px !important;
+    right: 12px !important;
+    bottom: 12px !important;
+    max-width: none !important;
+    width: auto !important;
+  }
+
+  .toast-item {
+    padding: 11px 14px !important;
+    font-size: 0.8rem !important;
+  }
+
+  .builder-bottom-bar {
+    padding: 0.85rem 1rem !important;
+    border-radius: 14px !important;
+  }
+
+  .btn {
+    max-width: 100%;
+  }
+
+  .footer-clean-wrap {
+    padding: 2.25rem 0 1.5rem 0 !important;
+    margin-top: 2.5rem !important;
+  }
+}
+
+/* Very narrow phones (<= 400px) */
+@media (max-width: 400px) {
+  .diamond-brand-names .brand-subtitle {
+    display: none !important;
+  }
+
+  .diamond-brand-names .brand-title {
+    font-size: 0.85rem !important;
+  }
+
+  .diamond-lang-flag {
+    display: none !important;
+  }
+
+  .diamond-lang-btn {
+    padding: 0 7px !important;
+  }
+
+  .admin-kpi-val,
+  .teacher-kpi-box .kpi-val {
+    font-size: 1.02rem !important;
+  }
 }
