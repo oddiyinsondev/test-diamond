@@ -6683,6 +6683,13 @@ def _build_schedule_overview_payload(lang='uz'):
             'periods': periods_list,
         })
 
+    def _class_sort_key(cname):
+        m = re.match(r'^\s*(\d+)', str(cname or ''))
+        num = int(m.group(1)) if m else 999
+        return (num, str(cname or '').lower())
+
+    classes_order.sort(key=_class_sort_key)
+
     return {
         'hasSchedule': len(slots) > 0,
         'enforced': bool(settings_obj.lesson_schedule_enforced),

@@ -372,6 +372,8 @@ export default function AdminPortal() {
   const [uploadingSchedule, setUploadingSchedule] = useState(false);
   const [togglingSchedule, setTogglingSchedule] = useState(false);
   const [scheduleDayFilter, setScheduleDayFilter] = useState('all');
+  const [scheduleClassFilter, setScheduleClassFilter] = useState('all');
+  const [scheduleSubjectFilter, setScheduleSubjectFilter] = useState('all');
   const [scheduleSearch, setScheduleSearch] = useState('');
   const [scheduleUploadNotes, setScheduleUploadNotes] = useState({ autoFixedTimes: [], warnings: [] });
 
@@ -5766,25 +5768,85 @@ export default function AdminPortal() {
           {activeTab === 'schedule' && (() => {
             const schedDays = Array.isArray(scheduleData?.days) ? scheduleData.days : [];
             const schedClasses = Array.isArray(scheduleData?.classes) ? scheduleData.classes : [];
-            const q = scheduleSearch.trim().toLowerCase();
-            const visibleDays = schedDays.filter((d) =>
+            const schedSubjects = Array.isArray(scheduleData?.subjects) ? scheduleData.subjects : [];
+            const rawQ = scheduleSearch.trim().toLowerCase();
+            const searchAliasMap = {
+              infa: ['informatika', 'информатика'],
+              inf: ['informatika', 'информатика'],
+              mat: ['matematika', 'математика'],
+              matem: ['matematika', 'математика'],
+              ing: ['ingliz', 'англ', 'инглиз', 'english'],
+              eng: ['ingliz', 'англ', 'инглиз', 'english'],
+              fiz: ['fizika', 'физика'],
+              kim: ['kimyo', 'химия', 'кимё'],
+              xim: ['kimyo', 'химия', 'кимё'],
+              bio: ['biologiya', 'биология'],
+              tar: ['tarix', 'история', 'тарих'],
+              ist: ['tarix', 'история', 'тарих'],
+              rus: ['rus tili', 'русский', 'рус тили'],
+              ona: ['ona tili', 'она тили', 'узбекский'],
+              uzb: ['ona tili', 'узбекский', 'uz'],
+              adab: ['adabiyot', 'литература', 'адабиёт'],
+            };
+            const searchTokens = rawQ
+              ? Array.from(new Set([rawQ, ...(searchAliasMap[rawQ] || [])]))
+              : [];
+
+            const cellMatchesFilter = (cell, cls) => {
+              if (!cell) return false;
+              if (scheduleSubjectFilter !== 'all' && cell.subject !== scheduleSubjectFilter) {
+                return false;
+              }
+              if (searchTokens.length > 0) {
+                const hay = `${cell.subject || ''} ${localizeSubject(cell.subject || '', language)} ${cell.rawSubject || ''} ${cls || ''}`.toLowerCase();
+                return searchTokens.some((tok) => hay.includes(tok));
+              }
+              return true;
+            };
+
+            const isFilteringLessons =
+              scheduleSubjectFilter !== 'all' || searchTokens.length > 0;
+
+            const baseDays = schedDays.filter((d) =>
               scheduleDayFilter === 'all' ? true : String(d.dayOfWeek) === String(scheduleDayFilter)
             );
-            const visibleClasses = q
-              ? schedClasses.filter((cls) => {
-                  if (cls.toLowerCase().includes(q)) return true;
-                  return visibleDays.some((d) =>
-                    (d.periods || []).some((p) => {
-                      const c = p.cells?.[cls];
-                      if (!c) return false;
-                      return (
-                        (c.subject || '').toLowerCase().includes(q) ||
-                        (c.rawSubject || '').toLowerCase().includes(q)
-                      );
-                    })
+
+            const classFiltered =
+              scheduleClassFilter !== 'all'
+                ? schedClasses.filter((cls) => cls === scheduleClassFilter)
+                : schedClasses;
+
+            const visibleClasses = isFilteringLessons
+              ? classFiltered.filter((cls) => {
+                  if (
+                    scheduleSubjectFilter === 'all' &&
+                    searchTokens.length > 0 &&
+                    searchTokens.some((tok) => cls.toLowerCase().includes(tok))
+                  ) {
+                    return true;
+                  }
+                  return baseDays.some((d) =>
+                    (d.periods || []).some((p) => cellMatchesFilter(p.cells?.[cls], cls))
                   );
                 })
-              : schedClasses;
+              : classFiltered;
+
+            const visibleDays = isFilteringLessons
+              ? baseDays
+                  .map((d) => ({
+                    ...d,
+                    periods: (d.periods || []).filter((p) =>
+                      visibleClasses.some((cls) => cellMatchesFilter(p.cells?.[cls], cls))
+                    ),
+                  }))
+                  .filter((d) => d.periods.length > 0)
+              : baseDays;
+
+            const hasAnyScheduleFilter =
+              scheduleDayFilter !== 'all' ||
+              scheduleClassFilter !== 'all' ||
+              scheduleSubjectFilter !== 'all' ||
+              Boolean(rawQ);
 
             return (
               <div className="space-y-4 animate-fade-in">
@@ -5944,7 +6006,7 @@ export default function AdminPortal() {
                 {/* Day Filter & Search Bar */}
                 {scheduleData?.hasSchedule ? (
                   <>
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                    <div className="flex flex-col gap-2.5 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <button
                           type="button"
@@ -5976,19 +6038,90 @@ export default function AdminPortal() {
                         ))}
                       </div>
 
-                      <div className="input-with-icon w-full md:w-64">
-                        <Search size={14} className="input-icon" />
-                        <input
-                          type="text"
-                          className="clean-input text-xs"
-                          placeholder={tr('Fan yoki sinf qidirish...', 'Поиск предмета или класса...')}
-                          value={scheduleSearch}
-                          onChange={(e) => setScheduleSearch(e.target.value)}
-                        />
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                        <select
+                          className="clean-select text-xs sm:w-48"
+                          value={scheduleSubjectFilter}
+                          onChange={(e) => setScheduleSubjectFilter(e.target.value)}
+                        >
+                          <option value="all">{tr('Barcha fanlar', 'Все предметы')} ({schedSubjects.length})</option>
+                          {schedSubjects.map((subj) => (
+                            <option key={subj} value={subj}>
+                              {localizeSubject(subj, language)}
+                            </option>
+                          ))}
+                        </select>
+
+                        <select
+                          className="clean-select text-xs sm:w-44"
+                          value={scheduleClassFilter}
+                          onChange={(e) => setScheduleClassFilter(e.target.value)}
+                        >
+                          <option value="all">{tr('Barcha sinflar', 'Все классы')} ({schedClasses.length})</option>
+                          {schedClasses.map((cls) => (
+                            <option key={cls} value={cls}>
+                              {localizeGrade(cls, language)}
+                            </option>
+                          ))}
+                        </select>
+
+                        <div className="input-with-icon flex-1">
+                          <Search size={14} className="input-icon" />
+                          <input
+                            type="text"
+                            className="clean-input text-xs"
+                            placeholder={tr('Fan yoki sinf qidirish (masalan: Informatika, 8-A-UZ)...', 'Поиск предмета или класса (напр.: Информатика, 8-A-UZ)...')}
+                            value={scheduleSearch}
+                            onChange={(e) => setScheduleSearch(e.target.value)}
+                          />
+                        </div>
+
+                        {hasAnyScheduleFilter && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setScheduleDayFilter('all');
+                              setScheduleClassFilter('all');
+                              setScheduleSubjectFilter('all');
+                              setScheduleSearch('');
+                            }}
+                            className="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-500/15 text-rose-300 border border-rose-500/35 hover:bg-rose-500/25 whitespace-nowrap"
+                          >
+                            {tr('Filtrlarni tozalash', 'Сбросить')}
+                          </button>
+                        )}
                       </div>
                     </div>
 
                     {/* Schedule Matrix by Day */}
+                    {visibleClasses.length === 0 || visibleDays.length === 0 ? (
+                      <div className="p-8 rounded-2xl bg-slate-900/60 border border-slate-800 text-center space-y-3">
+                        <div className="text-sm font-bold text-white">
+                          {tr(
+                            `Tanlangan filtr / qidiruv bo'yicha dars topilmadi${rawQ ? `: "${scheduleSearch}"` : ''}`,
+                            `По выбранному фильтру / поиску уроки не найдены${rawQ ? `: «${scheduleSearch}»` : ''}`
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400">
+                          {tr(
+                            "Yuqoridagi «Barcha fanlar» yoki «Barcha sinflar» ro'yxatidan kerakli fan/sinfni tanlang yoki qidiruvni tozalang.",
+                            'Выберите предмет или класс из выпадающего списка выше либо сбросьте фильтры.'
+                          )}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setScheduleDayFilter('all');
+                            setScheduleClassFilter('all');
+                            setScheduleSubjectFilter('all');
+                            setScheduleSearch('');
+                          }}
+                          className="btn btn-diamond-cyan btn-xs font-bold"
+                        >
+                          {tr("Barcha darslarni ko'rsatish", 'Показать все уроки')}
+                        </button>
+                      </div>
+                    ) : (
                     <div className="space-y-4">
                       {visibleDays.map((dayObj) => (
                         <div
@@ -6010,7 +6143,7 @@ export default function AdminPortal() {
                               )}
                             </div>
                             <span className="text-[11px] text-slate-400">
-                              {(dayObj.periods || []).length} {tr('ta dars soati', 'уроков')}
+                              {(dayObj.periods || []).length} {tr('ta dars soati', 'уроков')} • {visibleClasses.length} {tr('ta sinf', 'кл.')}
                             </span>
                           </div>
 
@@ -6018,10 +6151,12 @@ export default function AdminPortal() {
                             <table className="diamond-table w-full text-left">
                               <thead>
                                 <tr>
-                                  <th className="whitespace-nowrap">{tr('Dars / Vaqt', 'Урок / Время')}</th>
+                                  <th className="whitespace-nowrap sticky left-0 z-10 bg-slate-950">{tr('Dars / Vaqt', 'Урок / Время')}</th>
                                   {visibleClasses.map((cls) => (
                                     <th key={cls} className="whitespace-nowrap text-center">
-                                      {localizeGrade(cls, language)}
+                                      <span className="px-2 py-0.5 rounded-md bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-extrabold text-[11px]">
+                                        {localizeGrade(cls, language)}
+                                      </span>
                                     </th>
                                   ))}
                                 </tr>
@@ -6032,7 +6167,7 @@ export default function AdminPortal() {
                                     key={`${dayObj.dayOfWeek}-${p.lessonNumber}-${p.startTime}-${pIdx}`}
                                     className={p.isLiveNow ? 'bg-emerald-500/10' : ''}
                                   >
-                                    <td className="whitespace-nowrap">
+                                    <td className="whitespace-nowrap sticky left-0 z-10 bg-slate-900/95">
                                       <div className="flex items-center gap-1.5">
                                         <span className="w-5 h-5 rounded bg-slate-800 text-cyan-300 text-[10px] font-black flex items-center justify-center">
                                           {p.lessonNumber}
@@ -6047,23 +6182,20 @@ export default function AdminPortal() {
                                     </td>
                                     {visibleClasses.map((cls) => {
                                       const cell = p.cells?.[cls];
-                                      const isMatch =
-                                        q &&
-                                        cell &&
-                                        ((cell.subject || '').toLowerCase().includes(q) ||
-                                          (cell.rawSubject || '').toLowerCase().includes(q));
+                                      const isMatch = isFilteringLessons && cellMatchesFilter(cell, cls);
+                                      const isDimmed = isFilteringLessons && cell && !isMatch;
                                       return (
                                         <td key={cls} className="text-center align-middle">
                                           {cell ? (
                                             <div
-                                              className={`inline-flex flex-col items-center px-2 py-1 rounded-lg border text-[11px] leading-tight ${
+                                              className={`inline-flex flex-col items-center px-2 py-1 rounded-lg border text-[11px] leading-tight transition-opacity ${
                                                 isMatch
-                                                  ? 'bg-amber-500/20 border-amber-400 text-amber-200 font-bold'
+                                                  ? 'bg-amber-500/20 border-amber-400 text-amber-200 font-bold shadow-sm'
                                                   : p.isLiveNow
                                                   ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200 font-bold'
                                                   : 'bg-slate-950/60 border-slate-800 text-slate-200'
-                                              }`}
-                                              title={cell.rawSubject}
+                                              } ${isDimmed ? 'opacity-25' : ''}`}
+                                              title={`${cls}: ${cell.rawSubject}`}
                                             >
                                               <span className="font-bold whitespace-nowrap">{localizeSubject(cell.subject, language)}</span>
                                               {cell.rawSubject && cell.rawSubject !== cell.subject && (
@@ -6084,6 +6216,7 @@ export default function AdminPortal() {
                         </div>
                       ))}
                     </div>
+                    )}
                   </>
                 ) : (
                   <div className="p-8 rounded-2xl bg-slate-900/60 border border-dashed border-slate-700 text-center space-y-3">
