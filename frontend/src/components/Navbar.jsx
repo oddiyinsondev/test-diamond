@@ -41,6 +41,12 @@ export default function Navbar() {
   const isMainHomeActive = portalMode === 'main' && location.pathname === '/';
   const isOnAdminPortal =
     portalMode === 'admin' || (portalMode === 'main' && location.pathname.startsWith('/admin-panel'));
+  const isPortalPage =
+    portalMode !== 'main' ||
+    location.pathname.startsWith('/admin-panel') ||
+    location.pathname.startsWith('/teacher') ||
+    location.pathname.startsWith('/tutor') ||
+    location.pathname.startsWith('/student');
   const adminHomeTarget = getPortalLinkTarget('admin', '', { portalMode });
   const adminTestsTarget = getPortalLinkTarget('admin', '?tab=tests', { portalMode });
   const teacherPortalTarget = getPortalLinkTarget('teacher', '', { portalMode });
@@ -59,44 +65,46 @@ export default function Navbar() {
         </PortalNavItem>
       </div>
 
-      {/* Center Nav Links */}
-      <nav className="navbar-center-nav">
-        <PortalNavItem
-          target={homeTarget}
-          className={`nav-link-item ${isMainHomeActive ? 'active-nav-section' : ''}`}
-        >
-          {tr('BOSH SAHIFA', 'ГЛАВНАЯ')}
-        </PortalNavItem>
-        <a href={getMainSectionHref('#teachers-section', { portalMode })} className="nav-link-item">
-          {tr('USTOZLAR', 'УЧИТЕЛЯ')}
-        </a>
-        <a href={getMainSectionHref('#talented-section', { portalMode })} className="nav-link-item">
-          {tr('IQTIDORLILAR', 'ТАЛАНТЫ')}
-        </a>
-        <a href={getMainSectionHref('#contact-section', { portalMode })} className="nav-link-item">
-          {tr("BOG'LANISH", 'КОНТАКТЫ')}
-        </a>
+      {/* Center Nav Links (only on main landing page, hidden in Admin/Teacher/Tutor/Student portals) */}
+      {!isPortalPage && (
+        <nav className="navbar-center-nav">
+          <PortalNavItem
+            target={homeTarget}
+            className={`nav-link-item ${isMainHomeActive ? 'active-nav-section' : ''}`}
+          >
+            {tr('BOSH SAHIFA', 'ГЛАВНАЯ')}
+          </PortalNavItem>
+          <a href={getMainSectionHref('#teachers-section', { portalMode })} className="nav-link-item">
+            {tr('USTOZLAR', 'УЧИТЕЛЯ')}
+          </a>
+          <a href={getMainSectionHref('#talented-section', { portalMode })} className="nav-link-item">
+            {tr('IQTIDORLILAR', 'ТАЛАНТЫ')}
+          </a>
+          <a href={getMainSectionHref('#contact-section', { portalMode })} className="nav-link-item">
+            {tr("BOG'LANISH", 'КОНТАКТЫ')}
+          </a>
 
-        {/* If Admin, show direct nav link to Admin Panel & Tests */}
-        {user?.role === 'admin' && (
-          <>
-            <PortalNavItem
-              target={adminHomeTarget}
-              className={`nav-link-item ${isOnAdminPortal && !location.search.includes('tab=tests') ? 'active-nav-section' : ''}`}
-              style={{ color: '#f59e0b', fontWeight: 800 }}
-            >
-              👑 {tr('ADMIN PANELI', 'АДМИН')}
-            </PortalNavItem>
-            <PortalNavItem
-              target={adminTestsTarget}
-              className={`nav-link-item ${isOnAdminPortal && location.search.includes('tab=tests') ? 'active-nav-section' : ''}`}
-              style={{ color: '#38bdf8', fontWeight: 800 }}
-            >
-              📋 {tr('TESTLAR', 'ТЕСТЫ')}
-            </PortalNavItem>
-          </>
-        )}
-      </nav>
+          {/* If Admin on landing page, show direct nav link to Admin Panel & Tests */}
+          {user?.role === 'admin' && (
+            <>
+              <PortalNavItem
+                target={adminHomeTarget}
+                className={`nav-link-item ${isOnAdminPortal && !location.search.includes('tab=tests') ? 'active-nav-section' : ''}`}
+                style={{ color: '#f59e0b', fontWeight: 800 }}
+              >
+                👑 {tr('ADMIN PANELI', 'АДМИН')}
+              </PortalNavItem>
+              <PortalNavItem
+                target={adminTestsTarget}
+                className={`nav-link-item ${isOnAdminPortal && location.search.includes('tab=tests') ? 'active-nav-section' : ''}`}
+                style={{ color: '#38bdf8', fontWeight: 800 }}
+              >
+                📋 {tr('TESTLAR', 'ТЕСТЫ')}
+              </PortalNavItem>
+            </>
+          )}
+        </nav>
+      )}
 
       {/* Right Action Items */}
       <div className="nav-actions">
@@ -189,7 +197,11 @@ export default function Navbar() {
               type="button"
               onClick={openProfileModal}
               className="w-8 h-8 rounded-lg bg-slate-800/80 hover:bg-cyan-500/20 border border-slate-700 hover:border-cyan-400/60 text-slate-300 hover:text-cyan-300 flex items-center justify-center transition-all"
-              title={tr("Profilni tahrirlash (Rasm, Ma'lumotlar, Parol)", 'Редактировать профиль (Фото, Данные, Пароль)')}
+              title={
+                user.role === 'student'
+                  ? tr("Profilni tahrirlash (Ma'lumotlar, Bio, Parol)", 'Редактировать профиль (Данные, Био, Пароль)')
+                  : tr("Profilni tahrirlash (Rasm, Ma'lumotlar, Parol)", 'Редактировать профиль (Фото, Данные, Пароль)')
+              }
             >
               <Settings size={15} />
             </button>

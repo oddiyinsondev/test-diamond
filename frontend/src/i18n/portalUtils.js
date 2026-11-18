@@ -162,6 +162,23 @@ export const ADMIN_STUDENT_COIN_PRESETS_BY_LANG = {
   ],
 };
 
+export const ADMIN_STUDENT_DEDUCT_PRESETS_BY_LANG = {
+  uz: [
+    'Tartib-intizomni buzgani uchun ⚠️',
+    "Noto'g'ri berilgan coinni qaytarish ↩️",
+    'Darsga tayyorgarliksiz kelgani uchun 📉',
+    'Maktab qoidalariga amal qilmagani uchun 🚫',
+    'Balansni qayta hisoblash / tuzatish 🔧',
+  ],
+  ru: [
+    'За нарушение дисциплины ⚠️',
+    'Возврат ошибочно начисленных койнов ↩️',
+    'За неготовность к уроку 📉',
+    'За несоблюдение школьных правил 🚫',
+    'Перерасчёт / корректировка баланса 🔧',
+  ],
+};
+
 export const ADMIN_CLASS_COIN_PRESETS_BY_LANG = {
   uz: [
     'Faol sinf rag‘bati 🏫💎',

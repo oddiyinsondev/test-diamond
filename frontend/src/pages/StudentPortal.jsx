@@ -1407,14 +1407,18 @@ export default function StudentPortal() {
                           user?.id &&
                           ((item.studentId && item.studentId === user.id) ||
                             (item.id && item.id === user.id));
+                        const rankNum = item.rank || idx + 1;
                         return (
                           <tr
                             key={item.studentId || item.id || idx}
                             className={isMe ? 'bg-cyan-500/10' : ''}
                           >
                             <td>
-                              <div className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs bg-slate-800 text-amber-300">
-                                {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : item.rank || idx + 1}
+                              <div
+                                className="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs bg-slate-800 text-amber-300"
+                                title={language === 'ru' ? `${rankNum}-е место` : `${rankNum}-o'rin`}
+                              >
+                                {rankNum === 1 ? '🥇' : rankNum === 2 ? '🥈' : rankNum === 3 ? '🥉' : rankNum}
                               </div>
                             </td>
                             <td className="font-bold text-white text-xs">

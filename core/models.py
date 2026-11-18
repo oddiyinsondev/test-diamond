@@ -256,6 +256,12 @@ class SiteSetting(models.Model):
     student_tests_start_time = models.DateTimeField(null=True, blank=True, verbose_name="O'quvchilar testlari ruxsat boshlanish vaqti")
     student_tests_end_time = models.DateTimeField(null=True, blank=True, verbose_name="O'quvchilar testlari ruxsat tugash vaqti")
 
+    # O'qituvchilar coin ruxsatini dars jadvali bo'yicha nazorat qilish
+    lesson_schedule_enforced = models.BooleanField(
+        default=True,
+        verbose_name="O'qituvchilar coin ruxsatini dars jadvali bo'yicha nazorat qilish",
+    )
+
     class Meta:
         verbose_name = "Sayt Sozlamalari & Ma'lumotlari"
         verbose_name_plural = "Sayt Sozlamalari & Ma'lumotlari"
@@ -327,5 +333,57 @@ class ClassCoinTransaction(models.Model):
 
     def __str__(self):
         return f"{self.school_class.name}: {self.amount:+d} coin ({self.reason})"
+
+
+class LessonSchedule(models.Model):
+    """Admin tomonidan Excel/CSV orqali yuklanadigan haftalik dars jadvali (ish rejasi)"""
+    DAY_CHOICES = (
+        (0, 'Dushanba'),
+        (1, 'Seshanba'),
+        (2, 'Chorshanba'),
+        (3, 'Payshanba'),
+        (4, 'Juma'),
+        (5, 'Shanba'),
+        (6, 'Yakshanba'),
+    )
+    day_of_week = models.PositiveSmallIntegerField(
+        choices=DAY_CHOICES, db_index=True, verbose_name="Hafta kuni (0=Dushanba)"
+    )
+    lesson_number = models.PositiveSmallIntegerField(default=1, verbose_name="Dars tartib raqami")
+    start_time = models.TimeField(verbose_name="Boshlanish vaqti")
+    end_time = models.TimeField(verbose_name="Tugash vaqti")
+    school_class = models.ForeignKey(
+        SchoolClass,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='lesson_schedules',
+        verbose_name="Biriktirilgan sinf",
+    )
+    class_name = models.CharField(max_length=80, db_index=True, verbose_name="Sinf nomi")
+    raw_class_name = models.CharField(max_length=120, blank=True, default='', verbose_name="Excel dagi sinf nomi")
+    subject = models.CharField(max_length=150, verbose_name="Fan (normalizatsiya qilingan)")
+    raw_subject = models.CharField(max_length=200, blank=True, default='', verbose_name="Excel dagi asl fan nomi")
+    teacher = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='lesson_schedules',
+        limit_choices_to={'role': 'teacher'},
+        verbose_name="Biriktirilgan o'qituvchi (ixtiyoriy)",
+    )
+    academic_year = models.CharField(max_length=120, blank=True, default='', verbose_name="O'quv yili / sarlavha")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Dars Jadvali (Ish Reja)"
+        verbose_name_plural = "Dars Jadvali (Ish Reja)"
+        ordering = ['day_of_week', 'start_time', 'lesson_number', 'class_name']
+
+    def __str__(self):
+        day_label = dict(self.DAY_CHOICES).get(self.day_of_week, str(self.day_of_week))
+        return f"{day_label} {self.start_time.strftime('%H:%M')}-{self.end_time.strftime('%H:%M')} | {self.class_name}: {self.subject}"
+
 
 

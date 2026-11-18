@@ -68,8 +68,10 @@ export default function ProfileModal() {
   if (!profileModalOpen || !user) return null;
 
   const isTutorRestricted = user.role === 'tutor';
+  const isStudentAvatarRestricted = user.role === 'student';
 
   const handleAvatarChange = (e) => {
+    if (isStudentAvatarRestricted) return;
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
@@ -95,6 +97,7 @@ export default function ProfileModal() {
   };
 
   const handleClearAvatar = () => {
+    if (isStudentAvatarRestricted) return;
     setAvatarFile(null);
     setClearAvatar(true);
     const seed = user.fullName || user.username || 'U';
@@ -147,11 +150,13 @@ export default function ProfileModal() {
       if (user.role === 'teacher' && subject) {
         formData.append('subject', subject);
       }
-      if (clearAvatar) {
-        formData.append('clearAvatar', 'true');
-      }
-      if (avatarFile) {
-        formData.append('avatar', avatarFile);
+      if (!isStudentAvatarRestricted) {
+        if (clearAvatar) {
+          formData.append('clearAvatar', 'true');
+        }
+        if (avatarFile) {
+          formData.append('avatar', avatarFile);
+        }
       }
       if (!isTutorRestricted && newPassword) {
         if (oldPassword) formData.append('oldPassword', oldPassword);
@@ -210,11 +215,15 @@ export default function ProfileModal() {
                 overflow: 'hidden',
                 border: '3px solid #29B7E1',
                 boxShadow: '0 0 18px rgba(41, 183, 225, 0.4)',
-                cursor: 'pointer',
+                cursor: isStudentAvatarRestricted ? 'default' : 'pointer',
                 position: 'relative',
               }}
-              onClick={() => fileInputRef.current?.click()}
-              title={tr('Rasm tanlash', 'Выбрать фото')}
+              onClick={isStudentAvatarRestricted ? undefined : () => fileInputRef.current?.click()}
+              title={
+                isStudentAvatarRestricted
+                  ? tr("Profil rasmini faqat tyuter yoki administrator o'zgartira oladi", 'Фото профиля может изменять только тьютор или администратор')
+                  : tr('Rasm tanlash', 'Выбрать фото')
+              }
             >
               {avatarPreview ? (
                 <img src={avatarPreview} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -224,33 +233,47 @@ export default function ProfileModal() {
                 </div>
               )}
             </div>
-            <input
-              ref={fileInputRef}
-              id="profile-avatar-input-ref"
-              type="file"
-              accept="image/*"
-              style={{ display: 'none' }}
-              onChange={handleAvatarChange}
-            />
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="btn btn-secondary btn-xs text-xs flex items-center gap-1.5 text-cyan-300 border-cyan-500/40"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Camera size={13} /> {tr('Rasm yuklash', 'Загрузить фото')}
-              </button>
-              {(user.hasCustomAvatar || avatarFile) && !clearAvatar && (
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-xs text-xs flex items-center gap-1 text-rose-300 border-rose-500/35"
-                  onClick={handleClearAvatar}
-                  title={tr("Shaxsiy rasmni o'chirish", 'Удалить личное фото')}
-                >
-                  <Trash2 size={13} /> {tr("O'chirish", 'Удалить')}
-                </button>
-              )}
-            </div>
+            {isStudentAvatarRestricted ? (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700/80 text-[11px] text-slate-300 font-medium text-center">
+                <Lock size={11} className="text-cyan-400 flex-shrink-0" />
+                <span>
+                  {tr(
+                    "Profil rasmini faqat tyuter yoki administrator o'zgartira oladi",
+                    'Фото профиля может изменять только тьютор или администратор'
+                  )}
+                </span>
+              </div>
+            ) : (
+              <>
+                <input
+                  ref={fileInputRef}
+                  id="profile-avatar-input-ref"
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={handleAvatarChange}
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-xs text-xs flex items-center gap-1.5 text-cyan-300 border-cyan-500/40"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Camera size={13} /> {tr('Rasm yuklash', 'Загрузить фото')}
+                  </button>
+                  {(user.hasCustomAvatar || avatarFile) && !clearAvatar && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-xs text-xs flex items-center gap-1 text-rose-300 border-rose-500/35"
+                      onClick={handleClearAvatar}
+                      title={tr("Shaxsiy rasmni o'chirish", 'Удалить личное фото')}
+                    >
+                      <Trash2 size={13} /> {tr("O'chirish", 'Удалить')}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

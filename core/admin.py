@@ -4,8 +4,16 @@ from django.contrib.auth.admin import UserAdmin
 from .models import (
     CustomUser, Test, Question, Option, TestResult, StudentAnswer,
     TeacherShowcase, TalentedStudent, ContactMessage, SiteSetting, SchoolClass,
-    CoinTransaction, ClassCoinTransaction
+    CoinTransaction, ClassCoinTransaction, LessonSchedule
 )
+
+
+@admin.register(LessonSchedule)
+class LessonScheduleAdmin(admin.ModelAdmin):
+    list_display = ('day_of_week', 'lesson_number', 'start_time', 'end_time', 'class_name', 'subject', 'raw_subject')
+    list_filter = ('day_of_week', 'class_name', 'subject')
+    search_fields = ('class_name', 'raw_class_name', 'subject', 'raw_subject')
+    ordering = ('day_of_week', 'start_time', 'class_name')
 
 
 @admin.register(TeacherShowcase)

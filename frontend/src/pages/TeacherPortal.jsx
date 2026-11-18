@@ -258,7 +258,30 @@ export default function TeacherPortal() {
     0,
     Math.min(maxCoinsPerDay, Number(selectedClassDailyInfo?.coinsRemainingToday ?? (maxCoinsPerDay - coinsUsedToday)))
   );
-  const canAwardToSelectedClass = coinsRemainingToday > 0;
+  const scheduleStatus = dailyCoinStatus?.scheduleStatus || null;
+  const isScheduleEnforced = Boolean(scheduleStatus?.enforced);
+  const isAllowedBySchedule = !isScheduleEnforced || Boolean(scheduleStatus?.allowed);
+  const activeScheduleClasses = Array.isArray(scheduleStatus?.activeClasses)
+    ? scheduleStatus.activeClasses
+    : [];
+  const todayScheduleLessons = Array.isArray(scheduleStatus?.todayLessons)
+    ? scheduleStatus.todayLessons
+    : [];
+  const canAwardToSelectedClass = coinsRemainingToday > 0 && isAllowedBySchedule;
+
+  // Auto-refresh schedule / coin status every 60s while on the coins tab so permissions unlock right on time
+  useEffect(() => {
+    if (!isTeacher || activeTab !== 'coins' || !coinSelectedGrade) return;
+    const timer = setInterval(() => {
+      api.teacher
+        .getClassStudents(coinSelectedGrade)
+        .then((res) => {
+          if (res?.dailyCoinStatus) setDailyCoinStatus(res.dailyCoinStatus);
+        })
+        .catch(() => {});
+    }, 60000);
+    return () => clearInterval(timer);
+  }, [isTeacher, activeTab, coinSelectedGrade]);
 
   // Load read-only students directory when teacher opens 'students' tab
   useEffect(() => {
@@ -751,9 +774,21 @@ export default function TeacherPortal() {
     setCoinSelectedGrade(grade);
   };
 
-  // Auto-select populated class on initial visit if current selection has 0 students
+  // Auto-select active scheduled class (or populated class) on initial visit
   useEffect(() => {
     if (!isTeacher || activeTab !== 'coins' || hasManualGradePickRef.current) return;
+    if (isScheduleEnforced && activeScheduleClasses.length > 0) {
+      if (!activeScheduleClasses.includes(coinSelectedGrade)) {
+        const liveWithStudents =
+          activeScheduleClasses.find((cls) =>
+            classesMeta.some((c) => c.name === cls && Number(c.studentsCount) > 0)
+          ) || activeScheduleClasses[0];
+        if (liveWithStudents && liveWithStudents !== coinSelectedGrade) {
+          setCoinSelectedGrade(liveWithStudents);
+          return;
+        }
+      }
+    }
     if (classesMeta.length > 0) {
       const currentMeta = classesMeta.find((c) => c.name === coinSelectedGrade);
       if (!currentMeta || Number(currentMeta.studentsCount) === 0) {
@@ -765,7 +800,7 @@ export default function TeacherPortal() {
         }
       }
     }
-  }, [isTeacher, activeTab, classesMeta, coinSelectedGrade]);
+  }, [isTeacher, activeTab, classesMeta, coinSelectedGrade, isScheduleEnforced, activeScheduleClasses]);
 
   const refreshCoinTabData = async (grade = coinSelectedGrade) => {
     if (!grade) return;
@@ -3257,6 +3292,91 @@ export default function TeacherPortal() {
               </div>
 
               {/* 1.5 Teacher Daily Coin Limit Banner (Har bir sinf uchun kuniga max 5 coin) */}
+              {/* Lesson Schedule (Ish Reja) Live Permission Banner */}
+              {isScheduleEnforced && (
+                <div
+                  className={`p-4 rounded-2xl border space-y-2.5 ${
+                    isAllowedBySchedule
+                      ? 'bg-emerald-500/10 border-emerald-500/40'
+                      : 'bg-rose-500/10 border-rose-500/40'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0 ${
+                        isAllowedBySchedule
+                          ? 'bg-emerald-500/20 border-emerald-500/45 text-emerald-300'
+                          : 'bg-rose-500/20 border-rose-500/45 text-rose-300'
+                      }`}
+                    >
+                      {isAllowedBySchedule ? <Clock size={19} /> : <Lock size={19} />}
+                    </div>
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs sm:text-sm font-black text-white">
+                          {isAllowedBySchedule
+                            ? tr("Dars Jadvali: Ruxsat Ochiq (Sizning darsingiz vaqti)", 'Расписание: Доступ открыт (Время вашего урока)')
+                            : tr("Dars Jadvali: Hozir Ruxsat Yopiq", 'Расписание: Доступ сейчас закрыт')}
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-900/80 border border-slate-700 text-cyan-300 font-bold font-mono">
+                          {scheduleStatus?.currentDayLabel} • {scheduleStatus?.currentTime}
+                        </span>
+                        {scheduleStatus?.teacherSubject && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/35 text-amber-300 font-bold">
+                            {localizeSubject(scheduleStatus.teacherSubject, language)}
+                          </span>
+                        )}
+                      </div>
+                      <p className={`text-xs leading-relaxed ${isAllowedBySchedule ? 'text-emerald-200' : 'text-rose-200'}`}>
+                        {scheduleStatus?.message}
+                      </p>
+
+                      {activeScheduleClasses.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                          <span className="text-[10px] font-bold text-slate-300">
+                            {tr('Hozir faol sinflar:', 'Активные сейчас классы:')}
+                          </span>
+                          {activeScheduleClasses.map((cls) => (
+                            <button
+                              key={cls}
+                              type="button"
+                              onClick={() => handleSelectCoinGrade(cls, true)}
+                              className={`text-[11px] px-2.5 py-0.5 rounded-lg font-extrabold border transition-all ${
+                                cls === coinSelectedGrade
+                                  ? 'bg-emerald-500/30 border-emerald-400 text-white'
+                                  : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/25'
+                              }`}
+                            >
+                              ✓ {localizeGrade(cls, language)}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {todayScheduleLessons.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap pt-1.5 border-t border-slate-800/70">
+                          <span className="text-[10px] font-bold text-slate-400">
+                            {tr('Bugungi darslaringiz:', 'Ваши уроки сегодня:')}
+                          </span>
+                          {todayScheduleLessons.map((les, li) => (
+                            <span
+                              key={`${les.startTime}-${li}`}
+                              className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold ${
+                                les.isLive
+                                  ? 'bg-emerald-500/25 border-emerald-400 text-emerald-100 font-bold'
+                                  : 'bg-slate-900/70 border-slate-700 text-slate-300'
+                              }`}
+                            >
+                              {les.timeRange} ({(les.classes || []).map((c) => localizeGrade(c, language)).join(', ')})
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {isTeacherRestricted && (
                 <div
                   className={`teacher-daily-limit-banner ${
@@ -3628,7 +3748,10 @@ export default function TeacherPortal() {
                         className="clean-select text-xs"
                         value={selectedStudentForCoin}
                         onChange={(e) => setSelectedStudentForCoin(e.target.value)}
-                        disabled={coinMode === 'deduct' ? classStudentsList.length === 0 : !canAwardToSelectedClass || classStudentsList.length === 0}
+                        disabled={
+                          !isAllowedBySchedule ||
+                          (coinMode === 'deduct' ? classStudentsList.length === 0 : !canAwardToSelectedClass || classStudentsList.length === 0)
+                        }
                         required
                       >
                         {classStudentsList.length === 0 ? (
@@ -3674,7 +3797,10 @@ export default function TeacherPortal() {
                           type="number"
                           min={1}
                           max={coinMode === 'deduct' ? maxCoinsPerDay : Math.max(1, Math.min(maxCoinsPerDay, coinsRemainingToday || maxCoinsPerDay))}
-                          disabled={coinMode === 'deduct' ? classStudentsList.length === 0 : !canAwardToSelectedClass || classStudentsList.length === 0}
+                          disabled={
+                          !isAllowedBySchedule ||
+                          (coinMode === 'deduct' ? classStudentsList.length === 0 : !canAwardToSelectedClass || classStudentsList.length === 0)
+                        }
                           className="coin-amount-native-input"
                           value={coinAmount}
                           onChange={(e) => {
@@ -3725,17 +3851,19 @@ export default function TeacherPortal() {
                           const hasInsufficientBal =
                             selectedCoinStudentObj && Number(coinAmount) > (Number(selectedCoinStudentObj.coins) || 0);
                           const submitDisabled =
+                            !isAllowedBySchedule ||
                             classStudentsList.length === 0 ||
                             !coinAmount ||
                             Number(coinAmount) <= 0 ||
                             Number(coinAmount) > maxCoinsPerDay ||
                             hasInsufficientBal;
-                          const btnLabel =
-                            classStudentsList.length === 0
-                              ? tr("Sinfda O'quvchi Yo'q", 'В классе нет учеников')
-                              : hasInsufficientBal
-                              ? tr("Coin Yetarli Emas", 'Недостаточно койнов')
-                              : tr(`-${coinAmount || 0} Coin Olish`, `Снять -${coinAmount || 0} койнов`);
+                          const btnLabel = !isAllowedBySchedule
+                            ? tr('Dars Vaqti Emas 🔒', 'Не время урока 🔒')
+                            : classStudentsList.length === 0
+                            ? tr("Sinfda O'quvchi Yo'q", 'В классе нет учеников')
+                            : hasInsufficientBal
+                            ? tr("Coin Yetarli Emas", 'Недостаточно койнов')
+                            : tr(`-${coinAmount || 0} Coin Olish`, `Снять -${coinAmount || 0} койнов`);
                           return (
                             <button
                               type="submit"
@@ -3744,25 +3872,27 @@ export default function TeacherPortal() {
                                 submitDisabled ? 'is-locked opacity-75 cursor-not-allowed' : ''
                               }`}
                             >
-                              <AlertTriangle size={15} />
+                              {!isAllowedBySchedule ? <Lock size={15} /> : <AlertTriangle size={15} />}
                               <span>{btnLabel}</span>
                             </button>
                           );
                         }
                         const submitDisabled =
+                          !isAllowedBySchedule ||
                           coinsRemainingToday <= 0 ||
                           classStudentsList.length === 0 ||
                           Number(coinAmount) > maxCoinsPerDay ||
                           Number(coinAmount) > coinsRemainingToday;
-                        const btnLabel =
-                          coinsRemainingToday <= 0
-                            ? tr(
-                                `${localizeGrade(coinSelectedGrade, language)} Limiti Tugadi`,
-                                `Лимит ${localizeGrade(coinSelectedGrade, language)} исчерпан`
-                              )
-                            : classStudentsList.length === 0
-                            ? tr("Sinfda O'quvchi Yo'q", 'В классе нет учеников')
-                            : tr('Coin Taqdim Etish', 'Начислить койны');
+                        const btnLabel = !isAllowedBySchedule
+                          ? tr('Dars Vaqti Emas 🔒', 'Не время урока 🔒')
+                          : coinsRemainingToday <= 0
+                          ? tr(
+                              `${localizeGrade(coinSelectedGrade, language)} Limiti Tugadi`,
+                              `Лимит ${localizeGrade(coinSelectedGrade, language)} исчерпан`
+                            )
+                          : classStudentsList.length === 0
+                          ? tr("Sinfda O'quvchi Yo'q", 'В классе нет учеников')
+                          : tr('Coin Taqdim Etish', 'Начислить койны');
                         return (
                           <button
                             type="submit"
@@ -3771,7 +3901,7 @@ export default function TeacherPortal() {
                               submitDisabled ? 'is-locked opacity-75 cursor-not-allowed' : ''
                             }`}
                           >
-                            {coinsRemainingToday <= 0 ? <Lock size={15} /> : <Sparkles size={16} />}
+                            {!isAllowedBySchedule || coinsRemainingToday <= 0 ? <Lock size={15} /> : <Sparkles size={16} />}
                             <span>{btnLabel}</span>
                           </button>
                         );
@@ -3902,18 +4032,19 @@ export default function TeacherPortal() {
                               ).map((btn) => {
                                 const cardBtnDisabled =
                                   !canAwardToSelectedClass || (isTeacherRestricted && btn.amt > coinsRemainingToday);
-                                const tooltipText =
-                                  isTeacherRestricted && coinsRemainingToday <= 0
-                                    ? tr(
-                                        `Oxirgi 1 soatda '${localizeGrade(coinSelectedGrade, language)}' sinfi uchun ${maxCoinsPerDay} coin limiti tugadi`,
-                                        `За последний час для класса '${localizeGrade(coinSelectedGrade, language)}' лимит (${maxCoinsPerDay} койнов) исчерпан`
-                                      )
-                                    : isTeacherRestricted && btn.amt > coinsRemainingToday
-                                    ? tr(
-                                        `Ushbu soatda '${localizeGrade(coinSelectedGrade, language)}' sinfiga yana ko'pi bilan ${coinsRemainingToday} coin berish mumkin`,
-                                        `В этот час классу '${localizeGrade(coinSelectedGrade, language)}' можно выдать ещё макс. ${coinsRemainingToday} койнов`
-                                      )
-                                    : `${btn.reason} +${btn.amt} ${tr('coin', 'койнов')}`;
+                                const tooltipText = !isAllowedBySchedule
+                                  ? scheduleStatus?.message || tr("Hozir sizning darsingiz vaqti emas!", 'Сейчас не время вашего урока!')
+                                  : isTeacherRestricted && coinsRemainingToday <= 0
+                                  ? tr(
+                                      `Oxirgi 1 soatda '${localizeGrade(coinSelectedGrade, language)}' sinfi uchun ${maxCoinsPerDay} coin limiti tugadi`,
+                                      `За последний час для класса '${localizeGrade(coinSelectedGrade, language)}' лимит (${maxCoinsPerDay} койнов) исчерпан`
+                                    )
+                                  : isTeacherRestricted && btn.amt > coinsRemainingToday
+                                  ? tr(
+                                      `Ushbu soatda '${localizeGrade(coinSelectedGrade, language)}' sinfiga yana ko'pi bilan ${coinsRemainingToday} coin berish mumkin`,
+                                      `В этот час классу '${localizeGrade(coinSelectedGrade, language)}' можно выдать ещё макс. ${coinsRemainingToday} койнов`
+                                    )
+                                  : `${btn.reason} +${btn.amt} ${tr('coin', 'койнов')}`;
                                 return (
                                   <button
                                     key={btn.amt}
@@ -3960,8 +4091,10 @@ export default function TeacherPortal() {
                                 },
                               ].map((btn) => {
                                 const stCoins = Number(st.coins) || 0;
-                                const deductDisabled = stCoins < btn.amt;
-                                const deductTooltip = deductDisabled
+                                const deductDisabled = !isAllowedBySchedule || stCoins < btn.amt;
+                                const deductTooltip = !isAllowedBySchedule
+                                  ? scheduleStatus?.message || tr("Hozir sizning darsingiz vaqti emas!", 'Сейчас не время вашего урока!')
+                                  : stCoins < btn.amt
                                   ? tr(
                                       `${st.fullName || st.full_name} hisobida yetarli coin yo'q (Mavjud: ${stCoins} 💎)`,
                                       `У ${st.fullName || st.full_name} недостаточно койнов (Доступно: ${stCoins} 💎)`
@@ -4163,16 +4296,25 @@ export default function TeacherPortal() {
                             </div>
                           </td>
                           <td className="text-right">
-                            {tx.canEdit !== false && (!isTeacherRestricted || tx.isClassroom) && (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEditCoinTx(tx)}
-                                className="btn-icon-blue"
-                                title={tr('Miqdor yoki sababni tahrirlash', 'Редактировать сумму или причину')}
-                              >
-                                <Edit size={14} />
-                              </button>
-                            )}
+                            {tx.canEdit !== false && (!isTeacherRestricted || tx.isClassroom) && (() => {
+                              const editBlockedBySchedule =
+                                isScheduleEnforced && !activeScheduleClasses.includes(tx.grade);
+                              return (
+                                <button
+                                  type="button"
+                                  disabled={editBlockedBySchedule}
+                                  onClick={() => handleOpenEditCoinTx(tx)}
+                                  className={`btn-icon-blue ${editBlockedBySchedule ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                  title={
+                                    editBlockedBySchedule
+                                      ? scheduleStatus?.message || tr("Faqat o'z darsingiz vaqtida tahrirlash mumkin", 'Редактирование доступно только во время урока')
+                                      : tr('Miqdor yoki sababni tahrirlash', 'Редактировать сумму или причину')
+                                  }
+                                >
+                                  <Edit size={14} />
+                                </button>
+                              );
+                            })()}
                           </td>
                         </tr>
                       ))}

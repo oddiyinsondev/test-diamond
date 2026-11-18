@@ -206,10 +206,19 @@ def _evaluate_test_student_access(test, now=None, site_settings=None, lang='uz')
 from core.models import (
     CustomUser, Test, Question, Option, TestResult, StudentAnswer,
     TeacherShowcase, TalentedStudent, ContactMessage, SiteSetting, SchoolClass,
-    CoinTransaction, ClassCoinTransaction
+    CoinTransaction, ClassCoinTransaction, LessonSchedule
 )
 from core.importer import (
     parse_questions_from_file, generate_sample_word, generate_sample_excel
+)
+from core.schedule_utils import (
+    DAY_LABELS,
+    day_label_for_lang,
+    parse_schedule_file,
+    serialize_lesson_slot,
+    evaluate_teacher_lesson_schedule_access,
+    teacher_matches_lesson,
+    build_schedule_template_workbook,
 )
 
 SUBJECTS_LIST = ['Matematika', 'Fizika', 'Informatika', 'Ingliz tili', 'Biologiya', 'Kimyo', 'Tarix', 'Ona tili va Adabiyot']
@@ -245,8 +254,8 @@ def is_admin_user(user):
         (getattr(user, 'role', '') == 'admin' or getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False))
     )
 
-def get_teacher_daily_coin_status(teacher, enforce_for_portal=False, grade=''):
-    """O'qituvchining soatlik (har bir sinf uchun 1 soatda max 5 coin) limitini hisoblash"""
+def get_teacher_daily_coin_status(teacher, enforce_for_portal=False, grade='', lang='uz'):
+    """O'qituvchining soatlik (har bir sinf uchun 1 soatda max 5 coin) limitini va dars jadvali ruxsatini hisoblash"""
     selected_grade = (grade or '').strip()
     if selected_grade.lower() in ('all', 'barchasi'):
         selected_grade = ''
@@ -274,6 +283,16 @@ def get_teacher_daily_coin_status(teacher, enforce_for_portal=False, grade=''):
             'cooldownMinutesLeft': 0,
             'nextAvailableAtIso': None,
             'canAwardToday': True,
+            'scheduleStatus': {
+                'hasSchedule': LessonSchedule.objects.exists(),
+                'enforced': False,
+                'allowed': True,
+                'activeClasses': [],
+                'activeLessons': [],
+                'todayLessons': [],
+                'nextLesson': None,
+                'message': '',
+            },
         }
 
     now = timezone.now()
@@ -392,6 +411,20 @@ def get_teacher_daily_coin_status(teacher, enforce_for_portal=False, grade=''):
         next_iso = None
 
     awarded_class = awarded_classes[0] if awarded_classes else None
+    schedule_status = (
+        {
+            'hasSchedule': LessonSchedule.objects.exists(),
+            'enforced': False,
+            'allowed': True,
+            'activeClasses': [],
+            'activeLessons': [],
+            'todayLessons': [],
+            'nextLesson': None,
+            'message': '',
+        }
+        if is_admin
+        else evaluate_teacher_lesson_schedule_access(teacher, target_class=selected_grade, lang=lang)
+    )
 
     return {
         'isLimited': True,
@@ -417,6 +450,7 @@ def get_teacher_daily_coin_status(teacher, enforce_for_portal=False, grade=''):
         'nextAvailableAtIso': next_iso,
         'batchAwardedToday': batch_awarded_today,
         'canAwardToday': can_award_today,
+        'scheduleStatus': schedule_status,
     }
 
 
@@ -1289,6 +1323,7 @@ def api_admin_students(request):
                 'phone': s.phone or '-',
                 'bio': s.bio or '',
                 'avatarUrl': s.get_avatar_url(),
+                'hasCustomAvatar': bool(s.avatar),
                 'testsPassed': res_count,
                 'avgScore': avg_score,
                 'coins': s.coins,
@@ -1873,6 +1908,15 @@ def api_update_profile(request):
                 pass
 
         clear_avatar = str(data.get('clearAvatar') or request.POST.get('clearAvatar') or '').lower() in ['true', '1', 'yes', 'да']
+        if user.role == 'student' and not is_admin_user(request.user) and (clear_avatar or 'avatar' in request.FILES):
+            return JsonResponse({
+                'error': _msg(
+                    lang,
+                    "Cheklov: O'quvchilar profil rasmini o'zgartira olmaydi! Rasmni faqat tyuter yoki administrator qo'yishi mumkin.",
+                    "Ограничение: ученики не могут изменять фото профиля! Фото может загружать только тьютор или администратор.",
+                )
+            }, status=403)
+
         if clear_avatar and user.avatar:
             user.avatar.delete(save=False)
             user.avatar = None
@@ -3260,7 +3304,7 @@ def api_teacher_stats(request):
         'weakQuestions': global_weak_questions[:20],
         'recentSubmissions': recent_submissions,
         'studentTestsPolicy': policy,
-        'dailyCoinStatus': get_teacher_daily_coin_status(request.user, enforce_for_portal=is_teacher_portal),
+        'dailyCoinStatus': get_teacher_daily_coin_status(request.user, enforce_for_portal=is_teacher_portal, lang=_req_lang(request)),
     })
 
 
@@ -3813,8 +3857,13 @@ def api_student_leaderboard(request):
     leaderboard.sort(key=lambda x: (x['coins'], x['totalScore'], x['avgScore']), reverse=True)
 
     ranked = []
-    for idx, item in enumerate(leaderboard, 1):
-        item['rank'] = idx
+    current_rank = 0
+    prev_coins = None
+    for item in leaderboard:
+        if prev_coins is None or item['coins'] != prev_coins:
+            current_rank += 1
+            prev_coins = item['coins']
+        item['rank'] = current_rank
         ranked.append(item)
 
     return JsonResponse({'grade': grade, 'leaderboard': ranked})
@@ -4771,6 +4820,16 @@ def api_award_coins(request):
             if not target_class:
                 return JsonResponse({'error': _msg(lang, "Sinf tanlanishi shart!", "Необходимо выбрать класс!")}, status=400)
 
+            # Dars jadvali (ish rejasi) bo'yicha vaqt va sinf tekshiruvi (berish + va olib tashlash - uchun)
+            if not is_admin:
+                schedule_check = evaluate_teacher_lesson_schedule_access(giver, target_class=target_class, lang=lang)
+                if schedule_check['enforced'] and not schedule_check['allowed']:
+                    return JsonResponse({
+                        'error': schedule_check['message'],
+                        'scheduleStatus': schedule_check,
+                        'dailyCoinStatus': get_teacher_daily_coin_status(giver, enforce_for_portal=True, grade=target_class, lang=lang),
+                    }, status=403)
+
             if amount > 0:
                 daily_status = get_teacher_daily_coin_status(giver, enforce_for_portal=True, grade=target_class)
                 if not daily_status['canAwardToday'] or daily_status['coinsRemainingToday'] <= 0:
@@ -4813,6 +4872,8 @@ def api_award_coins(request):
                 return JsonResponse({'error': _msg(lang, "Coin miqdori 0 bo'lishi mumkin emas!", "Количество койнов не может быть 0!")}, status=400)
 
             awarded_students = []
+            skipped_zero_count = 0
+            total_delta = 0
             with transaction.atomic():
                 st_map = {
                     s.id: s
@@ -4823,34 +4884,64 @@ def api_award_coins(request):
                     return JsonResponse({'error': _msg(lang, "Tanlangan o'quvchilar topilmadi!", "Выбранные ученики не найдены!")}, status=404)
 
                 for st in target_students:
-                    st.coins = max(0, int(st.coins or 0) + amount)
+                    current_coins = int(st.coins or 0)
+                    if amount < 0:
+                        if current_coins <= 0:
+                            skipped_zero_count += 1
+                            continue
+                        actual_delta = -min(current_coins, abs(amount))
+                    else:
+                        actual_delta = amount
+                    st.coins = max(0, current_coins + actual_delta)
                     st.save(update_fields=['coins'])
                     CoinTransaction.objects.create(
                         student=st,
                         given_by=giver,
-                        amount=amount,
+                        amount=actual_delta,
                         reason=reason,
                         portal=tx_portal,
                     )
+                    total_delta += actual_delta
                     awarded_students.append({
                         'id': st.id,
                         'fullName': st.full_name,
                         'grade': st.grade or '-',
                         'coins': st.coins,
+                        'delta': actual_delta,
                     })
+
+                if amount < 0 and not awarded_students:
+                    return JsonResponse({
+                        'error': _msg(
+                            lang,
+                            "Tanlangan o'quvchilar hisobida olib tashlash uchun coin mavjud emas (0 💎)!",
+                            "На балансе выбранных учеников нет койнов для снятия (0 💎)!",
+                        )
+                    }, status=400)
+
+            batch_msg = (
+                _msg(
+                    lang,
+                    f"{len(awarded_students)} nafar o'quvchi hisobidan jami {abs(total_delta)} Diamond Coin muvaffaqiyatli olib tashlandi!",
+                    f"С баланса {len(awarded_students)} учеников успешно снято всего {abs(total_delta)} Diamond Coin!",
+                )
+                if amount < 0
+                else _msg(
+                    lang,
+                    f"{len(awarded_students)} nafar o'quvchiga {amount:+d} Diamond Coin muvaffaqiyatli berildi!",
+                    f"{len(awarded_students)} ученикам успешно начислено {amount:+d} Diamond Coin!",
+                )
+            )
 
             return JsonResponse({
                 'success': True,
                 'isBatch': True,
                 'count': len(awarded_students),
+                'skippedZeroCount': skipped_zero_count,
                 'amountAwarded': amount,
-                'totalGiven': len(awarded_students) * amount,
+                'totalGiven': total_delta,
                 'awardedStudents': awarded_students,
-                'message': _msg(
-                    lang,
-                    f"{len(awarded_students)} nafar o'quvchiga {amount:+d} Diamond Coin muvaffaqiyatli berildi!",
-                    f"{len(awarded_students)} ученикам успешно начислено {amount:+d} Diamond Coin!",
-                ),
+                'message': batch_msg,
             })
 
         # 1. Sinf bo'yicha (sinfning o'ziga va/yoki o'quvchilariga) taqdirlash
@@ -5083,22 +5174,34 @@ def api_award_coins(request):
         with transaction.atomic():
             student_locked = CustomUser.objects.select_for_update().get(id=student.id)
             current_coins = int(student_locked.coins or 0)
-            if amount < 0 and enforce_teacher_rules and current_coins < abs(amount):
-                return JsonResponse({
-                    'error': _msg(
-                        lang,
-                        f"{student_locked.full_name} hisobida yetarli coin yo'q (Mavjud: {current_coins} 💎)!",
-                        f"На балансе ученика {student_locked.full_name} недостаточно койнов (Доступно: {current_coins} 💎)!",
-                    )
-                }, status=400)
-            new_coins = max(0, current_coins + amount)
+            if amount < 0:
+                if enforce_teacher_rules and current_coins < abs(amount):
+                    return JsonResponse({
+                        'error': _msg(
+                            lang,
+                            f"{student_locked.full_name} hisobida yetarli coin yo'q (Mavjud: {current_coins} 💎)!",
+                            f"На балансе ученика {student_locked.full_name} недостаточно койнов (Доступно: {current_coins} 💎)!",
+                        )
+                    }, status=400)
+                if not enforce_teacher_rules and current_coins <= 0:
+                    return JsonResponse({
+                        'error': _msg(
+                            lang,
+                            f"{student_locked.full_name} hisobida olib tashlash uchun coin mavjud emas (Mavjud: 0 💎)!",
+                            f"На балансе ученика {student_locked.full_name} нет койнов для снятия (Доступно: 0 💎)!",
+                        )
+                    }, status=400)
+                actual_delta = -min(current_coins, abs(amount))
+            else:
+                actual_delta = amount
+            new_coins = max(0, current_coins + actual_delta)
             student_locked.coins = new_coins
             student_locked.save(update_fields=['coins'])
 
             CoinTransaction.objects.create(
                 student=student_locked,
                 given_by=giver,
-                amount=amount,
+                amount=actual_delta,
                 reason=reason,
                 test_result=test_result,
                 portal=tx_portal,
@@ -5107,14 +5210,14 @@ def api_award_coins(request):
         success_msg = (
             _msg(
                 lang,
-                f"{student_locked.full_name} hisobidan {abs(amount)} Diamond Coin olindi!",
-                f"С баланса ученика {student_locked.full_name} снято {abs(amount)} Diamond Coin!",
+                f"{student_locked.full_name} hisobidan {abs(actual_delta)} Diamond Coin olib tashlandi! (Qoldiq: {student_locked.coins} 💎)",
+                f"С баланса ученика {student_locked.full_name} снято {abs(actual_delta)} Diamond Coin! (Остаток: {student_locked.coins} 💎)",
             )
-            if amount < 0
+            if actual_delta < 0
             else _msg(
                 lang,
-                f"{student_locked.full_name} ga {amount:+d} Diamond Coin muvaffaqiyatli berildi!",
-                f"Ученику {student_locked.full_name} успешно начислено {amount:+d} Diamond Coin!",
+                f"{student_locked.full_name} ga {actual_delta:+d} Diamond Coin muvaffaqiyatli berildi!",
+                f"Ученику {student_locked.full_name} успешно начислено {actual_delta:+d} Diamond Coin!",
             )
         )
 
@@ -5123,7 +5226,7 @@ def api_award_coins(request):
             'studentId': student_locked.id,
             'studentName': student_locked.full_name,
             'coins': student_locked.coins,
-            'amountAwarded': amount,
+            'amountAwarded': actual_delta,
             'reason': reason,
             'dailyCoinStatus': get_teacher_daily_coin_status(giver, enforce_for_portal=enforce_teacher_rules, grade=student_grade),
             'message': success_msg,
@@ -5170,10 +5273,15 @@ def api_coin_rankings(request):
             'isActiveParticipant': is_active_participant,
         })
 
-    # TOP: Eng ko'p coin to'plaganlar
+    # TOP: Eng ko'p coin to'plaganlar (coinlar teng bo'lsa bir xil o'rin)
     top_students = sorted(students_list, key=lambda x: (x['coins'], x['testsPassed'], x['avgScore']), reverse=True)
-    for idx, s in enumerate(top_students, 1):
-        s['rank'] = idx
+    current_rank = 0
+    prev_coins = None
+    for s in top_students:
+        if prev_coins is None or s['coins'] != prev_coins:
+            current_rank += 1
+            prev_coins = s['coins']
+        s['rank'] = current_rank
 
     # BOTTOM: Eng kam coin to'plagan / past natijalilar (pastdan yuqoriga)
     bottom_students = sorted(students_list, key=lambda x: (x['coins'], x['avgScore']))
@@ -6022,7 +6130,7 @@ def api_teacher_class_students(request):
         'count': len(students),
         'students': students,
         'classesMeta': get_active_classes_meta(),
-        'dailyCoinStatus': get_teacher_daily_coin_status(giver, enforce_for_portal=enforce_for_portal, grade=grade),
+        'dailyCoinStatus': get_teacher_daily_coin_status(giver, enforce_for_portal=enforce_for_portal, grade=grade, lang=_req_lang(request)),
     })
 
 
@@ -6101,7 +6209,7 @@ def api_teacher_coin_history(request):
         'success': True,
         'count': len(history),
         'history': history,
-        'dailyCoinStatus': get_teacher_daily_coin_status(giver, enforce_for_portal=enforce_for_portal, grade=grade),
+        'dailyCoinStatus': get_teacher_daily_coin_status(giver, enforce_for_portal=enforce_for_portal, grade=grade, lang=_req_lang(request)),
     })
 
 
@@ -6162,6 +6270,14 @@ def api_teacher_coin_edit(request, tx_id):
 
         target_class = (tx.student.grade or '').strip() if tx.student else ''
         if enforce_teacher_rules:
+            if not is_admin:
+                schedule_check = evaluate_teacher_lesson_schedule_access(giver, target_class=target_class, lang=lang)
+                if schedule_check['enforced'] and not schedule_check['allowed']:
+                    return JsonResponse({
+                        'error': schedule_check['message'],
+                        'scheduleStatus': schedule_check,
+                        'dailyCoinStatus': get_teacher_daily_coin_status(giver, enforce_for_portal=True, grade=target_class, lang=lang),
+                    }, status=403)
             if old_amount < 0:
                 if new_amount >= 0 or new_amount < -HOURLY_TEACHER_MAX_COINS:
                     return JsonResponse({
@@ -6506,6 +6622,245 @@ def api_admin_test_permission(request, test_id):
         'startTimeIso': _fmt_local_iso(test.start_time),
         'endTimeIso': _fmt_local_iso(test.end_time),
     })
+
+
+# ================= 📅 LESSON SCHEDULE (ISH REJA / DARS JADVALI) APIS =================
+
+def _build_schedule_overview_payload(lang='uz'):
+    settings_obj = SiteSetting.get_settings()
+    slots = list(
+        LessonSchedule.objects.select_related('school_class', 'teacher')
+        .order_by('day_of_week', 'start_time', 'lesson_number', 'class_name')
+    )
+    local_now = timezone.localtime(timezone.now())
+    cur_day = local_now.weekday()
+    cur_time = local_now.time()
+
+    classes_order = []
+    subjects_set = set()
+    days_map = {}
+    academic_year = ''
+
+    for s in slots:
+        if not academic_year and s.academic_year:
+            academic_year = s.academic_year
+        cname = s.school_class.name if s.school_class else s.class_name
+        if cname not in classes_order:
+            classes_order.append(cname)
+        if s.subject:
+            subjects_set.add(s.subject)
+
+        d_idx = s.day_of_week
+        if d_idx not in days_map:
+            days_map[d_idx] = {
+                'dayOfWeek': d_idx,
+                'dayLabel': day_label_for_lang(d_idx, lang=lang),
+                'periods': {},
+            }
+        p_key = (s.lesson_number, s.start_time.strftime('%H:%M'), s.end_time.strftime('%H:%M'))
+        if p_key not in days_map[d_idx]['periods']:
+            days_map[d_idx]['periods'][p_key] = {
+                'lessonNumber': s.lesson_number,
+                'startTime': s.start_time.strftime('%H:%M'),
+                'endTime': s.end_time.strftime('%H:%M'),
+                'timeRange': f"{s.start_time.strftime('%H:%M')}–{s.end_time.strftime('%H:%M')}",
+                'isLiveNow': (d_idx == cur_day and s.start_time <= cur_time <= s.end_time),
+                'cells': {},
+            }
+        days_map[d_idx]['periods'][p_key]['cells'][cname] = serialize_lesson_slot(s, lang=lang)
+
+    days_list = []
+    for d_idx in sorted(days_map.keys()):
+        day_obj = days_map[d_idx]
+        periods_list = sorted(
+            day_obj['periods'].values(),
+            key=lambda p: (p['startTime'], p['lessonNumber']),
+        )
+        days_list.append({
+            'dayOfWeek': d_idx,
+            'dayLabel': day_obj['dayLabel'],
+            'isToday': d_idx == cur_day,
+            'periods': periods_list,
+        })
+
+    return {
+        'hasSchedule': len(slots) > 0,
+        'enforced': bool(settings_obj.lesson_schedule_enforced),
+        'effectiveEnforced': bool(settings_obj.lesson_schedule_enforced) and len(slots) > 0,
+        'academicYear': academic_year,
+        'currentDay': cur_day,
+        'currentDayLabel': day_label_for_lang(cur_day, lang=lang),
+        'currentTime': local_now.strftime('%H:%M'),
+        'summary': {
+            'totalLessons': len(slots),
+            'classesCount': len(classes_order),
+            'subjectsCount': len(subjects_set),
+            'daysCount': len(days_list),
+        },
+        'classes': classes_order,
+        'subjects': sorted(subjects_set),
+        'days': days_list,
+        'entries': [serialize_lesson_slot(s, lang=lang) for s in slots],
+    }
+
+
+@csrf_exempt
+def api_admin_schedule(request):
+    """Admin panel: Excel/CSV orqali ish rejasini (dars jadvalini) yuklash, ko'rish, yoqish/o'chirish va tozalash"""
+    auth_err = check_admin_permission(request)
+    if auth_err:
+        return auth_err
+    lang = _req_lang(request)
+
+    if request.method == 'GET':
+        return JsonResponse(_build_schedule_overview_payload(lang=lang))
+
+    elif request.method == 'POST':
+        # 1. Excel/CSV fayl yuklash
+        if 'file' in request.FILES:
+            uploaded = request.FILES['file']
+            try:
+                parsed = parse_schedule_file(uploaded)
+                with transaction.atomic():
+                    LessonSchedule.objects.all().delete()
+                    objs = [
+                        LessonSchedule(
+                            day_of_week=item['day_of_week'],
+                            lesson_number=item['lesson_number'],
+                            start_time=item['start_time'],
+                            end_time=item['end_time'],
+                            school_class=item['school_class'],
+                            class_name=item['class_name'],
+                            raw_class_name=item['raw_class_name'],
+                            subject=item['subject'],
+                            raw_subject=item['raw_subject'],
+                            academic_year=item['academic_year'],
+                        )
+                        for item in parsed['entries']
+                    ]
+                    LessonSchedule.objects.bulk_create(objs)
+                    settings_obj = SiteSetting.get_settings()
+                    settings_obj.lesson_schedule_enforced = True
+                    settings_obj.save(update_fields=['lesson_schedule_enforced'])
+
+                payload = _build_schedule_overview_payload(lang=lang)
+                payload['success'] = True
+                payload['autoFixedTimes'] = parsed.get('autoFixedTimes', [])
+                payload['warnings'] = parsed.get('warnings', [])
+                payload['importedClasses'] = parsed.get('classes', [])
+                payload['message'] = _msg(
+                    lang,
+                    f"Ish reja (dars jadvali) muvaffaqiyatli yuklandi! Jami {len(parsed['entries'])} ta dars ({len(parsed['classes'])} ta sinf) saqlandi.",
+                    f"Расписание уроков успешно загружено! Сохранено {len(parsed['entries'])} уроков ({len(parsed['classes'])} классов).",
+                )
+                return JsonResponse(payload)
+            except ValueError as ve:
+                return JsonResponse({'error': str(ve)}, status=400)
+            except Exception as e:
+                return JsonResponse({'error': f"{_msg(lang, 'Excel faylni tahlil qilishda xatolik', 'Ошибка разбора файла Excel')}: {str(e)}"}, status=400)
+
+        # 2. JSON orqali dars jadvali nazoratini yoqish/o'chirish
+        try:
+            data = json.loads(request.body.decode('utf-8')) if request.body else {}
+        except Exception:
+            data = {}
+        if 'enforced' in data:
+            settings_obj = SiteSetting.get_settings()
+            settings_obj.lesson_schedule_enforced = _parse_bool_flag(data.get('enforced'), default=True)
+            settings_obj.save(update_fields=['lesson_schedule_enforced'])
+            payload = _build_schedule_overview_payload(lang=lang)
+            payload['success'] = True
+            payload['message'] = (
+                _msg(lang, "Dars jadvali bo'yicha coin nazorati yoqildi!", "Контроль койнов по расписанию включён!")
+                if settings_obj.lesson_schedule_enforced
+                else _msg(lang, "Dars jadvali bo'yicha coin nazorati vaqtincha o'chirildi!", "Контроль койнов по расписанию временно отключён!")
+            )
+            return JsonResponse(payload)
+
+        return JsonResponse({'error': _msg(lang, 'Excel (.xlsx) yoki CSV fayl yuklang!', 'Загрузите файл Excel (.xlsx) или CSV!')}, status=400)
+
+    elif request.method == 'DELETE':
+        deleted_cnt, _ = LessonSchedule.objects.all().delete()
+        payload = _build_schedule_overview_payload(lang=lang)
+        payload['success'] = True
+        payload['deletedCount'] = deleted_cnt
+        payload['message'] = _msg(lang, "Yuklangan dars jadvali tozalandi!", "Загруженное расписание очищено!")
+        return JsonResponse(payload)
+
+    return JsonResponse({'error': _msg(lang, "Metod qo'llab-quvvatlanmaydi", "Метод не поддерживается")}, status=405)
+
+
+def api_admin_schedule_template(request):
+    """Admin uchun namuna Excel (.xlsx) dars jadvali shablonini yuklab berish"""
+    auth_err = check_admin_permission(request)
+    if auth_err:
+        return auth_err
+    buf = build_schedule_template_workbook()
+    resp = HttpResponse(
+        buf.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    resp['Content-Disposition'] = 'attachment; filename="diamond_dars_jadvali_namuna.xlsx"'
+    return resp
+
+
+def api_teacher_schedule(request):
+    """O'qituvchi portali: o'qituvchining shaxsiy haftalik dars jadvali va joriy coin ruxsat holati"""
+    lang = _req_lang(request)
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': _msg(lang, 'Tizimga kirish talab etiladi!', 'Требуется вход в систему!')}, status=401)
+    perm_err = check_teacher_permission(request)
+    if perm_err:
+        return perm_err
+
+    grade = (request.GET.get('grade') or '').strip()
+    if grade.lower() in ('all', 'barchasi'):
+        grade = ''
+
+    user = request.user
+    is_admin = is_admin_user(user)
+    all_slots = list(
+        LessonSchedule.objects.select_related('school_class', 'teacher')
+        .order_by('day_of_week', 'start_time', 'lesson_number', 'class_name')
+    )
+    my_slots = all_slots if is_admin else [s for s in all_slots if teacher_matches_lesson(user, s)]
+
+    weekly_by_day = {}
+    for s in my_slots:
+        d_idx = s.day_of_week
+        if d_idx not in weekly_by_day:
+            weekly_by_day[d_idx] = {
+                'dayOfWeek': d_idx,
+                'dayLabel': day_label_for_lang(d_idx, lang=lang),
+                'lessons': [],
+            }
+        weekly_by_day[d_idx]['lessons'].append(serialize_lesson_slot(s, lang=lang))
+
+    schedule_status = (
+        {
+            'hasSchedule': len(all_slots) > 0,
+            'enforced': False,
+            'allowed': True,
+            'currentDay': timezone.localtime(timezone.now()).weekday(),
+            'currentDayLabel': day_label_for_lang(timezone.localtime(timezone.now()).weekday(), lang=lang),
+            'currentTime': timezone.localtime(timezone.now()).strftime('%H:%M'),
+            'teacherSubject': user.subject or '',
+            'activeClasses': [],
+            'activeLessons': [],
+            'todayLessons': [],
+            'nextLesson': None,
+            'message': '',
+        }
+        if is_admin
+        else evaluate_teacher_lesson_schedule_access(user, target_class=grade, lang=lang)
+    )
+
+    return JsonResponse({
+        'scheduleStatus': schedule_status,
+        'weeklySchedule': [weekly_by_day[d] for d in sorted(weekly_by_day.keys())],
+        'totalMyLessons': len(my_slots),
+    })
+
 
 
 

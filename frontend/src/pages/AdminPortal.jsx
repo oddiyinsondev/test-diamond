@@ -11,6 +11,7 @@ import {
   localizeGrade,
   localizeUserFullName,
   ADMIN_STUDENT_COIN_PRESETS_BY_LANG,
+  ADMIN_STUDENT_DEDUCT_PRESETS_BY_LANG,
   ADMIN_CLASS_COIN_PRESETS_BY_LANG,
   getPolicyMessageLocalized,
 } from '../i18n/portalUtils';
@@ -31,6 +32,7 @@ import {
   TrendingUp,
   Coins,
   Plus,
+  Minus,
   Search,
   Trash2,
   Edit,
@@ -65,9 +67,12 @@ import {
   Copy,
   Check,
   ShieldOff,
+  Upload,
+  Download,
+  FileSpreadsheet,
 } from 'lucide-react';
 
-const ADMIN_VALID_TABS = ['teachers', 'tutors', 'students', 'tests', 'coins', 'classes', 'showcase'];
+const ADMIN_VALID_TABS = ['teachers', 'tutors', 'students', 'tests', 'coins', 'classes', 'schedule', 'showcase'];
 
 export default function AdminPortal() {
   const { user, login, language, tr } = useAuth();
@@ -297,6 +302,8 @@ export default function AdminPortal() {
     grade: '9-A',
     phone: '',
   });
+  const [studentAvatarFile, setStudentAvatarFile] = useState(null);
+  const [studentAvatarPreview, setStudentAvatarPreview] = useState('');
 
   // Edit Student Modal State
   const [editingStudent, setEditingStudent] = useState(null);
@@ -306,6 +313,10 @@ export default function AdminPortal() {
     password: '',
     grade: '9-A',
     phone: '',
+    avatarFile: null,
+    avatarPreview: '',
+    clearAvatar: false,
+    hasCustomAvatar: false,
   });
   const [showEditStudentPw, setShowEditStudentPw] = useState(false);
   const [savingEditStudent, setSavingEditStudent] = useState(false);
@@ -330,7 +341,8 @@ export default function AdminPortal() {
   });
   const [savingEditClass, setSavingEditClass] = useState(false);
 
-  // Award Coins Form State (Supports single & multi-select active students)
+  // Award / Deduct Coins Form State (Supports single & multi-select students)
+  const [awardCoinMode, setAwardCoinMode] = useState('award'); // 'award' | 'deduct'
   const [awardCoinsForm, setAwardCoinsForm] = useState({
     studentId: '',
     amount: 15,
@@ -355,6 +367,14 @@ export default function AdminPortal() {
     'Ona tili va Adabiyot',
   ];
 
+  // Lesson Schedule (Ish Reja / Dars Jadvali) state
+  const [scheduleData, setScheduleData] = useState(null);
+  const [uploadingSchedule, setUploadingSchedule] = useState(false);
+  const [togglingSchedule, setTogglingSchedule] = useState(false);
+  const [scheduleDayFilter, setScheduleDayFilter] = useState('all');
+  const [scheduleSearch, setScheduleSearch] = useState('');
+  const [scheduleUploadNotes, setScheduleUploadNotes] = useState({ autoFixedTimes: [], warnings: [] });
+
   const isAdmin = user && user.role === 'admin';
 
   // Load all admin data
@@ -362,7 +382,7 @@ export default function AdminPortal() {
     if (!isAdmin) return;
     setLoadingData(true);
     try {
-      const [statsRes, teachersRes, tutorsRes, studentsRes, classesRes, msgRes, coinsRes, testsRes, permRes] = await Promise.allSettled([
+      const [statsRes, teachersRes, tutorsRes, studentsRes, classesRes, msgRes, coinsRes, testsRes, permRes, schedRes] = await Promise.allSettled([
         api.admin.getStats(),
         api.admin.getTeachers(),
         api.admin.getTutors(),
@@ -372,6 +392,7 @@ export default function AdminPortal() {
         api.admin.getCoinRankings(),
         api.teacher.getTests(),
         api.admin.getTestPermissionSettings(),
+        api.admin.getSchedule(),
       ]);
 
       if (statsRes.status === 'fulfilled') setStats(statsRes.value || {});
@@ -423,11 +444,85 @@ export default function AdminPortal() {
           endTimeIso: p.endTimeIso || '',
         });
       }
+      if (schedRes.status === 'fulfilled' && schedRes.value) {
+        setScheduleData(schedRes.value);
+      }
     } catch (err) {
       console.error('Error loading admin data:', err);
     } finally {
       setLoadingData(false);
     }
+  };
+
+  // Upload Excel / CSV Lesson Schedule (Ish Reja)
+  const handleUploadScheduleFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingSchedule(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await api.admin.uploadSchedule(fd);
+      setScheduleData(res);
+      setScheduleUploadNotes({
+        autoFixedTimes: Array.isArray(res?.autoFixedTimes) ? res.autoFixedTimes : [],
+        warnings: Array.isArray(res?.warnings) ? res.warnings : [],
+      });
+      setScheduleDayFilter('all');
+      showToast(
+        res.message || tr('Ish reja (dars jadvali) muvaffaqiyatli yuklandi!', 'Расписание уроков успешно загружено!'),
+        'success'
+      );
+    } catch (err) {
+      showToast(err.message || tr('Excel faylni yuklashda xatolik!', 'Ошибка при загрузке файла Excel!'), 'error');
+    } finally {
+      setUploadingSchedule(false);
+    }
+  };
+
+  const handleToggleScheduleEnforcement = async () => {
+    const nextEnforced = !(scheduleData?.enforced ?? true);
+    setTogglingSchedule(true);
+    try {
+      const res = await api.admin.toggleScheduleEnforcement(nextEnforced);
+      setScheduleData(res);
+      showToast(
+        res.message ||
+          (nextEnforced
+            ? tr("Dars jadvali nazorati yoqildi!", 'Контроль по расписанию включён!')
+            : tr("Dars jadvali nazorati vaqtincha o'chirildi!", 'Контроль по расписанию отключён!')),
+        'success'
+      );
+    } catch (err) {
+      showToast(err.message || tr('Holatni yangilashda xatolik!', 'Ошибка при обновлении статуса!'), 'error');
+    } finally {
+      setTogglingSchedule(false);
+    }
+  };
+
+  const handleClearSchedule = () => {
+    setConfirmModalState({
+      isOpen: true,
+      title: tr('Dars Jadvalini Tozalash', 'Очистить расписание'),
+      message: tr(
+        "Yuklangan barcha ish reja (dars jadvali) yozuvlari o'chiriladi va o'qituvchilar jadval cheklovisiz coin bera oladi. Davom etasizmi?",
+        'Все загруженные записи расписания будут удалены, и учителя смогут начислять койны без ограничения по расписанию. Продолжить?'
+      ),
+      danger: true,
+      onConfirm: async () => {
+        try {
+          const res = await api.admin.clearSchedule();
+          setScheduleData(res);
+          setScheduleUploadNotes({ autoFixedTimes: [], warnings: [] });
+          showToast(res.message || tr('Dars jadvali tozalandi!', 'Расписание очищено!'), 'success');
+        } catch (err) {
+          showToast(err.message || tr('Tozalashda xatolik!', 'Ошибка при очистке!'), 'error');
+        } finally {
+          setConfirmModalState((prev) => ({ ...prev, isOpen: false }));
+        }
+      },
+    });
   };
 
   useEffect(() => {
@@ -455,6 +550,12 @@ export default function AdminPortal() {
       }
       if (language !== 'ru' && prev.reason === 'За активное участие в тестах и на уроках ⚡') {
         return { ...prev, reason: 'Test va darslarda faol qatnashgani uchun ⚡' };
+      }
+      if (language === 'ru' && prev.reason === 'Tartib-intizomni buzgani uchun ⚠️') {
+        return { ...prev, reason: 'За нарушение дисциплины ⚠️' };
+      }
+      if (language !== 'ru' && prev.reason === 'За нарушение дисциплины ⚠️') {
+        return { ...prev, reason: 'Tartib-intizomni buzgani uchun ⚠️' };
       }
       return prev;
     });
@@ -1314,22 +1415,37 @@ export default function AdminPortal() {
   const handleCreateStudent = async (e) => {
     e.preventDefault();
     try {
-      await api.admin.createStudent(studentForm);
+      const resolvedGrade =
+        availableGrades.length > 0 && !availableGrades.includes(studentForm.grade)
+          ? availableGrades[0]
+          : studentForm.grade;
+      const fd = new FormData();
+      fd.append('fullName', studentForm.fullName.trim());
+      fd.append('username', studentForm.username.trim());
+      fd.append('password', studentForm.password.trim());
+      fd.append('grade', resolvedGrade);
+      fd.append('phone', studentForm.phone.trim());
+      if (studentAvatarFile) {
+        fd.append('avatar', studentAvatarFile);
+      }
+      await api.admin.createStudent(fd);
       showToast(tr("Yangi o'quvchi muvaffaqiyatli qo'shildi!", 'Новый ученик успешно добавлен!'), 'success');
       setIssuedStudentCreds({
         fullName: studentForm.fullName.trim(),
         username: studentForm.username.trim(),
         password: studentForm.password.trim(),
-        grade: studentForm.grade,
+        grade: resolvedGrade,
         mode: 'created',
       });
       setCopiedStudentCreds(false);
       setIsAddStudentOpen(false);
+      setStudentAvatarFile(null);
+      setStudentAvatarPreview('');
       setStudentForm({
         fullName: '',
         username: '',
         password: '123',
-        grade: studentForm.grade || '9-A',
+        grade: resolvedGrade || '9-A',
         phone: '',
       });
       loadAdminData();
@@ -1347,6 +1463,10 @@ export default function AdminPortal() {
       password: '',
       grade: std.grade && std.grade !== '-' ? std.grade : availableGrades[0] || '9-A',
       phone: std.phone && std.phone !== '-' ? std.phone : '',
+      avatarFile: null,
+      avatarPreview: std.avatarUrl || '',
+      clearAvatar: false,
+      hasCustomAvatar: Boolean(std.hasCustomAvatar),
     });
     setShowEditStudentPw(false);
   };
@@ -1360,16 +1480,21 @@ export default function AdminPortal() {
     }
     setSavingEditStudent(true);
     try {
-      const payload = {
-        fullName: editStudentForm.fullName.trim(),
-        username: editStudentForm.username.trim(),
-        grade: editStudentForm.grade,
-        phone: editStudentForm.phone.trim(),
-      };
+      const fd = new FormData();
+      fd.append('fullName', editStudentForm.fullName.trim());
+      fd.append('username', editStudentForm.username.trim());
+      fd.append('grade', editStudentForm.grade);
+      fd.append('phone', editStudentForm.phone.trim());
       if (editStudentForm.password.trim()) {
-        payload.password = editStudentForm.password.trim();
+        fd.append('password', editStudentForm.password.trim());
       }
-      await api.admin.updateUser(editingStudent.id, payload);
+      if (editStudentForm.clearAvatar) {
+        fd.append('clearAvatar', 'true');
+      }
+      if (editStudentForm.avatarFile) {
+        fd.append('avatar', editStudentForm.avatarFile);
+      }
+      await api.admin.updateUser(editingStudent.id, fd);
       showToast(tr("O'quvchi ma'lumotlari yangilandi!", 'Данные ученика обновлены!'), 'success');
       if (editStudentForm.password.trim()) {
         setIssuedStudentCreds({
@@ -1535,36 +1660,89 @@ export default function AdminPortal() {
     return { cls: 'bronze', label: tr('🥉 Bronze Liga', '🥉 Лига Bronze') };
   };
 
-  // Quick single student award
-  const handleQuickStudentAward = async (studentId, amount, reason = tr('Dars va testlardagi faollik uchun', 'За активность на уроках и в тестах')) => {
+  // Quick single student award / deduct
+  const handleQuickStudentAward = async (studentId, amount, reason) => {
+    const numericAmount = Number(amount);
+    const resolvedReason =
+      reason ||
+      (numericAmount < 0
+        ? tr('Tartib-intizomni buzgani uchun ⚠️', 'За нарушение дисциплины ⚠️')
+        : tr('Dars va testlardagi faollik uchun', 'За активность на уроках и в тестах'));
     try {
       const res = await api.admin.awardCoins({
         studentId,
         student_id: studentId,
-        amount: Number(amount),
-        reason,
+        amount: numericAmount,
+        reason: resolvedReason,
       });
-      showToast(res.message || tr(`${amount > 0 ? '+' : ''}${amount} coin muvaffaqiyatli taqdim etildi!`, `${amount > 0 ? '+' : ''}${amount} койнов успешно начислено!`), 'success');
+      showToast(
+        res.message ||
+          (numericAmount < 0
+            ? tr(`${Math.abs(numericAmount)} coin muvaffaqiyatli olib tashlandi!`, `Успешно снято ${Math.abs(numericAmount)} койнов!`)
+            : tr(`+${numericAmount} coin muvaffaqiyatli taqdim etildi!`, `+${numericAmount} койнов успешно начислено!`)),
+        'success'
+      );
       loadAdminData();
     } catch (err) {
       showToast(err.message || tr('Xatolik yuz berdi!', 'Произошла ошибка!'), 'error');
     }
   };
 
-  const handleOpenAwardCoinsModal = ({ grade = 'all', onlyActive = true, preselectIds = [] } = {}) => {
+  const getDefaultAwardCoinReason = (mode = 'award') =>
+    mode === 'deduct'
+      ? tr('Tartib-intizomni buzgani uchun ⚠️', 'За нарушение дисциплины ⚠️')
+      : tr('Test va darslarda faol qatnashgani uchun ⚡', 'За активное участие в тестах и на уроках ⚡');
+
+  const handleSwitchAwardCoinMode = (nextMode) => {
+    const resolvedMode = nextMode === 'deduct' ? 'deduct' : 'award';
+    setAwardCoinMode(resolvedMode);
+    if (resolvedMode === 'deduct') {
+      setAwardOnlyActive(false);
+    }
+    setAwardCoinsForm((prev) => {
+      const defaultReasons = [
+        'Test va darslarda faol qatnashgani uchun ⚡',
+        'За активное участие в тестах и на уроках ⚡',
+        'Tartib-intizomni buzgani uchun ⚠️',
+        'За нарушение дисциплины ⚠️',
+        ...(ADMIN_STUDENT_COIN_PRESETS_BY_LANG.uz || []),
+        ...(ADMIN_STUDENT_COIN_PRESETS_BY_LANG.ru || []),
+        ...(ADMIN_STUDENT_DEDUCT_PRESETS_BY_LANG.uz || []),
+        ...(ADMIN_STUDENT_DEDUCT_PRESETS_BY_LANG.ru || []),
+      ];
+      const shouldResetReason = !prev.reason || defaultReasons.includes(prev.reason);
+      return {
+        ...prev,
+        amount: Math.max(1, Math.abs(Number(prev.amount) || (resolvedMode === 'deduct' ? 5 : 15))),
+        reason: shouldResetReason ? getDefaultAwardCoinReason(resolvedMode) : prev.reason,
+      };
+    });
+  };
+
+  const handleOpenAwardCoinsModal = ({ mode = 'award', grade = 'all', onlyActive, preselectIds = [] } = {}) => {
+    const resolvedMode = mode === 'deduct' ? 'deduct' : 'award';
+    const resolvedOnlyActive = typeof onlyActive === 'boolean' ? onlyActive : resolvedMode === 'award';
+    setAwardCoinMode(resolvedMode);
     setAwardStudentGradeFilter(grade);
-    setAwardOnlyActive(onlyActive);
+    setAwardOnlyActive(resolvedOnlyActive);
     setAwardStudentSearch('');
     setSelectedAwardStudentIds(preselectIds);
+    setAwardCoinsForm({
+      studentId: '',
+      amount: resolvedMode === 'deduct' ? 5 : 15,
+      reason: getDefaultAwardCoinReason(resolvedMode),
+    });
     setIsAwardCoinsOpen(true);
   };
 
   const awardCandidateStudents = useMemo(() => {
     const pool = (Array.isArray(coinRankings) && coinRankings.length ? coinRankings : students) || [];
-    const sorted = [...pool].sort(
-      (a, b) =>
-        (Number(b.testsPassed) || 0) - (Number(a.testsPassed) || 0) ||
-        (Number(b.coins) || 0) - (Number(a.coins) || 0)
+    const sorted = [...pool].sort((a, b) =>
+      awardCoinMode === 'deduct'
+        ? (Number(b.coins) || 0) - (Number(a.coins) || 0) ||
+          (Number(b.testsPassed) || 0) - (Number(a.testsPassed) || 0)
+        : (Number(b.testsPassed) || 0) - (Number(a.testsPassed) || 0) ||
+          (Number(b.coins) || 0) - (Number(a.coins) || 0)
     );
     const q = awardStudentSearch.trim().toLowerCase();
     return sorted.filter((s) => {
@@ -1576,7 +1754,7 @@ export default function AdminPortal() {
       }
       return true;
     });
-  }, [coinRankings, students, awardStudentSearch, awardOnlyActive, awardStudentGradeFilter]);
+  }, [coinRankings, students, awardStudentSearch, awardOnlyActive, awardStudentGradeFilter, awardCoinMode]);
 
   const handleToggleAwardStudent = (studentId) => {
     setSelectedAwardStudentIds((prev) =>
@@ -1593,7 +1771,7 @@ export default function AdminPortal() {
     setSelectedAwardStudentIds(topIds);
   };
 
-  // Award Coins (Supports single student OR multi-select batch studentIds[])
+  // Award or Deduct Coins (Supports single student OR multi-select batch studentIds[])
   const handleAwardCoins = async (e) => {
     e.preventDefault();
     const targetIds =
@@ -1606,36 +1784,51 @@ export default function AdminPortal() {
       showToast(tr("Kamida bitta o'quvchini belgilang!", 'Выберите хотя бы одного ученика!'), 'warning');
       return;
     }
-    if (!Number(awardCoinsForm.amount)) {
+    const rawAmount = Math.abs(Number(awardCoinsForm.amount) || 0);
+    if (!rawAmount) {
       showToast(tr("Coin miqdorini to'g'ri kiriting!", 'Введите корректное количество койнов!'), 'warning');
       return;
     }
+    const signedAmount = awardCoinMode === 'deduct' ? -rawAmount : rawAmount;
     try {
       const payload =
         targetIds.length === 1
           ? {
               studentId: targetIds[0],
               student_id: targetIds[0],
-              amount: Number(awardCoinsForm.amount),
+              amount: signedAmount,
               reason: awardCoinsForm.reason,
             }
           : {
               studentIds: targetIds,
-              amount: Number(awardCoinsForm.amount),
+              amount: signedAmount,
               reason: awardCoinsForm.reason,
             };
       const res = await api.admin.awardCoins(payload);
-      showToast(res.message || tr('Coinlar muvaffaqiyatli berildi!', 'Койны успешно начислены!'), 'success');
+      showToast(
+        res.message ||
+          (awardCoinMode === 'deduct'
+            ? tr('Coinlar muvaffaqiyatli olib tashlandi!', 'Койны успешно сняты!')
+            : tr('Coinlar muvaffaqiyatli berildi!', 'Койны успешно начислены!')),
+        'success'
+      );
       setIsAwardCoinsOpen(false);
       setSelectedAwardStudentIds([]);
+      setAwardCoinMode('award');
       setAwardCoinsForm({
         studentId: '',
         amount: 15,
-        reason: tr('Test va darslarda faol qatnashgani uchun ⚡', 'За активное участие в тестах и на уроках ⚡'),
+        reason: getDefaultAwardCoinReason('award'),
       });
       loadAdminData();
     } catch (err) {
-      showToast(err.message || tr('Coin berishda xatolik!', 'Ошибка при начислении койнов!'), 'error');
+      showToast(
+        err.message ||
+          (awardCoinMode === 'deduct'
+            ? tr('Coin olib tashlashda xatolik!', 'Ошибка при снятии койнов!')
+            : tr('Coin berishda xatolik!', 'Ошибка при начислении койнов!')),
+        'error'
+      );
     }
   };
 
@@ -1742,9 +1935,9 @@ export default function AdminPortal() {
     });
   }, [students, studentSearch, selectedGradeFilter]);
 
-  // Filtered Coin Leaderboard
+  // Filtered Coin Leaderboard (with tied dense rank by coins)
   const filteredCoinRankings = useMemo(() => {
-    return (Array.isArray(coinRankings) ? coinRankings : []).filter((item) => {
+    const filtered = (Array.isArray(coinRankings) ? coinRankings : []).filter((item) => {
       const q = coinSearchQuery.toLowerCase();
       const nameMatch =
         (item.fullName && item.fullName.toLowerCase().includes(q)) ||
@@ -1763,6 +1956,16 @@ export default function AdminPortal() {
       else if (coinTierFilter === 'zero') tierMatch = coins === 0;
 
       return nameMatch && gradeMatch && activeMatch && tierMatch;
+    });
+    let currentRank = 0;
+    let prevCoins = null;
+    return filtered.map((item) => {
+      const c = Number(item.coins) || 0;
+      if (prevCoins === null || c !== prevCoins) {
+        currentRank += 1;
+        prevCoins = c;
+      }
+      return { ...item, displayRank: currentRank };
     });
   }, [coinRankings, coinSearchQuery, coinGradeFilter, coinOnlyActiveFilter, coinTierFilter]);
 
@@ -2111,6 +2314,22 @@ export default function AdminPortal() {
                 <School size={18} />
               </div>
               <span className="portal-nav-label">{tr('Sinflar Boshqaruvi', 'Управление классами')}</span>
+            </button>
+
+            <button
+              type="button"
+              className={`portal-nav-btn ${activeTab === 'schedule' ? 'active' : ''}`}
+              onClick={() => setActiveTab('schedule')}
+            >
+              <div className="portal-nav-icon">
+                <Calendar size={18} />
+              </div>
+              <span className="portal-nav-label">{tr('Ish Reja / Dars Jadvali', 'Расписание уроков')}</span>
+              {scheduleData?.effectiveEnforced && (
+                <span className="portal-nav-badge bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold">
+                  {tr('Faol', 'Акт.')}
+                </span>
+              )}
             </button>
 
             <button
@@ -3605,12 +3824,13 @@ export default function AdminPortal() {
                   </select>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <button
                     type="button"
                     className="btn btn-warning btn-sm flex items-center gap-1.5 font-bold"
                     onClick={() =>
                       handleOpenAwardCoinsModal({
+                        mode: 'award',
                         grade: selectedGradeFilter === 'all' ? 'all' : selectedGradeFilter,
                         onlyActive: true,
                       })
@@ -3621,8 +3841,26 @@ export default function AdminPortal() {
 
                   <button
                     type="button"
+                    className="btn btn-sm flex items-center gap-1.5 font-bold bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40"
+                    onClick={() =>
+                      handleOpenAwardCoinsModal({
+                        mode: 'deduct',
+                        grade: selectedGradeFilter === 'all' ? 'all' : selectedGradeFilter,
+                        onlyActive: false,
+                      })
+                    }
+                  >
+                    <Minus size={15} /> {tr('Coin Olib Tashlash', 'Снять койны')}
+                  </button>
+
+                  <button
+                    type="button"
                     className="btn btn-diamond-cyan btn-sm flex items-center gap-1.5 font-bold"
-                    onClick={() => setIsAddStudentOpen(true)}
+                    onClick={() => {
+                      setStudentAvatarFile(null);
+                      setStudentAvatarPreview('');
+                      setIsAddStudentOpen(true);
+                    }}
                   >
                     <Plus size={16} /> {tr("Yangi O'quvchi", 'Новый ученик')}
                   </button>
@@ -3708,8 +3946,12 @@ export default function AdminPortal() {
                       <tr key={std.id}>
                         <td>
                           <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-lg overflow-hidden bg-slate-800 border border-sky-400/40 flex items-center justify-center font-bold text-sky-300 text-xs">
-                              {std.fullName?.charAt(0) || 'S'}
+                            <div className="w-8 h-8 rounded-lg overflow-hidden bg-slate-800 border border-sky-400/40 flex items-center justify-center font-bold text-sky-300 text-xs flex-shrink-0">
+                              {std.hasCustomAvatar && std.avatarUrl ? (
+                                <img src={std.avatarUrl} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                std.fullName?.charAt(0) || 'S'
+                              )}
                             </div>
                             <div>
                               <div className="font-bold text-white text-xs">{std.fullName}</div>
@@ -3739,6 +3981,22 @@ export default function AdminPortal() {
                               title={tr('+10 Coin berish', 'Начислить +10 койнов')}
                             >
                               +10 💎
+                            </button>
+                            <button
+                              type="button"
+                              disabled={(std.coins || 0) <= 0}
+                              className="text-[10px] px-2 py-1 rounded-lg font-bold bg-rose-500/15 text-rose-300 border border-rose-500/35 hover:bg-rose-500/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                              onClick={() =>
+                                handleOpenAwardCoinsModal({
+                                  mode: 'deduct',
+                                  grade: std.grade || 'all',
+                                  onlyActive: false,
+                                  preselectIds: [std.id],
+                                })
+                              }
+                              title={tr("O'quvchidan coin olib tashlash", 'Снять койны у ученика')}
+                            >
+                              -💎
                             </button>
                             <button
                               type="button"
@@ -3824,9 +4082,16 @@ export default function AdminPortal() {
                   <button
                     type="button"
                     className="btn btn-warning btn-sm flex items-center gap-1.5 font-bold shadow-md shadow-amber-500/20"
-                    onClick={() => handleOpenAwardCoinsModal({ onlyActive: true })}
+                    onClick={() => handleOpenAwardCoinsModal({ mode: 'award', onlyActive: true })}
                   >
                     <Plus size={16} /> {tr("Faol O'quvchilarga Coin", 'Койны активным ученикам')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm flex items-center gap-1.5 font-bold bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 shadow-md shadow-rose-500/10"
+                    onClick={() => handleOpenAwardCoinsModal({ mode: 'deduct', onlyActive: false })}
+                  >
+                    <Minus size={16} /> {tr("O'quvchilardan Coin Olib Tashlash", 'Снять койны у учеников')}
                   </button>
                 </div>
               </div>
@@ -4723,7 +4988,7 @@ export default function AdminPortal() {
                         >
                           <div className="flex items-center gap-3 flex-1 min-w-0">
                             <span className="w-8 h-8 rounded-xl bg-slate-800 flex items-center justify-center font-black text-xs text-amber-300 border border-slate-700/60 flex-shrink-0">
-                              #{idx + 1}
+                              #{item.displayRank || item.rank || idx + 1}
                             </span>
                             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-600 to-slate-800 flex items-center justify-center text-white font-black text-sm border border-cyan-500/30 flex-shrink-0">
                               {(item.fullName || item.username).charAt(0)}
@@ -4756,7 +5021,7 @@ export default function AdminPortal() {
                             <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/35 text-amber-300 font-black text-xs shadow-md">
                               <Coins size={13} /> {item.coins} {tr('Coins', 'Койн.')}
                             </div>
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1 flex-wrap justify-end">
                               <button
                                 type="button"
                                 className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-cyan-300 hover:bg-slate-700"
@@ -4772,6 +5037,40 @@ export default function AdminPortal() {
                                 title={tr('+10 Coin berish', 'Начислить +10 койнов')}
                               >
                                 +10
+                              </button>
+                              <button
+                                type="button"
+                                disabled={(item.coins || 0) <= 0}
+                                className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30 hover:bg-rose-500/25 disabled:opacity-40 disabled:cursor-not-allowed"
+                                onClick={() => handleQuickStudentAward(item.id, -5)}
+                                title={tr('-5 Coin olib tashlash', 'Снять -5 койнов')}
+                              >
+                                -5
+                              </button>
+                              <button
+                                type="button"
+                                disabled={(item.coins || 0) <= 0}
+                                className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30 hover:bg-rose-500/25 disabled:opacity-40 disabled:cursor-not-allowed"
+                                onClick={() => handleQuickStudentAward(item.id, -10)}
+                                title={tr('-10 Coin olib tashlash', 'Снять -10 койнов')}
+                              >
+                                -10
+                              </button>
+                              <button
+                                type="button"
+                                disabled={(item.coins || 0) <= 0}
+                                className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-rose-300 border border-rose-500/30 hover:bg-rose-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                                onClick={() =>
+                                  handleOpenAwardCoinsModal({
+                                    mode: 'deduct',
+                                    grade: item.grade || 'all',
+                                    onlyActive: false,
+                                    preselectIds: [item.id],
+                                  })
+                                }
+                                title={tr("Ixtiyoriy miqdorda coin olib tashlash", 'Снять произвольное количество койнов')}
+                              >
+                                -💎
                               </button>
                             </div>
                           </div>
@@ -5463,6 +5762,349 @@ export default function AdminPortal() {
             </div>
           )}
 
+          {/* TAB: LESSON SCHEDULE (ISH REJA / DARS JADVALI) */}
+          {activeTab === 'schedule' && (() => {
+            const schedDays = Array.isArray(scheduleData?.days) ? scheduleData.days : [];
+            const schedClasses = Array.isArray(scheduleData?.classes) ? scheduleData.classes : [];
+            const q = scheduleSearch.trim().toLowerCase();
+            const visibleDays = schedDays.filter((d) =>
+              scheduleDayFilter === 'all' ? true : String(d.dayOfWeek) === String(scheduleDayFilter)
+            );
+            const visibleClasses = q
+              ? schedClasses.filter((cls) => {
+                  if (cls.toLowerCase().includes(q)) return true;
+                  return visibleDays.some((d) =>
+                    (d.periods || []).some((p) => {
+                      const c = p.cells?.[cls];
+                      if (!c) return false;
+                      return (
+                        (c.subject || '').toLowerCase().includes(q) ||
+                        (c.rawSubject || '').toLowerCase().includes(q)
+                      );
+                    })
+                  );
+                })
+              : schedClasses;
+
+            return (
+              <div className="space-y-4 animate-fade-in">
+                {/* Header & Controls */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-slate-900/80 p-4 rounded-2xl border border-cyan-500/30">
+                  <div>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <Calendar className="text-cyan-400" size={20} />
+                      {tr("Ish Reja / Haftalik Dars Jadvali (O'qituvchilar Coin Nazorati)", 'Расписание уроков (Контроль койнов учителей)')}
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {tr(
+                        "Excel (.xlsx) yoki CSV jadvalni yuklang — har bir fan o'qituvchisi faqat o'z darsi vaqtida va o'sha sinfga coin berishi hamda olib tashlashi mumkin bo'ladi.",
+                        'Загрузите расписание в Excel (.xlsx) или CSV — каждый учитель сможет начислять и снимать койны только во время своего урока для нужного класса.'
+                      )}
+                    </p>
+                    {scheduleData?.academicYear && (
+                      <div className="text-[11px] text-cyan-300 font-semibold mt-1">
+                        📘 {scheduleData.academicYear}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <label className="btn btn-diamond-cyan btn-sm flex items-center gap-1.5 font-bold cursor-pointer">
+                      {uploadingSchedule ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+                      <span>{uploadingSchedule ? tr('Yuklanmoqda...', 'Загрузка...') : tr('Excel / CSV Yuklash', 'Загрузить Excel / CSV')}</span>
+                      <input
+                        type="file"
+                        accept=".xlsx,.xlsm,.csv"
+                        className="hidden"
+                        disabled={uploadingSchedule}
+                        onChange={handleUploadScheduleFile}
+                      />
+                    </label>
+
+                    <a
+                      href={api.admin.downloadScheduleTemplateUrl()}
+                      className="btn btn-secondary btn-sm flex items-center gap-1.5 font-bold"
+                    >
+                      <Download size={14} /> {tr('Namuna Excel', 'Шаблон Excel')}
+                    </a>
+
+                    {scheduleData?.hasSchedule && (
+                      <>
+                        <button
+                          type="button"
+                          disabled={togglingSchedule}
+                          onClick={handleToggleScheduleEnforcement}
+                          className={`btn btn-sm flex items-center gap-1.5 font-bold border ${
+                            scheduleData?.enforced
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/45 hover:bg-emerald-500/30'
+                              : 'bg-amber-500/15 text-amber-300 border-amber-500/40 hover:bg-amber-500/25'
+                          }`}
+                        >
+                          {scheduleData?.enforced ? <Lock size={14} /> : <Unlock size={14} />}
+                          <span>
+                            {scheduleData?.enforced
+                              ? tr('Jadval Nazorati: YOQILGAN', 'Контроль расписания: ВКЛ')
+                              : tr("Jadval Nazorati: O'CHIRILGAN", 'Контроль расписания: ВЫКЛ')}
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleClearSchedule}
+                          className="btn btn-sm flex items-center gap-1.5 font-bold bg-rose-500/15 text-rose-300 border border-rose-500/35 hover:bg-rose-500/25"
+                        >
+                          <Trash2 size={14} /> {tr('Tozalash', 'Очистить')}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Auto-fixed times & warnings banner */}
+                {(scheduleUploadNotes.autoFixedTimes.length > 0 || scheduleUploadNotes.warnings.length > 0) && (
+                  <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/35 text-xs space-y-1.5">
+                    {scheduleUploadNotes.autoFixedTimes.length > 0 && (
+                      <div className="text-amber-200 font-semibold">
+                        ⏱️ {tr("Vaqt xatoligi avtomatik to'g'rilandi:", 'Опечатка времени автоматически исправлена:')}{' '}
+                        <span className="font-mono text-amber-300">{scheduleUploadNotes.autoFixedTimes.join(', ')}</span>
+                      </div>
+                    )}
+                    {scheduleUploadNotes.warnings.map((w, wi) => (
+                      <div key={wi} className="text-slate-300">
+                        ℹ️ {w}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Summary KPI cards */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="coin-summary-card">
+                    <div className="coin-icon-box" style={{ borderColor: 'rgba(56, 189, 248, 0.4)', color: '#38bdf8' }}>
+                      <FileSpreadsheet size={20} />
+                    </div>
+                    <div>
+                      <div className="text-xl font-black text-white font-cinzel">
+                        {scheduleData?.summary?.totalLessons ?? 0}
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase">
+                        {tr('Jami Darslar', 'Всего уроков')}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="coin-summary-card">
+                    <div className="coin-icon-box" style={{ borderColor: 'rgba(16, 185, 129, 0.4)', color: '#34d399' }}>
+                      <School size={20} />
+                    </div>
+                    <div>
+                      <div className="text-xl font-black text-emerald-400 font-cinzel">
+                        {scheduleData?.summary?.classesCount ?? 0}
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase">
+                        {tr('Qamrab Olingan Sinflar', 'Классов в расписании')}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="coin-summary-card">
+                    <div className="coin-icon-box" style={{ borderColor: 'rgba(245, 158, 11, 0.4)', color: '#fbbf24' }}>
+                      <BookOpen size={20} />
+                    </div>
+                    <div>
+                      <div className="text-xl font-black text-amber-400 font-cinzel">
+                        {scheduleData?.summary?.subjectsCount ?? 0}
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase">
+                        {tr('Fanlar Soni', 'Предметов')}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="coin-summary-card">
+                    <div
+                      className="coin-icon-box"
+                      style={{
+                        borderColor: scheduleData?.effectiveEnforced ? 'rgba(16, 185, 129, 0.45)' : 'rgba(148, 163, 184, 0.35)',
+                        color: scheduleData?.effectiveEnforced ? '#34d399' : '#94a3b8',
+                      }}
+                    >
+                      <Clock size={20} />
+                    </div>
+                    <div>
+                      <div className={`text-sm font-black ${scheduleData?.effectiveEnforced ? 'text-emerald-400' : 'text-slate-300'}`}>
+                        {scheduleData?.effectiveEnforced
+                          ? tr('Nazorat Faol ✓', 'Контроль активен ✓')
+                          : tr('Nazorat Nofaol', 'Контроль неактивен')}
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-bold">
+                        {scheduleData?.currentDayLabel ? `${scheduleData.currentDayLabel}, ${scheduleData.currentTime}` : '-'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Day Filter & Search Bar */}
+                {scheduleData?.hasSchedule ? (
+                  <>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => setScheduleDayFilter('all')}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                            scheduleDayFilter === 'all'
+                              ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
+                              : 'bg-slate-950/60 text-slate-300 border-slate-800 hover:border-slate-600'
+                          }`}
+                        >
+                          {tr('Barcha kunlar', 'Все дни')} ({schedDays.length})
+                        </button>
+                        {schedDays.map((d) => (
+                          <button
+                            key={d.dayOfWeek}
+                            type="button"
+                            onClick={() => setScheduleDayFilter(String(d.dayOfWeek))}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1 ${
+                              String(scheduleDayFilter) === String(d.dayOfWeek)
+                                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
+                                : d.isToday
+                                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                                : 'bg-slate-950/60 text-slate-300 border-slate-800 hover:border-slate-600'
+                            }`}
+                          >
+                            <span>{d.dayLabel}</span>
+                            {d.isToday && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="input-with-icon w-full md:w-64">
+                        <Search size={14} className="input-icon" />
+                        <input
+                          type="text"
+                          className="clean-input text-xs"
+                          placeholder={tr('Fan yoki sinf qidirish...', 'Поиск предмета или класса...')}
+                          value={scheduleSearch}
+                          onChange={(e) => setScheduleSearch(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Schedule Matrix by Day */}
+                    <div className="space-y-4">
+                      {visibleDays.map((dayObj) => (
+                        <div
+                          key={dayObj.dayOfWeek}
+                          className={`rounded-2xl border overflow-hidden ${
+                            dayObj.isToday
+                              ? 'bg-slate-900/80 border-emerald-500/40'
+                              : 'bg-slate-900/60 border-slate-800'
+                          }`}
+                        >
+                          <div className="px-4 py-2.5 bg-slate-950/70 border-b border-slate-800 flex items-center justify-between">
+                            <div className="flex items-center gap-2 font-extrabold text-sm text-white">
+                              <Calendar size={15} className={dayObj.isToday ? 'text-emerald-400' : 'text-cyan-400'} />
+                              <span>{dayObj.dayLabel}</span>
+                              {dayObj.isToday && (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold">
+                                  {tr('Bugun', 'Сегодня')}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[11px] text-slate-400">
+                              {(dayObj.periods || []).length} {tr('ta dars soati', 'уроков')}
+                            </span>
+                          </div>
+
+                          <div className="table-responsive overflow-x-auto">
+                            <table className="diamond-table w-full text-left">
+                              <thead>
+                                <tr>
+                                  <th className="whitespace-nowrap">{tr('Dars / Vaqt', 'Урок / Время')}</th>
+                                  {visibleClasses.map((cls) => (
+                                    <th key={cls} className="whitespace-nowrap text-center">
+                                      {localizeGrade(cls, language)}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(dayObj.periods || []).map((p, pIdx) => (
+                                  <tr
+                                    key={`${dayObj.dayOfWeek}-${p.lessonNumber}-${p.startTime}-${pIdx}`}
+                                    className={p.isLiveNow ? 'bg-emerald-500/10' : ''}
+                                  >
+                                    <td className="whitespace-nowrap">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="w-5 h-5 rounded bg-slate-800 text-cyan-300 text-[10px] font-black flex items-center justify-center">
+                                          {p.lessonNumber}
+                                        </span>
+                                        <span className="font-mono text-xs font-bold text-white">{p.timeRange}</span>
+                                        {p.isLiveNow && (
+                                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/25 text-emerald-300 border border-emerald-500/45 font-extrabold uppercase">
+                                            LIVE
+                                          </span>
+                                        )}
+                                      </div>
+                                    </td>
+                                    {visibleClasses.map((cls) => {
+                                      const cell = p.cells?.[cls];
+                                      const isMatch =
+                                        q &&
+                                        cell &&
+                                        ((cell.subject || '').toLowerCase().includes(q) ||
+                                          (cell.rawSubject || '').toLowerCase().includes(q));
+                                      return (
+                                        <td key={cls} className="text-center align-middle">
+                                          {cell ? (
+                                            <div
+                                              className={`inline-flex flex-col items-center px-2 py-1 rounded-lg border text-[11px] leading-tight ${
+                                                isMatch
+                                                  ? 'bg-amber-500/20 border-amber-400 text-amber-200 font-bold'
+                                                  : p.isLiveNow
+                                                  ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200 font-bold'
+                                                  : 'bg-slate-950/60 border-slate-800 text-slate-200'
+                                              }`}
+                                              title={cell.rawSubject}
+                                            >
+                                              <span className="font-bold whitespace-nowrap">{localizeSubject(cell.subject, language)}</span>
+                                              {cell.rawSubject && cell.rawSubject !== cell.subject && (
+                                                <span className="text-[9px] text-slate-400 whitespace-nowrap">{cell.rawSubject}</span>
+                                              )}
+                                            </div>
+                                          ) : (
+                                            <span className="text-slate-600 text-xs">—</span>
+                                          )}
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="p-8 rounded-2xl bg-slate-900/60 border border-dashed border-slate-700 text-center space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 flex items-center justify-center mx-auto">
+                      <FileSpreadsheet size={24} />
+                    </div>
+                    <h4 className="text-sm font-bold text-white">
+                      {tr("Hali ish reja (dars jadvali) yuklanmagan", 'Расписание уроков ещё не загружено')}
+                    </h4>
+                    <p className="text-xs text-slate-400 max-w-lg mx-auto">
+                      {tr(
+                        "Yuqoridagi «Excel / CSV Yuklash» tugmasi orqali maktab dars jadvalini yuklang. Jadval yuklangandan so'ng har bir fan o'qituvchisi (Matematika, Ingliz tili, Informatika va boshqalar) faqat o'z darsi vaqtida o'sha sinfga coin berish va olib tashlash huquqiga ega bo'ladi.",
+                        'Загрузите школьное расписание через кнопку «Загрузить Excel / CSV» выше. После загрузки каждый учитель (Математика, Английский язык, Информатика и др.) сможет начислять и снимать койны только во время своего урока для соответствующего класса.'
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {/* TAB 5: CONTACT MESSAGES & LEADS */}
           {activeTab === 'showcase' && (
             <div className="space-y-4 animate-fade-in">
@@ -5962,6 +6604,60 @@ export default function AdminPortal() {
               </button>
             </div>
             <form onSubmit={handleCreateStudent} className="modal-body space-y-3.5 pt-3">
+              {/* Optional Student Avatar */}
+              <div className="flex items-center gap-4 p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+                <div className="w-14 h-14 rounded-xl overflow-hidden bg-slate-800 border border-sky-400/50 flex items-center justify-center flex-shrink-0">
+                  {studentAvatarPreview ? (
+                    <img src={studentAvatarPreview} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-lg font-black text-sky-300">
+                      {(studentForm.fullName || 'S')[0]}
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-1.5 flex-1">
+                  <div className="text-xs font-bold text-white">
+                    {tr("O'quvchi profil rasmi (ixtiyoriy)", 'Фото профиля ученика (необязательно)')}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <label className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-300 text-[11px] font-bold cursor-pointer">
+                      <Camera size={12} />
+                      <span>{tr('Rasm yuklash', 'Загрузить фото')}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          e.target.value = '';
+                          if (!file) return;
+                          if (file.size > 5 * 1024 * 1024) {
+                            showToast(tr('Rasm hajmi 5MB dan oshmasligi kerak!', 'Максимум 5 МБ!'), 'warning');
+                            return;
+                          }
+                          setStudentAvatarFile(file);
+                          const reader = new FileReader();
+                          reader.onload = (ev) => setStudentAvatarPreview(ev.target.result);
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </label>
+                    {studentAvatarPreview && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStudentAvatarFile(null);
+                          setStudentAvatarPreview('');
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-rose-500/15 border border-rose-500/35 text-rose-300 text-[11px] font-bold"
+                      >
+                        {tr("O'chirish", 'Удалить')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="input-label">{tr("O'quvchi F.I.SH *", 'Ф.И.О. ученика *')}</label>
                 <input
@@ -6572,6 +7268,75 @@ export default function AdminPortal() {
               </button>
             </div>
             <form onSubmit={handleSaveEditStudent} className="modal-body space-y-3.5 pt-3">
+              {/* Student Profile Photo (Admin & Tutor only) */}
+              <div className="flex items-center gap-4 p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+                <div className="w-14 h-14 rounded-xl overflow-hidden bg-slate-800 border border-sky-400/50 flex items-center justify-center flex-shrink-0">
+                  {editStudentForm.avatarPreview ? (
+                    <img src={editStudentForm.avatarPreview} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-lg font-black text-sky-300">
+                      {(editStudentForm.fullName || 'S')[0]}
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-1.5 flex-1 min-w-0">
+                  <div className="text-xs font-bold text-white truncate">
+                    {editStudentForm.fullName || editingStudent.fullName}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <label className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-300 text-[11px] font-bold cursor-pointer">
+                      <Camera size={12} />
+                      <span>{tr("Rasm yuklash / o'zgartirish", 'Загрузить / сменить фото')}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          e.target.value = '';
+                          if (!file) return;
+                          if (file.size > 5 * 1024 * 1024) {
+                            showToast(tr('Rasm hajmi 5MB dan oshmasligi kerak!', 'Максимум 5 МБ!'), 'warning');
+                            return;
+                          }
+                          const reader = new FileReader();
+                          reader.onload = (ev) =>
+                            setEditStudentForm((prev) => ({
+                              ...prev,
+                              avatarFile: file,
+                              avatarPreview: ev.target.result,
+                              clearAvatar: false,
+                            }));
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </label>
+                    {(editStudentForm.hasCustomAvatar || editStudentForm.avatarFile) &&
+                      !editStudentForm.clearAvatar && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const seed = (editStudentForm.fullName || editStudentForm.username || 'S')
+                              .slice(0, 2)
+                              .toUpperCase();
+                            setEditStudentForm((prev) => ({
+                              ...prev,
+                              avatarFile: null,
+                              clearAvatar: true,
+                              avatarPreview: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(
+                                seed
+                              )}&backgroundColor=0284c7`,
+                            }));
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-rose-500/15 border border-rose-500/35 text-rose-300 text-[11px] font-bold"
+                        >
+                          {tr("O'chirish", 'Удалить')}
+                        </button>
+                      )}
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="input-label">{tr("O'quvchi F.I.SH *", 'Ф.И.О. ученика *')}</label>
                 <input
@@ -7121,9 +7886,13 @@ export default function AdminPortal() {
         );
       })()}
 
-      {/* MODAL: AWARD COINS (MULTI-SELECT ACTIVE STUDENTS) */}
+      {/* MODAL: AWARD OR DEDUCT COINS (MULTI-SELECT STUDENTS) */}
       {isAwardCoinsOpen && (() => {
-        const studentPresets = ADMIN_STUDENT_COIN_PRESETS_BY_LANG[language === 'ru' ? 'ru' : 'uz'] || ADMIN_STUDENT_COIN_PRESETS_BY_LANG.uz;
+        const isDeduct = awardCoinMode === 'deduct';
+        const studentPresets = isDeduct
+          ? ADMIN_STUDENT_DEDUCT_PRESETS_BY_LANG[language === 'ru' ? 'ru' : 'uz'] || ADMIN_STUDENT_DEDUCT_PRESETS_BY_LANG.uz
+          : ADMIN_STUDENT_COIN_PRESETS_BY_LANG[language === 'ru' ? 'ru' : 'uz'] || ADMIN_STUDENT_COIN_PRESETS_BY_LANG.uz;
+        const displayAmount = Math.abs(Number(awardCoinsForm.amount) || 0);
         return (
         <div className="modal-backdrop" onClick={() => setIsAwardCoinsOpen(false)}>
           <div
@@ -7132,8 +7901,11 @@ export default function AdminPortal() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-header">
-              <h3 className="modal-title flex items-center gap-2">
-                <Coins className="text-amber-400" size={20} /> {tr("Faol O'quvchilarga Diamond Coin Berish", 'Начислить Diamond Coin активным ученикам')}
+              <h3 className={`modal-title flex items-center gap-2 ${isDeduct ? 'text-rose-300' : ''}`}>
+                <Coins className={isDeduct ? 'text-rose-400' : 'text-amber-400'} size={20} />{' '}
+                {isDeduct
+                  ? tr("O'quvchilardan Diamond Coin Olib Tashlash", 'Снять Diamond Coin у учеников')
+                  : tr("Faol O'quvchilarga Diamond Coin Berish", 'Начислить Diamond Coin активным ученикам')}
               </h3>
               <button
                 type="button"
@@ -7144,6 +7916,32 @@ export default function AdminPortal() {
               </button>
             </div>
             <form onSubmit={handleAwardCoins} className="modal-body space-y-3.5 pt-3">
+              {/* Award / Deduct Mode Switcher */}
+              <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-950/80 border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => handleSwitchAwardCoinMode('award')}
+                  className={`py-2 px-3 rounded-lg text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
+                    !isDeduct
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-400/50 shadow-sm'
+                      : 'text-slate-400 hover:text-white border border-transparent'
+                  }`}
+                >
+                  <Plus size={14} /> {tr('Coin Berish (+)', 'Начислить (+)')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSwitchAwardCoinMode('deduct')}
+                  className={`py-2 px-3 rounded-lg text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
+                    isDeduct
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-400/50 shadow-sm'
+                      : 'text-slate-400 hover:text-white border border-transparent'
+                  }`}
+                >
+                  <Minus size={14} /> {tr('Coin Olib Tashlash (-)', 'Снять (-)')}
+                </button>
+              </div>
+
               {/* Filter bar */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div className="input-with-icon sm:col-span-2">
@@ -7240,7 +8038,7 @@ export default function AdminPortal() {
                     {tr("Ro'yxatdagi nomzodlar:", 'Кандидаты в списке:')} <strong className="text-white">{awardCandidateStudents.length}</strong> {tr('nafar', 'уч.')}
                   </span>
                   <span>
-                    {tr('Tanlangan:', 'Выбрано:')} <strong className="text-amber-300">{selectedAwardStudentIds.length}</strong> {tr('nafar', 'уч.')}
+                    {tr('Tanlangan:', 'Выбрано:')} <strong className={isDeduct ? 'text-rose-300' : 'text-amber-300'}>{selectedAwardStudentIds.length}</strong> {tr('nafar', 'уч.')}
                   </span>
                 </div>
 
@@ -7254,7 +8052,9 @@ export default function AdminPortal() {
                         onClick={() => handleToggleAwardStudent(s.id)}
                         className={`flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition-all ${
                           checked
-                            ? 'bg-amber-500/15 border-amber-400/60'
+                            ? isDeduct
+                              ? 'bg-rose-500/15 border-rose-400/60'
+                              : 'bg-amber-500/15 border-amber-400/60'
                             : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
                         }`}
                       >
@@ -7263,7 +8063,7 @@ export default function AdminPortal() {
                             type="checkbox"
                             checked={checked}
                             onChange={() => {}}
-                            className="w-4 h-4 accent-amber-400 cursor-pointer flex-shrink-0"
+                            className={`w-4 h-4 cursor-pointer flex-shrink-0 ${isDeduct ? 'accent-rose-400' : 'accent-amber-400'}`}
                           />
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -7310,18 +8110,27 @@ export default function AdminPortal() {
               </div>
 
               <div>
-                <label className="input-label">{tr('Har biriga beriladigan Coin Miqdori *', 'Количество койнов для каждого *')}</label>
+                <label className="input-label">
+                  {isDeduct
+                    ? tr('Har biridan olib tashlanadigan Coin Miqdori *', 'Количество снимаемых койнов у каждого *')
+                    : tr('Har biriga beriladigan Coin Miqdori *', 'Количество койнов для каждого *')}
+                </label>
                 <div className="flex items-center gap-1.5 mb-2 flex-wrap">
                   {[5, 10, 15, 20, 50, 100].map((amt) => (
                     <button
                       key={amt}
                       type="button"
                       className={`coin-pill-btn flex-1 text-center ${
-                        Number(awardCoinsForm.amount) === amt ? 'active' : ''
-                      }`}
+                        displayAmount === amt ? 'active' : ''
+                      } ${isDeduct ? '!border-rose-500/40 !text-rose-300' : ''}`}
+                      style={
+                        isDeduct && displayAmount === amt
+                          ? { background: 'rgba(244, 63, 94, 0.25)', borderColor: '#fb7185', color: '#fecdd3' }
+                          : undefined
+                      }
                       onClick={() => setAwardCoinsForm({ ...awardCoinsForm, amount: amt })}
                     >
-                      +{amt}
+                      {isDeduct ? `-${amt}` : `+${amt}`}
                     </button>
                   ))}
                 </div>
@@ -7334,6 +8143,11 @@ export default function AdminPortal() {
                   onChange={(e) => setAwardCoinsForm({ ...awardCoinsForm, amount: e.target.value })}
                   required
                 />
+                {isDeduct && (
+                  <p className="text-[11px] text-rose-300/80 mt-1">
+                    ℹ️ {tr("O'quvchi balansi 0 dan pastga tushmaydi. Hisobida 0 coin bo'lgan o'quvchilar o'tkazib yuboriladi.", 'Баланс ученика не опустится ниже 0. Ученики с 0 койнами будут пропущены.')}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -7345,7 +8159,9 @@ export default function AdminPortal() {
                       type="button"
                       className={`text-[10px] px-2 py-1 rounded-lg border transition-all ${
                         awardCoinsForm.reason === preset
-                          ? 'bg-amber-500/20 border-amber-400 text-amber-200 font-bold'
+                          ? isDeduct
+                            ? 'bg-rose-500/20 border-rose-400 text-rose-200 font-bold'
+                            : 'bg-amber-500/20 border-amber-400 text-amber-200 font-bold'
                           : 'bg-slate-950/60 border-slate-800 text-slate-300 hover:border-slate-600'
                       }`}
                       onClick={() => setAwardCoinsForm({ ...awardCoinsForm, reason: preset })}
@@ -7374,14 +8190,23 @@ export default function AdminPortal() {
                 <button
                   type="submit"
                   disabled={selectedAwardStudentIds.length === 0 && !awardCoinsForm.studentId}
-                  className="btn btn-warning btn-sm font-bold flex items-center gap-1.5 disabled:opacity-50"
+                  className={`btn btn-sm font-bold flex items-center gap-1.5 disabled:opacity-50 ${
+                    isDeduct
+                      ? 'bg-rose-600 hover:bg-rose-500 text-white border border-rose-400/40'
+                      : 'btn-warning'
+                  }`}
                 >
-                  <Coins size={14} />{' '}
+                  {isDeduct ? <Minus size={14} /> : <Coins size={14} />}{' '}
                   {selectedAwardStudentIds.length > 0
-                    ? tr(
-                        `${selectedAwardStudentIds.length} nafariga +${awardCoinsForm.amount} Coin Berish`,
-                        `Начислить +${awardCoinsForm.amount} койн. (${selectedAwardStudentIds.length} уч.)`
-                      )
+                    ? isDeduct
+                      ? tr(
+                          `${selectedAwardStudentIds.length} nafaridan -${displayAmount} Coin Olib Tashlash`,
+                          `Снять -${displayAmount} койн. (${selectedAwardStudentIds.length} уч.)`
+                        )
+                      : tr(
+                          `${selectedAwardStudentIds.length} nafariga +${displayAmount} Coin Berish`,
+                          `Начислить +${displayAmount} койн. (${selectedAwardStudentIds.length} уч.)`
+                        )
                     : tr("O'quvchilarni tanlang", 'Выберите учеников')}
                 </button>
               </div>
@@ -7530,6 +8355,36 @@ export default function AdminPortal() {
                         }
                       >
                         +10
+                      </button>
+                      <button
+                        type="button"
+                        disabled={(st.coins || 0) <= 0}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/35 hover:bg-rose-500/25 font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                        onClick={() =>
+                          handleQuickStudentAward(
+                            st.id,
+                            -5,
+                            tr(`${liveViewingClassInfo.name} sinf tartib-intizomi bo'yicha coin olib tashlash`, `Снятие койнов за дисциплину в классе ${localizeGrade(liveViewingClassInfo.name, language)}`)
+                          )
+                        }
+                        title={tr('-5 Coin olib tashlash', 'Снять -5 койнов')}
+                      >
+                        -5
+                      </button>
+                      <button
+                        type="button"
+                        disabled={(st.coins || 0) <= 0}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/35 hover:bg-rose-500/25 font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                        onClick={() =>
+                          handleQuickStudentAward(
+                            st.id,
+                            -10,
+                            tr(`${liveViewingClassInfo.name} sinf tartib-intizomi bo'yicha coin olib tashlash`, `Снятие койнов за дисциплину в классе ${localizeGrade(liveViewingClassInfo.name, language)}`)
+                          )
+                        }
+                        title={tr('-10 Coin olib tashlash', 'Снять -10 койнов')}
+                      >
+                        -10
                       </button>
                     </div>
                   </div>

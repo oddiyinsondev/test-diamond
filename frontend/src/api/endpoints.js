@@ -139,6 +139,22 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    getSchedule: () => apiClient('/api/admin/schedule/'),
+    uploadSchedule: (formData) =>
+      apiClient('/api/admin/schedule/', {
+        method: 'POST',
+        body: formData,
+      }),
+    toggleScheduleEnforcement: (enforced) =>
+      apiClient('/api/admin/schedule/', {
+        method: 'POST',
+        body: JSON.stringify({ enforced: Boolean(enforced) }),
+      }),
+    clearSchedule: () =>
+      apiClient('/api/admin/schedule/', {
+        method: 'DELETE',
+      }),
+    downloadScheduleTemplateUrl: () => '/api/admin/schedule/template/',
   },
 
   // --- TEACHER PORTAL ---
@@ -222,6 +238,8 @@ export const api = {
       apiClient(`/api/teacher/coins/${txId}/delete/`, {
         method: 'POST',
       }),
+    getSchedule: (grade = '') =>
+      apiClient(`/api/teacher/schedule/${grade && grade !== 'all' ? `?grade=${encodeURIComponent(grade)}` : ''}`),
   },
 
   // --- TUTOR (TYUTER) PORTAL ---

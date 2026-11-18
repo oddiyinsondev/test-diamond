@@ -13,6 +13,7 @@ import {
   TEACHER_DEDUCT_PRESETS_BY_LANG,
   getTeacherDeductPresets,
   ADMIN_STUDENT_COIN_PRESETS_BY_LANG,
+  ADMIN_STUDENT_DEDUCT_PRESETS_BY_LANG,
   ADMIN_CLASS_COIN_PRESETS_BY_LANG,
   getLockMessageLocalized,
   getPolicyMessageLocalized,
@@ -99,6 +100,8 @@ test('teacher and admin coin presets are non-empty and comply with teacher lesso
 
   assert.ok(ADMIN_STUDENT_COIN_PRESETS_BY_LANG.uz.length >= 3);
   assert.ok(ADMIN_STUDENT_COIN_PRESETS_BY_LANG.ru.length >= 3);
+  assert.ok(ADMIN_STUDENT_DEDUCT_PRESETS_BY_LANG.uz.length >= 3);
+  assert.ok(ADMIN_STUDENT_DEDUCT_PRESETS_BY_LANG.ru.length >= 3);
   assert.ok(ADMIN_CLASS_COIN_PRESETS_BY_LANG.uz.length >= 3);
   assert.ok(ADMIN_CLASS_COIN_PRESETS_BY_LANG.ru.length >= 3);
 });

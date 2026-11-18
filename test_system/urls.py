@@ -79,6 +79,11 @@ urlpatterns = [
     path('api/admin/classes/', views.api_admin_classes, name='api_admin_classes'),
     path('api/admin/classes/<int:class_id>/', views.api_admin_class_manage, name='api_admin_class_manage'),
 
+    # 8.5 LESSON SCHEDULE (ISH REJA / DARS JADVALI) APIS
+    path('api/admin/schedule/', views.api_admin_schedule, name='api_admin_schedule'),
+    path('api/admin/schedule/template/', views.api_admin_schedule_template, name='api_admin_schedule_template'),
+    path('api/teacher/schedule/', views.api_teacher_schedule, name='api_teacher_schedule'),
+
     # 9. DIAMOND COINS & GAMIFICATION APIS
     path('api/coins/award/', views.api_award_coins, name='api_award_coins'),
     path('api/coins/rankings/', views.api_coin_rankings, name='api_coin_rankings'),

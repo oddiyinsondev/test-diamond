@@ -1637,3 +1637,510 @@ class TutorPortalAndClassCoinsTests(TestCase):
         self.assertTrue(any(t['id'] == stat_tut_id and t['classBonusTotal'] == 55 for t in sj['tutors']))
 
 
+class AdminCoinDeductionAndTiedLeaderboardTests(TestCase):
+    def setUp(self):
+        SchoolClass.objects.create(name='8-A', grade_level=8, language='uz')
+        self.admin_user = CustomUser.objects.create_user(
+            username='admin_deduct', password='123', role='admin', is_staff=True, is_superuser=True, full_name='Admin'
+        )
+        self.st1 = CustomUser.objects.create_user(username='st_tie_1', password='123', role='student', grade='8-A', full_name='Ali', coins=50)
+        self.st2 = CustomUser.objects.create_user(username='st_tie_2', password='123', role='student', grade='8-A', full_name='Vali', coins=50)
+        self.st3 = CustomUser.objects.create_user(username='st_tie_3', password='123', role='student', grade='8-A', full_name='Hasan', coins=30)
+        self.st4 = CustomUser.objects.create_user(username='st_tie_4', password='123', role='student', grade='8-A', full_name='Husan', coins=30)
+        self.st5 = CustomUser.objects.create_user(username='st_tie_5', password='123', role='student', grade='8-A', full_name='Olim', coins=10)
+        self.st_zero = CustomUser.objects.create_user(username='st_zero', password='123', role='student', grade='8-A', full_name='Nol', coins=0)
+
+    def test_student_leaderboard_and_coin_rankings_tie_same_coins(self):
+        cli = Client()
+        cli.login(username='st_tie_1', password='123')
+        resp = cli.get('/api/student/leaderboard/?grade=8-A')
+        self.assertEqual(resp.status_code, 200)
+        rows = resp.json()['leaderboard']
+        by_user = {r['username']: r['rank'] for r in rows}
+        self.assertEqual(by_user['st_tie_1'], 1)
+        self.assertEqual(by_user['st_tie_2'], 1)
+        self.assertEqual(by_user['st_tie_3'], 2)
+        self.assertEqual(by_user['st_tie_4'], 2)
+        self.assertEqual(by_user['st_tie_5'], 3)
+        self.assertEqual(by_user['st_zero'], 4)
+
+        adm = Client()
+        adm.login(username='admin_deduct', password='123')
+        r_rank = adm.get('/api/coins/rankings/?grade=8-A')
+        self.assertEqual(r_rank.status_code, 200)
+        top_map = {r['username']: r['rank'] for r in r_rank.json()['topStudents']}
+        self.assertEqual(top_map['st_tie_1'], 1)
+        self.assertEqual(top_map['st_tie_2'], 1)
+        self.assertEqual(top_map['st_tie_3'], 2)
+        self.assertEqual(top_map['st_tie_4'], 2)
+        self.assertEqual(top_map['st_tie_5'], 3)
+        self.assertEqual(top_map['st_zero'], 4)
+
+    def test_admin_single_and_batch_coin_deduction_from_students(self):
+        adm = Client()
+        adm.login(username='admin_deduct', password='123')
+
+        # 1. Single student normal deduction
+        r1 = adm.post(
+            '/api/coins/award/',
+            data=json.dumps({'studentId': self.st1.id, 'amount': -15, 'reason': 'Tartib-intizom'}),
+            content_type='application/json',
+        )
+        self.assertEqual(r1.status_code, 200)
+        d1 = r1.json()
+        self.assertEqual(d1['coins'], 35)
+        self.assertEqual(d1['amountAwarded'], -15)
+        self.assertIn('olib tashlandi', d1['message'])
+        self.st1.refresh_from_db()
+        self.assertEqual(self.st1.coins, 35)
+
+        # 2. Single student deduction exceeding balance clamps to 0 and records exact delta
+        r2 = adm.post(
+            '/api/coins/award/',
+            data=json.dumps({'studentId': self.st5.id, 'amount': -25, 'reason': 'Balans tuzatish'}),
+            content_type='application/json',
+            HTTP_X_LANGUAGE='ru',
+        )
+        self.assertEqual(r2.status_code, 200)
+        d2 = r2.json()
+        self.assertEqual(d2['coins'], 0)
+        self.assertEqual(d2['amountAwarded'], -10)
+        self.assertIn('снято 10', d2['message'])
+        tx2 = CoinTransaction.objects.filter(student=self.st5).order_by('-id').first()
+        self.assertEqual(tx2.amount, -10)
+
+        # 3. Single student deduction when already 0 coins returns 400
+        r3 = adm.post(
+            '/api/coins/award/',
+            data=json.dumps({'studentId': self.st_zero.id, 'amount': -5, 'reason': 'Test'}),
+            content_type='application/json',
+        )
+        self.assertEqual(r3.status_code, 400)
+
+        # 4. Batch deduction skips 0-coin students, clamps partial balances, and reports exact total
+        r4 = adm.post(
+            '/api/coins/award/',
+            data=json.dumps({
+                'studentIds': [self.st2.id, self.st3.id, self.st_zero.id],
+                'amount': -40,
+                'reason': 'Ommaviy jarima',
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(r4.status_code, 200)
+        d4 = r4.json()
+        self.assertEqual(d4['count'], 2)
+        self.assertEqual(d4['skippedZeroCount'], 1)
+        self.assertEqual(d4['totalGiven'], -70)  # st2: -40 (50->10), st3: -30 (30->0)
+        self.assertIn('olib tashlandi', d4['message'])
+        self.st2.refresh_from_db()
+        self.st3.refresh_from_db()
+        self.assertEqual(self.st2.coins, 10)
+        self.assertEqual(self.st3.coins, 0)
+
+        # 5. Batch deduction where all selected students have 0 coins returns 400
+        r5 = adm.post(
+            '/api/coins/award/',
+            data=json.dumps({
+                'studentIds': [self.st3.id, self.st_zero.id],
+                'amount': -10,
+                'reason': 'Ommaviy jarima',
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(r5.status_code, 400)
+
+
+class StudentAvatarPermissionTests(TestCase):
+    def setUp(self):
+        import tempfile
+        from django.test import override_settings
+
+        self._tmp_media = tempfile.mkdtemp()
+        self._media_override = override_settings(MEDIA_ROOT=self._tmp_media)
+        self._media_override.enable()
+
+        self.admin_user = CustomUser.objects.create_user(
+            username='admin_av', password='123', role='admin', is_staff=True, is_superuser=True, full_name='Admin Av'
+        )
+        self.tutor_user = CustomUser.objects.create_user(
+            username='tutor_av', password='123', role='tutor', full_name='Tutor Av'
+        )
+        self.cls = SchoolClass.objects.create(name='9-A', grade_level=9, language='uz', tutor=self.tutor_user)
+        self.student_user = CustomUser.objects.create_user(
+            username='student_av', password='123', role='student', grade='9-A', full_name='Student Av', bio='Old bio'
+        )
+
+    def tearDown(self):
+        import shutil
+        self._media_override.disable()
+        shutil.rmtree(self._tmp_media, ignore_errors=True)
+
+    def _make_png(self, name='photo.png'):
+        from io import BytesIO
+        from PIL import Image
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        buf = BytesIO()
+        Image.new('RGB', (32, 32), color=(41, 183, 225)).save(buf, format='PNG')
+        return SimpleUploadedFile(name, buf.getvalue(), content_type='image/png')
+
+    def test_student_cannot_change_avatar_but_can_edit_profile_fields(self):
+        cli = Client()
+        cli.login(username='student_av', password='123')
+
+        # Uploading avatar as student is blocked (403)
+        r_upload = cli.post(
+            '/api/profile/update/',
+            {'fullName': 'Student Updated', 'avatar': self._make_png('st.png')},
+        )
+        self.assertEqual(r_upload.status_code, 403)
+        self.student_user.refresh_from_db()
+        self.assertFalse(bool(self.student_user.avatar))
+
+        # Clearing avatar as student is also blocked (403)
+        r_clear = cli.post(
+            '/api/profile/update/',
+            {'fullName': 'Student Updated', 'clearAvatar': 'true'},
+        )
+        self.assertEqual(r_clear.status_code, 403)
+
+        # Updating fullName, username, bio, and password succeeds (200)
+        r_ok = cli.post(
+            '/api/profile/update/',
+            {
+                'fullName': 'Yangi Ism Familiya',
+                'username': 'student_av_new',
+                'bio': 'Mening yangi biom!',
+                'oldPassword': '123',
+                'newPassword': '456',
+            },
+        )
+        self.assertEqual(r_ok.status_code, 200)
+        self.student_user.refresh_from_db()
+        self.assertEqual(self.student_user.full_name, 'Yangi Ism Familiya')
+        self.assertEqual(self.student_user.username, 'student_av_new')
+        self.assertEqual(self.student_user.bio, 'Mening yangi biom!')
+        self.assertTrue(self.student_user.check_password('456'))
+
+    def test_admin_and_tutor_can_upload_and_clear_student_avatar(self):
+        # 1. Admin uploads avatar for student
+        adm = Client()
+        adm.login(username='admin_av', password='123')
+        r_adm = adm.post(
+            f'/api/admin/users/{self.student_user.id}/',
+            {'fullName': 'Student Av', 'username': 'student_av', 'grade': '9-A', 'avatar': self._make_png('adm.png')},
+        )
+        self.assertEqual(r_adm.status_code, 200)
+        self.student_user.refresh_from_db()
+        self.assertTrue(bool(self.student_user.avatar))
+
+        # Admin students list exposes hasCustomAvatar=True
+        r_list = adm.get('/api/admin/students/')
+        self.assertEqual(r_list.status_code, 200)
+        st_entry = next(s for s in r_list.json() if s['id'] == self.student_user.id)
+        self.assertTrue(st_entry['hasCustomAvatar'])
+
+        # 2. Tutor replaces and clears student avatar
+        tut = Client()
+        tut.login(username='tutor_av', password='123')
+        r_tut_up = tut.post(
+            f'/api/tutor/students/{self.student_user.id}/',
+            {'fullName': 'Student Av', 'username': 'student_av', 'grade': '9-A', 'avatar': self._make_png('tut.png')},
+        )
+        self.assertEqual(r_tut_up.status_code, 200)
+        self.student_user.refresh_from_db()
+        self.assertTrue(bool(self.student_user.avatar))
+
+        r_tut_clr = tut.post(
+            f'/api/tutor/students/{self.student_user.id}/',
+            {'fullName': 'Student Av', 'username': 'student_av', 'grade': '9-A', 'clearAvatar': 'true'},
+        )
+        self.assertEqual(r_tut_clr.status_code, 200)
+        self.student_user.refresh_from_db()
+        self.assertFalse(bool(self.student_user.avatar))
+
+
+class LessonScheduleEnforcementTests(TestCase):
+    def setUp(self):
+        self.admin_user = CustomUser.objects.create_user(
+            username='admin_sch', password='123', role='admin', is_staff=True, is_superuser=True, full_name='Admin Sch'
+        )
+        self.math_teacher = CustomUser.objects.create_user(
+            username='math_tch', password='123', role='teacher', subject='Matematika', full_name='Math Ustoz'
+        )
+        self.it_teacher = CustomUser.objects.create_user(
+            username='it_tch', password='123', role='teacher', subject='Informatika', full_name='IT Ustoz'
+        )
+        self.cls_8uz = SchoolClass.objects.create(name='8-A-UZ', grade_level=8, language='uz')
+        self.cls_9ru = SchoolClass.objects.create(name='9-A-RUS', grade_level=9, language='ru')
+        self.st_8uz = CustomUser.objects.create_user(
+            username='st_8uz', password='123', role='student', grade='8-A-UZ', full_name='Ali 8UZ', coins=10
+        )
+        self.st_9ru = CustomUser.objects.create_user(
+            username='st_9ru', password='123', role='student', grade='9-A-RUS', full_name='Vali 9RU', coins=10
+        )
+
+    def _build_real_xlsx(self):
+        import io
+        import openpyxl
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(['', 'Расписание Уроков на 2026-2027 учебный год', '', ''])
+        ws.append(['', 'Урок / время', '8-А (узб.)', '9-А (рус.)'])
+        ws.append(['Понедельник', '1. 09:00–09:45', 'Математика (РЕП)', 'Русский язык'])
+        ws.append(['', '6. 14:50–14:35', 'Информатика', 'Английский язык (РЕП.)'])
+        buf = io.BytesIO()
+        wb.save(buf)
+        return SimpleUploadedFile(
+            'ish_reja.xlsx',
+            buf.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+
+    def test_excel_upload_and_time_based_teacher_coin_permissions(self):
+        from datetime import datetime
+        from unittest.mock import patch
+        from zoneinfo import ZoneInfo
+
+        adm = Client()
+        adm.login(username='admin_sch', password='123')
+
+        # 1. Admin uploads Excel timetable
+        r_up = adm.post('/api/admin/schedule/', {'file': self._build_real_xlsx()})
+        self.assertEqual(r_up.status_code, 200)
+        up_data = r_up.json()
+        self.assertTrue(up_data['success'])
+        self.assertTrue(up_data['effectiveEnforced'])
+        self.assertEqual(up_data['summary']['totalLessons'], 4)
+        self.assertIn('14:50–14:35 -> 13:50–14:35', up_data['autoFixedTimes'])
+        self.assertIn('8-A-UZ', up_data['classes'])
+        self.assertIn('9-A-RUS', up_data['classes'])
+
+        # Template download works
+        r_tpl = adm.get('/api/admin/schedule/template/')
+        self.assertEqual(r_tpl.status_code, 200)
+        self.assertIn('spreadsheetml', r_tpl['Content-Type'])
+
+        tz = ZoneInfo('Asia/Tashkent')
+        # Monday 2026-11-16 09:15 (during Period 1: 09:00-09:45 -> Matematika in 8-A-UZ, Rus tili in 9-A-RUS)
+        mon_0915 = datetime(2026, 11, 16, 9, 15, tzinfo=tz)
+        # Monday 2026-11-16 14:00 (during Period 6 auto-fixed 13:50-14:35 -> Informatika in 8-A-UZ)
+        mon_1400 = datetime(2026, 11, 16, 14, 0, tzinfo=tz)
+
+        math_cli = Client()
+        math_cli.login(username='math_tch', password='123')
+        it_cli = Client()
+        it_cli.login(username='it_tch', password='123')
+
+        with patch('core.schedule_utils.timezone.now', return_value=mon_0915):
+            # Math teacher ALLOWED to award (+) and deduct (-) in 8-A-UZ during 09:00-09:45
+            r_m_add = math_cli.post(
+                '/api/coins/award/',
+                data=json.dumps({'studentId': self.st_8uz.id, 'amount': 2, 'reason': 'Darsda faol qatnashdi', 'portal': 'teacher'}),
+                content_type='application/json',
+            )
+            self.assertEqual(r_m_add.status_code, 200)
+            self.assertEqual(r_m_add.json()['coins'], 12)
+
+            r_m_ded = math_cli.post(
+                '/api/coins/award/',
+                data=json.dumps({'studentId': self.st_8uz.id, 'amount': -1, 'reason': 'Dars intizomini buzdi', 'portal': 'teacher'}),
+                content_type='application/json',
+            )
+            self.assertEqual(r_m_ded.status_code, 200)
+            self.assertEqual(r_m_ded.json()['coins'], 11)
+
+            # Math teacher BLOCKED in 9-A-RUS (not Math at 09:15)
+            r_m_wrong_cls = math_cli.post(
+                '/api/coins/award/',
+                data=json.dumps({'studentId': self.st_9ru.id, 'amount': 2, 'reason': 'Darsda faol qatnashdi', 'portal': 'teacher'}),
+                content_type='application/json',
+            )
+            self.assertEqual(r_m_wrong_cls.status_code, 403)
+
+            # IT teacher BLOCKED (both + and -) at 09:15
+            r_it_add = it_cli.post(
+                '/api/coins/award/',
+                data=json.dumps({'studentId': self.st_8uz.id, 'amount': 2, 'reason': 'Darsda faol qatnashdi', 'portal': 'teacher'}),
+                content_type='application/json',
+            )
+            self.assertEqual(r_it_add.status_code, 403)
+            r_it_ded = it_cli.post(
+                '/api/coins/award/',
+                data=json.dumps({'studentId': self.st_8uz.id, 'amount': -1, 'reason': 'Dars intizomini buzdi', 'portal': 'teacher'}),
+                content_type='application/json',
+            )
+            self.assertEqual(r_it_ded.status_code, 403)
+
+            # Teacher schedule endpoint reflects active status accurately
+            r_ts = math_cli.get('/api/teacher/schedule/?grade=8-A-UZ')
+            self.assertEqual(r_ts.status_code, 200)
+            self.assertTrue(r_ts.json()['scheduleStatus']['allowed'])
+            self.assertIn('8-A-UZ', r_ts.json()['scheduleStatus']['activeClasses'])
+
+        with patch('core.schedule_utils.timezone.now', return_value=mon_1400):
+            # At 14:00 (13:50-14:35), IT teacher is ALLOWED in 8-A-UZ (both + and -)
+            r_it_ok = it_cli.post(
+                '/api/coins/award/',
+                data=json.dumps({'studentId': self.st_8uz.id, 'amount': 3, 'reason': 'Darsda faol qatnashdi', 'portal': 'teacher'}),
+                content_type='application/json',
+            )
+            self.assertEqual(r_it_ok.status_code, 200)
+            r_it_ded_ok = it_cli.post(
+                '/api/coins/award/',
+                data=json.dumps({'studentId': self.st_8uz.id, 'amount': -1, 'reason': 'Dars intizomini buzdi', 'portal': 'teacher'}),
+                content_type='application/json',
+            )
+            self.assertEqual(r_it_ded_ok.status_code, 200)
+
+            # Math teacher is now BLOCKED at 14:00 (both + and -)
+            r_m_blk = math_cli.post(
+                '/api/coins/award/',
+                data=json.dumps({'studentId': self.st_8uz.id, 'amount': 1, 'reason': 'Darsda faol qatnashdi', 'portal': 'teacher'}),
+                content_type='application/json',
+            )
+            self.assertEqual(r_m_blk.status_code, 403)
+
+            # Admin disables schedule enforcement -> Math teacher allowed again
+            r_off = adm.post('/api/admin/schedule/', data=json.dumps({'enforced': False}), content_type='application/json')
+            self.assertEqual(r_off.status_code, 200)
+            self.assertFalse(r_off.json()['effectiveEnforced'])
+
+            r_m_unblk = math_cli.post(
+                '/api/coins/award/',
+                data=json.dumps({'studentId': self.st_8uz.id, 'amount': 1, 'reason': 'Darsda faol qatnashdi', 'portal': 'teacher'}),
+                content_type='application/json',
+            )
+            self.assertEqual(r_m_unblk.status_code, 200)
+
+    def test_merged_banner_xlsx_boundaries_spoof_edit_and_weekend(self):
+        import io
+        from datetime import datetime
+        from unittest.mock import patch
+        from zoneinfo import ZoneInfo
+        import openpyxl
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        # Build an .xlsx with a REAL merged horizontal banner row (B2:O2) + merged vertical day column (A5:A6)
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.cell(2, 2, 'Расписание Уроков на 2026-2027 учебный год')
+        ws.merge_cells('B2:E2')
+        ws.cell(4, 2, 'Урок / время')
+        ws.cell(4, 3, '8-А (узб.)')
+        ws.cell(4, 4, '9-А (рус.)')
+        ws.cell(5, 1, 'Понедельник')
+        ws.merge_cells('A5:A6')
+        ws.cell(5, 2, '1. 09:00–09:45')
+        ws.cell(5, 3, 'Математика (РЕП)')
+        ws.cell(5, 4, 'Физика')
+        ws.cell(6, 2, '2. 10:05–10:50')
+        ws.cell(6, 3, 'Инглиз тили(РЕП)')
+        ws.cell(6, 4, 'Информатика')
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        xlsx_file = SimpleUploadedFile(
+            'real_merged.xlsx',
+            buf.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+
+        adm = Client()
+        adm.login(username='admin_sch', password='123')
+        r_up = adm.post('/api/admin/schedule/', {'file': xlsx_file})
+        self.assertEqual(r_up.status_code, 200)
+        up = r_up.json()
+        # Merged banner title MUST NOT become a class column!
+        self.assertEqual(up['classes'], ['8-A-UZ', '9-A-RUS'])
+        self.assertEqual(up['academicYear'], 'Расписание Уроков на 2026-2027 учебный год')
+        self.assertEqual(up['summary']['totalLessons'], 4)
+
+        tz = ZoneInfo('Asia/Tashkent')
+        mon_085959 = datetime(2026, 11, 16, 8, 59, 59, tzinfo=tz)
+        mon_090000 = datetime(2026, 11, 16, 9, 0, 0, tzinfo=tz)
+        mon_094500 = datetime(2026, 11, 16, 9, 45, 0, tzinfo=tz)
+        mon_094501 = datetime(2026, 11, 16, 9, 45, 1, tzinfo=tz)
+        mon_095500 = datetime(2026, 11, 16, 9, 55, 0, tzinfo=tz)  # break between lesson 1 and 2
+        sat_091500 = datetime(2026, 11, 21, 9, 15, 0, tzinfo=tz)  # Saturday (weekend)
+
+        math_cli = Client()
+        math_cli.login(username='math_tch', password='123')
+
+        # 08:59:59 -> BLOCKED (1 sec before lesson start)
+        with patch('core.schedule_utils.timezone.now', return_value=mon_085959):
+            r = math_cli.post(
+                '/api/coins/award/',
+                data=json.dumps({'studentId': self.st_8uz.id, 'amount': 1, 'reason': 'Darsda faol', 'portal': 'teacher'}),
+                content_type='application/json',
+            )
+            self.assertEqual(r.status_code, 403)
+
+            # Even spoofing portal='admin' as a teacher MUST stay blocked (403)
+            r_spoof = math_cli.post(
+                '/api/coins/award/',
+                data=json.dumps({'studentId': self.st_8uz.id, 'amount': 1, 'reason': 'Darsda faol', 'portal': 'admin'}),
+                content_type='application/json',
+            )
+            self.assertEqual(r_spoof.status_code, 403)
+
+            # Whole-class award outside lesson time MUST stay blocked (403)
+            r_cls_blk = math_cli.post(
+                '/api/coins/award/',
+                data=json.dumps({'className': '8-A-UZ', 'amount': 1, 'reason': 'Darsda faol', 'portal': 'teacher'}),
+                content_type='application/json',
+            )
+            self.assertEqual(r_cls_blk.status_code, 403)
+
+        # 09:00:00 -> ALLOWED (exact start), both single and whole-class award work
+        with patch('core.schedule_utils.timezone.now', return_value=mon_090000):
+            r_start = math_cli.post(
+                '/api/coins/award/',
+                data=json.dumps({'studentId': self.st_8uz.id, 'amount': 1, 'reason': 'Darsda faol', 'portal': 'teacher'}),
+                content_type='application/json',
+            )
+            self.assertEqual(r_start.status_code, 200)
+            tx = CoinTransaction.objects.filter(student=self.st_8uz, given_by=self.math_teacher).order_by('-id').first()
+            self.assertIsNotNone(tx)
+
+            # Editing own tx DURING lesson time -> ALLOWED
+            r_edit_ok = math_cli.post(
+                f'/api/teacher/coins/{tx.id}/edit/',
+                data=json.dumps({'amount': 2, 'reason': 'Darsda juda faol', 'portal': 'teacher'}),
+                content_type='application/json',
+            )
+            self.assertEqual(r_edit_ok.status_code, 200)
+
+        # 09:45:00 -> ALLOWED (exact end minute)
+        with patch('core.schedule_utils.timezone.now', return_value=mon_094500):
+            r_end = math_cli.post(
+                '/api/coins/award/',
+                data=json.dumps({'studentId': self.st_8uz.id, 'amount': -1, 'reason': 'Dars intizomini buzdi', 'portal': 'teacher'}),
+                content_type='application/json',
+            )
+            self.assertEqual(r_end.status_code, 200)
+
+        # 09:45:01, break 09:55:00, and Saturday 09:15:00 -> ALL BLOCKED (award, deduct, AND edit!)
+        for blocked_dt in (mon_094501, mon_095500, sat_091500):
+            with patch('core.schedule_utils.timezone.now', return_value=blocked_dt):
+                r_b1 = math_cli.post(
+                    '/api/coins/award/',
+                    data=json.dumps({'studentId': self.st_8uz.id, 'amount': 1, 'reason': 'Darsda faol', 'portal': 'teacher'}),
+                    content_type='application/json',
+                )
+                self.assertEqual(r_b1.status_code, 403)
+                r_b2 = math_cli.post(
+                    f'/api/teacher/coins/{tx.id}/edit/',
+                    data=json.dumps({'amount': 1, 'reason': 'Darsda faol', 'portal': 'teacher'}),
+                    content_type='application/json',
+                )
+                self.assertEqual(r_b2.status_code, 403)
+
+
+
+
+
+
