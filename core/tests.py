@@ -2096,7 +2096,15 @@ class LessonScheduleEnforcementTests(TestCase):
             self.assertEqual(r_cls_blk.status_code, 403)
 
         # 09:00:00 -> ALLOWED (exact start), both single and whole-class award work
-        with patch('core.schedule_utils.timezone.now', return_value=mon_090000):
+        with patch('core.schedule_utils.timezone.now', return_value=mon_090000), patch('core.views.timezone.now', return_value=mon_090000):
+            r_sched = math_cli.get('/api/teacher/schedule/')
+            self.assertEqual(r_sched.status_code, 200)
+            sdata = r_sched.json()
+            self.assertIn('8-A-UZ', sdata['myClasses'])
+            self.assertGreaterEqual(len(sdata['todayDetailedLessons']), 1)
+            self.assertTrue(any(l['className'] == '8-A-UZ' and l['isLiveNow'] for l in sdata['todayDetailedLessons']))
+            self.assertTrue(any(d['isToday'] for d in sdata['weeklySchedule']))
+
             r_start = math_cli.post(
                 '/api/coins/award/',
                 data=json.dumps({'studentId': self.st_8uz.id, 'amount': 1, 'reason': 'Darsda faol', 'portal': 'teacher'}),

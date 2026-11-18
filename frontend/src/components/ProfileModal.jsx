@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { api } from '../api/endpoints';
-import { localizeSubject } from '../i18n/portalUtils';
-import { Eye, EyeOff, Camera, Trash2, Lock, ShieldCheck } from 'lucide-react';
+import { localizeSubject, localizeGrade } from '../i18n/portalUtils';
+import { Eye, EyeOff, Camera, Trash2, Lock, ShieldCheck, Calendar } from 'lucide-react';
 
 const DEFAULT_SUBJECTS = [
   'Matematika',
@@ -34,6 +34,7 @@ export default function ProfileModal() {
   const [avatarFile, setAvatarFile] = useState(null);
   const [clearAvatar, setClearAvatar] = useState(false);
   const [subjectsList, setSubjectsList] = useState(DEFAULT_SUBJECTS);
+  const [teacherSched, setTeacherSched] = useState(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -45,8 +46,11 @@ export default function ProfileModal() {
           }
         })
         .catch(() => {});
+      api.teacher.getSchedule()
+        .then((res) => setTeacherSched(res || null))
+        .catch(() => setTeacherSched(null));
     }
-  }, [profileModalOpen, user?.role]);
+  }, [profileModalOpen, user?.role, language]);
 
   useEffect(() => {
     if (user && profileModalOpen) {
@@ -348,6 +352,58 @@ export default function ProfileModal() {
               )}
             />
           </div>
+
+          {/* Teacher Quick Today's Lessons Card */}
+          {user.role === 'teacher' && teacherSched && (
+            <div className="p-3 rounded-xl bg-slate-900/80 border border-cyan-500/30 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-extrabold text-cyan-300 flex items-center gap-1.5">
+                  <Calendar size={14} />
+                  {tr('Bugungi darslarim', 'Мои уроки на сегодня')}
+                  {teacherSched.currentDayLabel ? ` (${teacherSched.currentDayLabel})` : ''}
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-200 border border-cyan-500/30 font-bold">
+                  {Array.isArray(teacherSched.todayDetailedLessons) ? teacherSched.todayDetailedLessons.length : 0}{' '}
+                  {tr('dars', 'ур.')} • {Array.isArray(teacherSched.myClasses) ? teacherSched.myClasses.length : 0}{' '}
+                  {tr('sinf', 'кл.')}
+                </span>
+              </div>
+
+              {Array.isArray(teacherSched.todayDetailedLessons) && teacherSched.todayDetailedLessons.length > 0 ? (
+                <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+                  {teacherSched.todayDetailedLessons.map((l, idx) => (
+                    <div
+                      key={`modal-sched-${l.id || idx}`}
+                      className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] ${
+                        l.isLiveNow
+                          ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-100'
+                          : 'bg-slate-950/70 border-slate-800 text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-500/35 font-extrabold text-[10px]">
+                          {localizeGrade(l.className, language)}
+                        </span>
+                        <span className="font-bold truncate">{localizeSubject(l.subject, language)}</span>
+                        {l.isLiveNow && (
+                          <span className="text-[9px] px-1.5 rounded bg-emerald-500/30 text-emerald-200 border border-emerald-400 font-black">
+                            LIVE
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-mono text-[10px] text-slate-300 whitespace-nowrap">{l.timeRange}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-[11px] text-slate-400">
+                  {teacherSched.scheduleStatus?.nextLesson
+                    ? `${tr('Bugun dars yo‘q. Keyingi dars:', 'Сегодня уроков нет. Следующий урок:')} ${teacherSched.scheduleStatus.nextLesson.dayLabel} ${teacherSched.scheduleStatus.nextLesson.timeRange} (${localizeGrade(teacherSched.scheduleStatus.nextLesson.className, language)})`
+                    : tr('Bugun darsingiz belgilanmagan.', 'На сегодня уроков не запланировано.')}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Password update section */}
           {isTutorRestricted ? (

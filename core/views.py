@@ -6826,31 +6826,51 @@ def api_teacher_schedule(request):
 
     user = request.user
     is_admin = is_admin_user(user)
+    local_now = timezone.localtime(timezone.now())
+    cur_day = local_now.weekday()
+    cur_time = local_now.time()
+
     all_slots = list(
         LessonSchedule.objects.select_related('school_class', 'teacher')
         .order_by('day_of_week', 'start_time', 'lesson_number', 'class_name')
     )
     my_slots = all_slots if is_admin else [s for s in all_slots if teacher_matches_lesson(user, s)]
 
+    def _cls_sort_key(cname):
+        m = re.match(r'^\s*(\d+)', str(cname or ''))
+        return (int(m.group(1)) if m else 999, str(cname or '').lower())
+
+    my_classes_set = set()
     weekly_by_day = {}
+    today_detailed = []
     for s in my_slots:
         d_idx = s.day_of_week
+        cname = s.school_class.name if s.school_class else s.class_name
+        my_classes_set.add(cname)
+        is_live = (d_idx == cur_day and s.start_time <= cur_time <= s.end_time)
+        slot_data = serialize_lesson_slot(s, lang=lang)
+        slot_data['isLiveNow'] = is_live
+        slot_data['isToday'] = (d_idx == cur_day)
+
         if d_idx not in weekly_by_day:
             weekly_by_day[d_idx] = {
                 'dayOfWeek': d_idx,
                 'dayLabel': day_label_for_lang(d_idx, lang=lang),
+                'isToday': (d_idx == cur_day),
                 'lessons': [],
             }
-        weekly_by_day[d_idx]['lessons'].append(serialize_lesson_slot(s, lang=lang))
+        weekly_by_day[d_idx]['lessons'].append(slot_data)
+        if d_idx == cur_day:
+            today_detailed.append(slot_data)
 
     schedule_status = (
         {
             'hasSchedule': len(all_slots) > 0,
             'enforced': False,
             'allowed': True,
-            'currentDay': timezone.localtime(timezone.now()).weekday(),
-            'currentDayLabel': day_label_for_lang(timezone.localtime(timezone.now()).weekday(), lang=lang),
-            'currentTime': timezone.localtime(timezone.now()).strftime('%H:%M'),
+            'currentDay': cur_day,
+            'currentDayLabel': day_label_for_lang(cur_day, lang=lang),
+            'currentTime': local_now.strftime('%H:%M'),
             'teacherSubject': user.subject or '',
             'activeClasses': [],
             'activeLessons': [],
@@ -6865,6 +6885,11 @@ def api_teacher_schedule(request):
     return JsonResponse({
         'scheduleStatus': schedule_status,
         'weeklySchedule': [weekly_by_day[d] for d in sorted(weekly_by_day.keys())],
+        'todayDetailedLessons': today_detailed,
+        'myClasses': sorted(my_classes_set, key=_cls_sort_key),
+        'currentDay': cur_day,
+        'currentDayLabel': day_label_for_lang(cur_day, lang=lang),
+        'currentTime': local_now.strftime('%H:%M'),
         'totalMyLessons': len(my_slots),
     })
 

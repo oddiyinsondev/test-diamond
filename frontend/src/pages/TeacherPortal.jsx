@@ -49,9 +49,14 @@ import {
   Layers,
   Target,
   GraduationCap,
+  School,
+  LayoutGrid,
+  List,
+  RefreshCw,
+  ArrowRight,
 } from 'lucide-react';
 
-const TEACHER_VALID_TABS = ['tests', 'students', 'stats', 'results', 'coins', 'profile'];
+const TEACHER_VALID_TABS = ['tests', 'students', 'stats', 'results', 'coins', 'schedule', 'profile'];
 const testMatchesClassFilter = (t, selectedClass, includeAllTests = true) => {
   if (!selectedClass || selectedClass === 'all') return true;
   const raw = (t?.grade || '').trim();
@@ -225,6 +230,14 @@ export default function TeacherPortal() {
   const [studentViewSearch, setStudentViewSearch] = useState('');
   const [loadingStudentView, setLoadingStudentView] = useState(false);
 
+  // Teacher Personal Lesson Schedule (Dars Jadvalim — shown in both 'schedule' & 'profile' tabs)
+  const [teacherScheduleData, setTeacherScheduleData] = useState(null);
+  const [loadingTeacherSchedule, setLoadingTeacherSchedule] = useState(false);
+  const [teacherSchedViewMode, setTeacherSchedViewMode] = useState('classes'); // 'classes' | 'days'
+  const [teacherSchedDayFilter, setTeacherSchedDayFilter] = useState('today'); // 'today' | 'all' | '0'..'6'
+  const [teacherSchedClassFilter, setTeacherSchedClassFilter] = useState('all');
+  const [teacherSchedSearch, setTeacherSchedSearch] = useState('');
+
   const isTeacher = user && (user.role === 'teacher' || user.role === 'admin');
   // Teacher Portal har doim o'qituvchi qoidalari asosida ishlaydi (har bir sinf uchun kuniga max 5 coin, faqat dars faolligi)
   const isTeacherRestricted = true;
@@ -282,6 +295,32 @@ export default function TeacherPortal() {
     }, 60000);
     return () => clearInterval(timer);
   }, [isTeacher, activeTab, coinSelectedGrade]);
+
+  // Load Teacher Personal Schedule (used in sidebar badge, 'schedule' tab, and 'profile' tab)
+  const loadTeacherSchedule = async (silent = false) => {
+    if (!isTeacher) return;
+    if (!silent) setLoadingTeacherSchedule(true);
+    try {
+      const res = await api.teacher.getSchedule();
+      setTeacherScheduleData(res || null);
+    } catch (err) {
+      console.error('Error loading teacher schedule:', err);
+    } finally {
+      if (!silent) setLoadingTeacherSchedule(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isTeacher) return;
+    loadTeacherSchedule();
+  }, [isTeacher, user?.id, user?.subject, language]);
+
+  useEffect(() => {
+    if (!isTeacher || (activeTab !== 'schedule' && activeTab !== 'profile')) return;
+    loadTeacherSchedule(true);
+    const timer = setInterval(() => loadTeacherSchedule(true), 60000);
+    return () => clearInterval(timer);
+  }, [isTeacher, activeTab]);
 
   // Load read-only students directory when teacher opens 'students' tab
   useEffect(() => {
@@ -713,6 +752,7 @@ export default function TeacherPortal() {
       setProfileAvatarFile(null);
       setProfileClearAvatar(false);
       loadTeacherData();
+      loadTeacherSchedule(true);
     } catch (err) {
       showToast(err.message || tr("Profilni saqlashda xatolik!", 'Ошибка при сохранении профиля!'), 'error');
     } finally {
@@ -1339,6 +1379,654 @@ export default function TeacherPortal() {
     );
   }
 
+  const mySchedStatus = teacherScheduleData?.scheduleStatus || scheduleStatus || null;
+  const myWeeklyDays = Array.isArray(teacherScheduleData?.weeklySchedule) ? teacherScheduleData.weeklySchedule : [];
+  const myTodayDetailed = Array.isArray(teacherScheduleData?.todayDetailedLessons)
+    ? teacherScheduleData.todayDetailedLessons
+    : [];
+  const mySchedClasses = Array.isArray(teacherScheduleData?.myClasses) ? teacherScheduleData.myClasses : [];
+  const myLiveLessonsCount = myTodayDetailed.filter((l) => l.isLiveNow).length;
+  const myTotalSchedLessons = Number(teacherScheduleData?.totalMyLessons ?? 0);
+
+  const openCoinsForClass = (clsName) => {
+    if (!clsName) return;
+    handleSelectCoinGrade(clsName, true);
+    setActiveTab('coins');
+  };
+
+  const renderTeacherScheduleSection = (inProfile = false) => {
+    const todayDayBlock = myWeeklyDays.find((d) => d.isToday) || null;
+    const effectiveDayFilter =
+      teacherSchedDayFilter === 'today'
+        ? todayDayBlock
+          ? String(todayDayBlock.dayOfWeek)
+          : 'all'
+        : teacherSchedDayFilter;
+    const isTodayEmptyFallback = teacherSchedDayFilter === 'today' && !todayDayBlock && myWeeklyDays.length > 0;
+    const rawQ = teacherSchedSearch.trim().toLowerCase();
+
+    const filteredDayBlocks = myWeeklyDays
+      .filter((d) => (effectiveDayFilter === 'all' ? true : String(d.dayOfWeek) === String(effectiveDayFilter)))
+      .map((d) => ({
+        ...d,
+        lessons: (d.lessons || []).filter((l) => {
+          if (teacherSchedClassFilter !== 'all' && l.className !== teacherSchedClassFilter) return false;
+          if (rawQ) {
+            const hay = `${l.className || ''} ${localizeGrade(l.className || '', language)} ${l.subject || ''} ${localizeSubject(l.subject || '', language)} ${l.rawSubject || ''} ${l.timeRange || ''} ${d.dayLabel || ''}`.toLowerCase();
+            return hay.includes(rawQ);
+          }
+          return true;
+        }),
+      }))
+      .filter((d) => d.lessons.length > 0);
+
+    // Group filtered lessons into distinct per-class cards
+    const classOrderIndex = new Map(mySchedClasses.map((c, i) => [c, i]));
+    const classMap = new Map();
+    filteredDayBlocks.forEach((d) => {
+      d.lessons.forEach((l) => {
+        const key = l.className || '-';
+        if (!classMap.has(key)) {
+          classMap.set(key, {
+            className: key,
+            lessons: [],
+            hasLiveNow: false,
+            todayCount: 0,
+            langTag: /uz\b/i.test(key) ? 'UZ' : /rus\b|класс/i.test(key) ? 'RU' : null,
+          });
+        }
+        const entry = classMap.get(key);
+        entry.lessons.push({
+          ...l,
+          dayOfWeek: d.dayOfWeek,
+          dayLabel: d.dayLabel,
+          isToday: Boolean(d.isToday),
+        });
+        if (l.isLiveNow) entry.hasLiveNow = true;
+        if (d.isToday) entry.todayCount += 1;
+      });
+    });
+    const teacherClassCards = Array.from(classMap.values()).sort(
+      (a, b) => (classOrderIndex.get(a.className) ?? 999) - (classOrderIndex.get(b.className) ?? 999)
+    );
+
+    const hasFilters = teacherSchedClassFilter !== 'all' || Boolean(rawQ);
+    const activeLiveClasses = Array.isArray(mySchedStatus?.activeClasses) ? mySchedStatus.activeClasses : [];
+    const nextLesson = mySchedStatus?.nextLesson || null;
+
+    return (
+      <div className="space-y-4 animate-fade-in">
+        {/* Header & Live Status Banner */}
+        <div
+          className={`p-4 rounded-2xl border flex flex-col lg:flex-row lg:items-center justify-between gap-3 ${
+            myLiveLessonsCount > 0
+              ? 'bg-emerald-500/10 border-emerald-500/40'
+              : 'bg-slate-900/80 border-cyan-500/30'
+          }`}
+        >
+          <div className="space-y-1">
+            <h3 className="text-base font-extrabold text-white flex items-center gap-2 flex-wrap">
+              <Calendar className={myLiveLessonsCount > 0 ? 'text-emerald-400' : 'text-cyan-400'} size={20} />
+              <span>
+                {inProfile
+                  ? tr('Mening Dars Jadvalim & Bugungi Darslarim', 'Моё расписание и уроки на сегодня')
+                  : tr('Haftalik Dars Jadvalim & Bugungi Darslar', 'Моё недельное расписание и уроки на сегодня')}
+              </span>
+              {user?.subject && (
+                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/35 font-bold">
+                  {localizeSubject(user.subject, language)}
+                </span>
+              )}
+              {myLiveLessonsCount > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/25 text-emerald-200 border border-emerald-400 font-black animate-pulse">
+                  ● LIVE ({activeLiveClasses.map((c) => localizeGrade(c, language)).join(', ')})
+                </span>
+              )}
+            </h3>
+            <p className="text-xs text-slate-300">
+              {teacherScheduleData?.currentDayLabel ? (
+                <>
+                  🕒 <strong className="text-white">{teacherScheduleData.currentDayLabel}, {teacherScheduleData.currentTime}</strong>
+                  {' • '}
+                  {tr('Jami darslar:', 'Всего уроков:')} <strong className="text-cyan-300">{myTotalSchedLessons}</strong>
+                  {' • '}
+                  {tr('Sinflar:', 'Классов:')} <strong className="text-emerald-300">{mySchedClasses.length}</strong>
+                  {' • '}
+                  {tr('Bugun:', 'Сегодня:')} <strong className="text-amber-300">{myTodayDetailed.length}</strong> {tr('ta dars', 'ур.')}
+                </>
+              ) : (
+                tr("O'qituvchining barcha sinflardagi haftalik va bugungi dars jadvali", 'Недельное и сегодняшнее расписание уроков учителя по всем классам')
+              )}
+            </p>
+            {mySchedStatus?.enforced && mySchedStatus?.message && (
+              <div className={`text-[11px] font-semibold ${mySchedStatus.allowed ? 'text-emerald-300' : 'text-amber-300'}`}>
+                {mySchedStatus.allowed ? '✅ ' : '🔒 '}
+                {mySchedStatus.message}
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {inProfile && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('schedule')}
+                className="btn btn-secondary btn-sm text-xs font-bold flex items-center gap-1.5"
+              >
+                <Calendar size={14} /> {tr("To'liq bo'limda ochish", 'Открыть отдельно')}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => loadTeacherSchedule(false)}
+              disabled={loadingTeacherSchedule}
+              className="btn btn-secondary btn-sm text-xs font-bold flex items-center gap-1.5"
+            >
+              <RefreshCw size={13} className={loadingTeacherSchedule ? 'animate-spin' : ''} />
+              <span>{tr('Yangilash', 'Обновить')}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Today's Lessons Spotlight */}
+        <div className="p-4 rounded-2xl bg-slate-900/75 border border-emerald-500/30 space-y-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+              <h4 className="text-sm font-extrabold text-white">
+                {tr('Bugungi darslarim', 'Мои уроки на сегодня')}
+                {teacherScheduleData?.currentDayLabel && (
+                  <span className="text-emerald-300 ml-1.5">({teacherScheduleData.currentDayLabel})</span>
+                )}
+              </h4>
+            </div>
+            <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/35">
+              {myTodayDetailed.length} {tr('ta dars', 'уроков')}
+            </span>
+          </div>
+
+          {myTodayDetailed.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {myTodayDetailed.map((lesson, idx) => (
+                <div
+                  key={`today-${lesson.id || idx}-${lesson.className}-${lesson.lessonNumber}`}
+                  className={`p-3 rounded-xl border flex flex-col justify-between gap-2.5 transition-all ${
+                    lesson.isLiveNow
+                      ? 'bg-emerald-500/15 border-emerald-400 shadow-md shadow-emerald-500/15'
+                      : 'bg-slate-950/70 border-slate-800 hover:border-cyan-500/45'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`w-7 h-7 rounded-lg text-xs font-black flex items-center justify-center flex-shrink-0 ${
+                          lesson.isLiveNow
+                            ? 'bg-emerald-500 text-slate-950'
+                            : 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
+                        }`}
+                      >
+                        {lesson.lessonNumber}
+                      </span>
+                      <div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="px-2 py-0.5 rounded-md bg-cyan-500/20 text-cyan-200 border border-cyan-400/40 text-xs font-black">
+                            🏫 {localizeGrade(lesson.className, language)}
+                          </span>
+                          {lesson.isLiveNow && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 border border-emerald-400 font-black animate-pulse">
+                              ● LIVE
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs font-bold text-white mt-1">
+                          {localizeSubject(lesson.subject, language)}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="font-mono text-[11px] font-bold text-slate-300 whitespace-nowrap">
+                      {lesson.timeRange}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => openCoinsForClass(lesson.className)}
+                    className={`w-full py-1.5 px-2.5 rounded-lg text-[11px] font-extrabold flex items-center justify-center gap-1.5 transition-all ${
+                      lesson.isLiveNow
+                        ? 'bg-emerald-500 text-slate-950 hover:bg-emerald-400'
+                        : 'bg-slate-900 text-cyan-300 border border-cyan-500/35 hover:bg-cyan-500/15'
+                    }`}
+                  >
+                    <Coins size={12} />
+                    <span>{lesson.isLiveNow ? tr('Hozir coin berish', 'Выдать койны сейчас') : tr('Sinfga o‘tish', 'Перейти к классу')}</span>
+                    <ArrowRight size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+              <div className="text-slate-300">
+                📅 {tr('Bugun sizning faningiz bo‘yicha dars belgilanmagan.', 'На сегодня по вашему предмету уроков не запланировано.')}
+              </div>
+              {nextLesson && (
+                <div className="px-2.5 py-1 rounded-lg bg-cyan-500/15 border border-cyan-500/35 text-cyan-200 font-bold whitespace-nowrap">
+                  ⏭️ {tr('Keyingi dars:', 'Следующий урок:')} {nextLesson.dayLabel} {nextLesson.timeRange} • {localizeGrade(nextLesson.className, language)}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Loading / Empty Schedule Guard */}
+        {loadingTeacherSchedule && !teacherScheduleData ? (
+          <div className="p-8 rounded-2xl bg-slate-900/60 border border-slate-800 flex items-center justify-center gap-2 text-xs text-slate-400">
+            <Loader2 size={16} className="animate-spin text-cyan-400" />
+            <span>{tr('Dars jadvali yuklanmoqda...', 'Загрузка расписания...')}</span>
+          </div>
+        ) : myTotalSchedLessons === 0 ? (
+          <div className="p-8 rounded-2xl bg-slate-900/60 border border-dashed border-slate-700 text-center space-y-2">
+            <div className="text-sm font-bold text-white">
+              {tr("Sizning faningiz bo'yicha dars jadvali topilmadi", 'Расписание по вашему предмету не найдено')}
+            </div>
+            <p className="text-xs text-slate-400 max-w-md mx-auto">
+              {tr(
+                "Administrator ish rejani (Excel jadvalni) yuklaganidan so'ng yoki profilingizdagi fan nomi jadvalga mos kelganida barcha darslaringiz shu yerda ko'rinadi.",
+                'После загрузки расписания администратором все ваши уроки автоматически отобразятся здесь.'
+              )}
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Powerful Filter Bar */}
+            <div className="space-y-3 bg-slate-900/70 p-3.5 rounded-2xl border border-slate-800">
+              {/* Day Pills + View Mode Toggle */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {todayDayBlock && (
+                    <button
+                      type="button"
+                      onClick={() => setTeacherSchedDayFilter('today')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-extrabold border transition-all flex items-center gap-1.5 ${
+                        teacherSchedDayFilter === 'today' || String(teacherSchedDayFilter) === String(todayDayBlock.dayOfWeek)
+                          ? 'bg-emerald-500/25 text-emerald-200 border-emerald-400'
+                          : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/35 hover:bg-emerald-500/20'
+                      }`}
+                    >
+                      <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                      <span>{tr('Bugun', 'Сегодня')} ({todayDayBlock.dayLabel})</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setTeacherSchedDayFilter('all')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                      effectiveDayFilter === 'all'
+                        ? 'bg-cyan-500/20 text-cyan-200 border-cyan-400'
+                        : 'bg-slate-950/60 text-slate-300 border-slate-800 hover:border-slate-600'
+                    }`}
+                  >
+                    {tr('Barcha kunlar', 'Все дни')} ({myWeeklyDays.length})
+                  </button>
+
+                  {myWeeklyDays.map((d) => {
+                    if (d.isToday) return null;
+                    const active = teacherSchedDayFilter !== 'today' && String(teacherSchedDayFilter) === String(d.dayOfWeek);
+                    return (
+                      <button
+                        key={d.dayOfWeek}
+                        type="button"
+                        onClick={() => setTeacherSchedDayFilter(String(d.dayOfWeek))}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                          active
+                            ? 'bg-cyan-500/20 text-cyan-200 border-cyan-400'
+                            : 'bg-slate-950/60 text-slate-300 border-slate-800 hover:border-slate-600'
+                        }`}
+                      >
+                        {d.dayLabel}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="inline-flex items-center p-1 rounded-xl bg-slate-950/80 border border-slate-800 self-start md:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => setTeacherSchedViewMode('classes')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                      teacherSchedViewMode === 'classes'
+                        ? 'bg-cyan-500/25 text-cyan-200 border border-cyan-500/40'
+                        : 'text-slate-400 hover:text-white border border-transparent'
+                    }`}
+                  >
+                    <LayoutGrid size={13} />
+                    <span>{tr("Sinflar bo'yicha", 'По классам')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTeacherSchedViewMode('days')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                      teacherSchedViewMode === 'days'
+                        ? 'bg-cyan-500/25 text-cyan-200 border border-cyan-500/40'
+                        : 'text-slate-400 hover:text-white border border-transparent'
+                    }`}
+                  >
+                    <List size={13} />
+                    <span>{tr("Kunlar bo'yicha", 'По дням')}</span>
+                  </button>
+                </div>
+              </div>
+
+              {isTodayEmptyFallback && (
+                <div className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-1.5">
+                  ℹ️ {tr('Bugun darsingiz yo‘q — barcha haftalik darslaringiz ko‘rsatilmoqda.', 'Сегодня уроков нет — показано расписание на всю неделю.')}
+                </div>
+              )}
+
+              {/* Quick Class Filter Chips */}
+              <div className="pt-2 border-t border-slate-800/80">
+                <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center justify-between">
+                  <span>🏫 {tr('Sinflarim bo‘yicha filtr', 'Фильтр по моим классам')}</span>
+                  <span className="text-cyan-300">
+                    {teacherClassCards.length}/{mySchedClasses.length} {tr('sinf', 'кл.')}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setTeacherSchedClassFilter('all')}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold border transition-all ${
+                      teacherSchedClassFilter === 'all'
+                        ? 'bg-cyan-500/20 text-cyan-200 border-cyan-400'
+                        : 'bg-slate-950/70 text-slate-300 border-slate-800 hover:border-slate-600'
+                    }`}
+                  >
+                    {tr('Barcha sinflar', 'Все классы')} ({mySchedClasses.length})
+                  </button>
+                  {mySchedClasses.map((cls) => {
+                    const selected = teacherSchedClassFilter === cls;
+                    const isUz = /uz\b/i.test(cls);
+                    return (
+                      <button
+                        key={cls}
+                        type="button"
+                        onClick={() => setTeacherSchedClassFilter(selected ? 'all' : cls)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
+                          selected
+                            ? 'bg-cyan-500/25 text-white border-cyan-400 shadow-sm shadow-cyan-500/20'
+                            : isUz
+                            ? 'bg-emerald-500/10 text-emerald-200 border-emerald-500/30 hover:border-emerald-400'
+                            : 'bg-slate-950/70 text-slate-200 border-slate-700/80 hover:border-cyan-500/50'
+                        }`}
+                      >
+                        {localizeGrade(cls, language)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Search Input */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-2 border-t border-slate-800/80">
+                <div className="input-with-icon flex-1">
+                  <Search size={14} className="input-icon" />
+                  <input
+                    type="text"
+                    className="clean-input text-xs"
+                    placeholder={tr('Sinf, kun yoki vaqt qidirish (masalan: 8-A-UZ, 10:05, Chorshanba)...', 'Поиск класса, дня или времени (напр.: 8-A-UZ, 10:05, Среда)...')}
+                    value={teacherSchedSearch}
+                    onChange={(e) => setTeacherSchedSearch(e.target.value)}
+                  />
+                </div>
+                {hasFilters && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTeacherSchedClassFilter('all');
+                      setTeacherSchedSearch('');
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-500/15 text-rose-300 border border-rose-500/35 hover:bg-rose-500/25 whitespace-nowrap"
+                  >
+                    {tr('Filtrlarni tozalash', 'Сбросить')}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Filtered Results */}
+            {teacherClassCards.length === 0 || filteredDayBlocks.length === 0 ? (
+              <div className="p-8 rounded-2xl bg-slate-900/60 border border-slate-800 text-center space-y-2.5">
+                <div className="text-sm font-bold text-white">
+                  {tr('Tanlangan filtr bo‘yicha dars topilmadi', 'По выбранному фильтру уроков не найдено')}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTeacherSchedDayFilter('all');
+                    setTeacherSchedClassFilter('all');
+                    setTeacherSchedSearch('');
+                  }}
+                  className="btn btn-diamond-cyan btn-xs font-bold"
+                >
+                  {tr("Barcha darslarimni ko'rsatish", 'Показать все мои уроки')}
+                </button>
+              </div>
+            ) : teacherSchedViewMode === 'classes' ? (
+              /* SEPARATED PER-CLASS CARDS */
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
+                {teacherClassCards.map((card) => (
+                  <div
+                    key={card.className}
+                    className={`rounded-2xl border overflow-hidden flex flex-col transition-all ${
+                      card.hasLiveNow
+                        ? 'bg-slate-900/90 border-emerald-500/55 shadow-lg shadow-emerald-500/10'
+                        : card.langTag === 'UZ'
+                        ? 'bg-slate-900/80 border-cyan-500/35 hover:border-cyan-400/60'
+                        : 'bg-slate-900/80 border-indigo-500/35 hover:border-indigo-400/60'
+                    }`}
+                  >
+                    <div
+                      className={`px-3.5 py-2.5 border-b flex items-center justify-between gap-2 ${
+                        card.hasLiveNow
+                          ? 'bg-emerald-500/15 border-emerald-500/35'
+                          : card.langTag === 'UZ'
+                          ? 'bg-cyan-500/10 border-cyan-500/25'
+                          : 'bg-indigo-500/10 border-indigo-500/25'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div
+                          className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 border ${
+                            card.hasLiveNow
+                              ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300'
+                              : card.langTag === 'UZ'
+                              ? 'bg-cyan-500/20 border-cyan-400/45 text-cyan-300'
+                              : 'bg-indigo-500/20 border-indigo-400/45 text-indigo-300'
+                          }`}
+                        >
+                          <School size={15} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <h4 className="text-sm font-black text-white truncate">
+                              {localizeGrade(card.className, language)}
+                            </h4>
+                            {card.langTag && (
+                              <span
+                                className={`text-[9px] px-1.5 py-0.5 rounded font-black border ${
+                                  card.langTag === 'UZ'
+                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                    : 'bg-indigo-500/20 text-indigo-200 border-indigo-500/40'
+                                }`}
+                              >
+                                {card.langTag}
+                              </span>
+                            )}
+                            {card.hasLiveNow && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-200 border border-emerald-400 font-black animate-pulse">
+                                ● LIVE
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-semibold">
+                            {card.lessons.length} {tr('ta dars', 'ур.')}
+                            {card.todayCount > 0 && ` • ${tr('Bugun', 'Сегодня')}: ${card.todayCount}`}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => openCoinsForClass(card.className)}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold flex items-center gap-1 flex-shrink-0 transition-all ${
+                          card.hasLiveNow
+                            ? 'bg-emerald-500 text-slate-950 hover:bg-emerald-400'
+                            : 'bg-slate-950/80 text-cyan-300 border border-cyan-500/35 hover:bg-cyan-500/15'
+                        }`}
+                      >
+                        <Coins size={11} />
+                        <span>{tr('Coin', 'Койны')}</span>
+                      </button>
+                    </div>
+
+                    <div className="p-3 space-y-1.5 flex-1">
+                      {card.lessons.map((l, idx) => (
+                        <div
+                          key={`${card.className}-${l.dayOfWeek}-${l.lessonNumber}-${idx}`}
+                          className={`flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl border text-xs ${
+                            l.isLiveNow
+                              ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-100'
+                              : l.isToday
+                              ? 'bg-cyan-500/10 border-cyan-500/30 text-slate-100'
+                              : 'bg-slate-950/65 border-slate-800/90 text-slate-200'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className={`w-5 h-5 rounded-md text-[10px] font-black flex items-center justify-center flex-shrink-0 ${
+                                l.isLiveNow
+                                  ? 'bg-emerald-500 text-slate-950'
+                                  : 'bg-slate-800 text-cyan-300'
+                              }`}
+                            >
+                              {l.lessonNumber}
+                            </span>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className={`font-extrabold text-[11px] ${l.isToday ? 'text-emerald-300' : 'text-cyan-300'}`}>
+                                  {l.dayLabel}
+                                </span>
+                                {l.isToday && (
+                                  <span className="text-[9px] px-1.5 rounded-full bg-emerald-500/20 text-emerald-200 border border-emerald-500/40 font-bold">
+                                    {tr('Bugun', 'Сегодня')}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] font-bold text-white truncate">
+                                {localizeSubject(l.subject, language)}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <span className="font-mono text-[11px] font-bold text-slate-300">{l.timeRange}</span>
+                            {l.isLiveNow && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/30 text-emerald-200 border border-emerald-400 font-black">
+                                LIVE
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              /* DAY-BY-DAY VIEW */
+              <div className="space-y-3.5">
+                {filteredDayBlocks.map((dayBlock) => (
+                  <div
+                    key={dayBlock.dayOfWeek}
+                    className={`rounded-2xl border overflow-hidden ${
+                      dayBlock.isToday
+                        ? 'bg-slate-900/85 border-emerald-500/45'
+                        : 'bg-slate-900/70 border-slate-800'
+                    }`}
+                  >
+                    <div className="px-4 py-2.5 bg-slate-950/75 border-b border-slate-800 flex items-center justify-between">
+                      <div className="flex items-center gap-2 font-extrabold text-sm text-white">
+                        <Calendar size={15} className={dayBlock.isToday ? 'text-emerald-400' : 'text-cyan-400'} />
+                        <span>{dayBlock.dayLabel}</span>
+                        {dayBlock.isToday && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold">
+                            {tr('Bugun', 'Сегодня')}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-slate-400 font-semibold">
+                        {dayBlock.lessons.length} {tr('ta dars', 'уроков')}
+                      </span>
+                    </div>
+
+                    <div className="p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                      {dayBlock.lessons.map((l, idx) => (
+                        <div
+                          key={`${dayBlock.dayOfWeek}-${l.className}-${l.lessonNumber}-${idx}`}
+                          className={`p-3 rounded-xl border flex items-center justify-between gap-2 ${
+                            l.isLiveNow
+                              ? 'bg-emerald-500/20 border-emerald-400 text-emerald-100'
+                              : 'bg-slate-950/70 border-slate-800 text-slate-200'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span
+                              className={`w-7 h-7 rounded-lg text-xs font-black flex items-center justify-center flex-shrink-0 ${
+                                l.isLiveNow ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-cyan-300'
+                              }`}
+                            >
+                              {l.lessonNumber}
+                            </span>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="px-2 py-0.5 rounded-md bg-cyan-500/15 text-cyan-200 border border-cyan-500/35 text-[11px] font-black">
+                                  🏫 {localizeGrade(l.className, language)}
+                                </span>
+                                {l.isLiveNow && (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/30 text-emerald-200 border border-emerald-400 font-black">
+                                    LIVE
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs font-bold text-white mt-0.5 truncate">
+                                {localizeSubject(l.subject, language)}
+                              </div>
+                              <div className="font-mono text-[11px] text-slate-400">{l.timeRange}</div>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => openCoinsForClass(l.className)}
+                            className="p-2 rounded-lg bg-slate-900 border border-cyan-500/35 text-cyan-300 hover:bg-cyan-500/15 flex-shrink-0"
+                            title={tr('Sinf coin bo‘limiga o‘tish', 'Перейти к койнам класса')}
+                          >
+                            <Coins size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="teacher-portal-wrapper space-y-6 pb-12">
       {/* Header */}
@@ -1563,6 +2251,28 @@ export default function TeacherPortal() {
               <span className="portal-nav-label">{tr('Dars Faolligi & Coinlar', 'Активность и койны')}</span>
               <span className="portal-nav-badge">
                 {isTeacherRestricted ? `${coinsRemainingToday}/${maxCoinsPerDay}` : tr('💎 Coin', '💎 Койны')}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className={`portal-nav-btn ${activeTab === 'schedule' ? 'active' : ''}`}
+              onClick={() => setActiveTab('schedule')}
+            >
+              <div className="portal-nav-icon">
+                <Calendar size={18} />
+              </div>
+              <span className="portal-nav-label">{tr('Dars Jadvalim', 'Моё расписание')}</span>
+              <span
+                className={`portal-nav-badge ${
+                  myLiveLessonsCount > 0 ? '!bg-emerald-500/25 !text-emerald-200 !border-emerald-400' : ''
+                }`}
+              >
+                {myLiveLessonsCount > 0
+                  ? '● LIVE'
+                  : myTodayDetailed.length > 0
+                  ? `${myTodayDetailed.length} ${tr('bugun', 'сег.')}`
+                  : `${myTotalSchedLessons}`}
               </span>
             </button>
 
@@ -4620,8 +5330,14 @@ export default function TeacherPortal() {
                   </div>
                 </form>
               </div>
+
+              {/* Teacher's Personal Lesson Schedule directly inside Profile tab */}
+              {renderTeacherScheduleSection(true)}
             </div>
           )}
+
+          {/* TAB: TEACHER PERSONAL SCHEDULE (DARS JADVALIM) */}
+          {activeTab === 'schedule' && renderTeacherScheduleSection(false)}
         </main>
       </div>
 
