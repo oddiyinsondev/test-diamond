@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { api } from '../api/endpoints';
 import ConfirmModal from '../components/ConfirmModal';
+import MobilePortalNav from '../components/MobilePortalNav';
 import { localizeGrade, localizeUserFullName } from '../i18n/portalUtils';
 import {
   UserCheck,
@@ -2196,6 +2197,43 @@ export default function TutorPortal() {
         danger={confirmModalState.danger}
         onConfirm={confirmModalState.onConfirm}
         onCancel={() => setConfirmModalState((prev) => ({ ...prev, isOpen: false }))}
+      />
+
+      {/* Mobile Native Bottom Navigation */}
+      <MobilePortalNav
+        title={tr("Tyuter Bo'limlari", 'Разделы тьютора')}
+        menuLabel={tr("Bo'limlar", 'Разделы')}
+        accent="purple"
+        primaryItems={[
+          {
+            key: 'students',
+            label: tr("O'quvchilar Boshqaruvi", 'Управление учениками'),
+            shortLabel: tr("O'quvchilar", 'Ученики'),
+            icon: <Users size={19} />,
+            active: activeTab === 'students',
+            badge: students.length > 0 ? String(students.length) : '',
+            onClick: () => setActiveTab('students'),
+          },
+          {
+            key: 'coins',
+            label: tr('Sinf Coinlari & Hamyon', 'Койны и кошелёк'),
+            shortLabel: tr('Coinlar', 'Койны'),
+            icon: <Wallet size={19} />,
+            active: activeTab === 'coins',
+            badge: String(summary.tutorCoins ?? 0),
+            highlight: 'coin',
+            onClick: () => setActiveTab('coins'),
+          },
+          {
+            key: 'profile',
+            label: tr('Mening Profilim', 'Мой профиль'),
+            shortLabel: tr('Profil', 'Профиль'),
+            icon: <User size={19} />,
+            active: activeTab === 'profile',
+            onClick: () => setActiveTab('profile'),
+          },
+        ]}
+        allItems={[]}
       />
     </div>
   );

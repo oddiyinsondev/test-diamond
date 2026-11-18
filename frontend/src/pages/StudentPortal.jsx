@@ -11,6 +11,7 @@ import {
 } from '../i18n/portalUtils';
 import MathRenderer from '../components/MathRenderer';
 import ConfirmModal from '../components/ConfirmModal';
+import MobilePortalNav from '../components/MobilePortalNav';
 import confetti from 'canvas-confetti';
 import {
   GraduationCap,
@@ -1556,6 +1557,44 @@ export default function StudentPortal() {
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
       />
+
+      {/* Mobile Native Bottom Navigation (hidden while actively taking a test) */}
+      {activeTab !== 'runner' && (
+        <MobilePortalNav
+          title={tr("O'quvchi Bo'limlari", 'Разделы ученика')}
+          menuLabel={tr("Bo'limlar", 'Разделы')}
+          accent="cyan"
+          primaryItems={[
+            {
+              key: 'tests',
+              label: tr('Mavjud Testlar', 'Доступные тесты'),
+              shortLabel: tr('Testlar', 'Тесты'),
+              icon: <ListCheck size={19} />,
+              active: activeTab === 'tests',
+              badge: availableTests.length > 0 ? String(availableTests.length) : '',
+              onClick: () => setActiveTab('tests'),
+            },
+            {
+              key: 'leaderboard',
+              label: tr('Sinfim Reytingi', 'Рейтинг класса'),
+              shortLabel: tr('Reyting', 'Рейтинг'),
+              icon: <Trophy size={19} />,
+              active: activeTab === 'leaderboard',
+              highlight: 'coin',
+              onClick: () => setActiveTab('leaderboard'),
+            },
+            {
+              key: 'analytics',
+              label: tr('Natijalarim & Tahlil', 'Мои результаты и анализ'),
+              shortLabel: tr('Natijalar', 'Результаты'),
+              icon: <BarChart2 size={19} />,
+              active: activeTab === 'analytics',
+              onClick: () => setActiveTab('analytics'),
+            },
+          ]}
+          allItems={[]}
+        />
+      )}
     </div>
   );
 }

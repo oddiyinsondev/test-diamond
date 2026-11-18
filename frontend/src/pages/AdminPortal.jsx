@@ -6,6 +6,7 @@ import { api } from '../api/endpoints';
 import ConfirmModal from '../components/ConfirmModal';
 import AdminTestBuilder from '../components/AdminTestBuilder';
 import MathRenderer from '../components/MathRenderer';
+import MobilePortalNav from '../components/MobilePortalNav';
 import {
   localizeSubject,
   localizeGrade,
@@ -9200,6 +9201,110 @@ export default function AdminPortal() {
         onConfirm={confirmModalState.onConfirm}
         onCancel={() => setConfirmModalState((prev) => ({ ...prev, isOpen: false }))}
       />
+
+      {/* Mobile Native Bottom Navigation & Full Sections Drawer */}
+      {(() => {
+        const unreadLeads = (Array.isArray(contactMessages) ? contactMessages : []).filter(
+          (m) => !(m.isContacted || m.is_contacted)
+        ).length;
+        const allItems = [
+          {
+            key: 'schedule',
+            label: tr('Ish Reja / Dars Jadvali', 'Расписание уроков'),
+            shortLabel: tr('Dars jadvali', 'Расписание'),
+            icon: <Calendar size={19} />,
+            active: activeTab === 'schedule',
+            badge: scheduleData?.effectiveEnforced ? tr('Faol', 'Акт.') : '',
+            highlight: scheduleData?.effectiveEnforced ? 'live' : undefined,
+            onClick: () => setActiveTab('schedule'),
+          },
+          {
+            key: 'coins',
+            label: tr('Coinlar & Reyting', 'Койны и рейтинг'),
+            shortLabel: tr('Coinlar', 'Койны'),
+            icon: <Coins size={19} />,
+            active: activeTab === 'coins',
+            highlight: 'coin',
+            onClick: () => setActiveTab('coins'),
+          },
+          {
+            key: 'students',
+            label: tr("O'quvchilar", 'Ученики'),
+            shortLabel: tr("O'quvchilar", 'Ученики'),
+            icon: <GraduationCap size={19} />,
+            active: activeTab === 'students',
+            badge: students.length > 0 ? String(students.length) : '',
+            onClick: () => setActiveTab('students'),
+          },
+          {
+            key: 'tests',
+            label: tr('Testlar Boshqaruvi', 'Управление тестами'),
+            shortLabel: tr('Testlar', 'Тесты'),
+            icon: <FileCheck2 size={19} />,
+            active: activeTab === 'tests' && testViewMode !== 'builder',
+            badge: adminTests.length > 0 ? String(adminTests.length) : '',
+            onClick: () => {
+              setActiveTab('tests');
+              setTestViewMode('list');
+              setEditingAdminTest(null);
+            },
+          },
+          {
+            key: 'new_test',
+            label: tr("Test & Savol Qo'shish", 'Создать тест и вопросы'),
+            shortLabel: tr("Qo'shish", 'Создать'),
+            icon: <Plus size={19} />,
+            active: activeTab === 'tests' && testViewMode === 'builder' && !editingAdminTest,
+            onClick: handleAdminNewTest,
+          },
+          {
+            key: 'teachers',
+            label: tr("O'qituvchilar", 'Учителя'),
+            shortLabel: tr('Ustozlar', 'Учителя'),
+            icon: <ChalkboardTeacher size={19} />,
+            active: activeTab === 'teachers',
+            badge: teachers.length > 0 ? String(teachers.length) : '',
+            onClick: () => setActiveTab('teachers'),
+          },
+          {
+            key: 'tutors',
+            label: tr('Tyuterlar', 'Тьюторы'),
+            shortLabel: tr('Tyuterlar', 'Тьюторы'),
+            icon: <UserCheck size={19} />,
+            active: activeTab === 'tutors',
+            badge: tutors.length > 0 ? String(tutors.length) : '',
+            onClick: () => setActiveTab('tutors'),
+          },
+          {
+            key: 'classes',
+            label: tr('Sinflar Boshqaruvi', 'Управление классами'),
+            shortLabel: tr('Sinflar', 'Классы'),
+            icon: <School size={19} />,
+            active: activeTab === 'classes',
+            badge: classesList.length > 0 ? String(classesList.length) : '',
+            onClick: () => setActiveTab('classes'),
+          },
+          {
+            key: 'showcase',
+            label: tr("Arizalar & Bog'lanish", 'Заявки и контакты'),
+            shortLabel: tr('Arizalar', 'Заявки'),
+            icon: <Mail size={19} />,
+            active: activeTab === 'showcase',
+            badge: unreadLeads > 0 ? String(unreadLeads) : '',
+            onClick: () => setActiveTab('showcase'),
+          },
+        ];
+        const primaryItems = [allItems[0], allItems[1], allItems[2], allItems[3]];
+        return (
+          <MobilePortalNav
+            title={tr("Administrator Bo'limlari", 'Разделы администратора')}
+            menuLabel={tr("Bo'limlar", 'Разделы')}
+            accent="amber"
+            primaryItems={primaryItems}
+            allItems={allItems}
+          />
+        );
+      })()}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { api } from '../api/endpoints';
 import MathRenderer from '../components/MathRenderer';
+import MobilePortalNav from '../components/MobilePortalNav';
 import {
   localizeSubject,
   localizeGrade,
@@ -5720,6 +5721,92 @@ export default function TeacherPortal() {
             </form>
           </div>
         </div>
+        );
+      })()}
+
+      {/* Mobile Native Bottom Navigation & Full Sections Drawer */}
+      {(() => {
+        const schedBadge =
+          myLiveLessonsCount > 0
+            ? 'LIVE'
+            : myTodayDetailed.length > 0
+            ? String(myTodayDetailed.length)
+            : '';
+        const coinBadge = isScheduleEnforced && activeScheduleClasses.length === 0
+          ? ''
+          : `${coinsRemainingToday}/${maxCoinsPerDay}`;
+        const allItems = [
+          {
+            key: 'schedule',
+            label: tr('Dars Jadvalim', 'Моё расписание'),
+            shortLabel: tr('Dars jadvali', 'Расписание'),
+            icon: <Calendar size={19} />,
+            active: activeTab === 'schedule',
+            badge: schedBadge,
+            highlight: myLiveLessonsCount > 0 ? 'live' : undefined,
+            onClick: () => setActiveTab('schedule'),
+          },
+          {
+            key: 'coins',
+            label: tr('Dars Faolligi & Coinlar', 'Активность и койны'),
+            shortLabel: tr('Coinlar', 'Койны'),
+            icon: <Coins size={19} />,
+            active: activeTab === 'coins',
+            badge: coinBadge,
+            highlight: 'coin',
+            onClick: () => setActiveTab('coins'),
+          },
+          {
+            key: 'tests',
+            label: tr('Fan Testlari', 'Тесты предмета'),
+            shortLabel: tr('Testlar', 'Тесты'),
+            icon: <FileCheck2 size={19} />,
+            active: activeTab === 'tests',
+            badge: tests.length > 0 ? String(tests.length) : '',
+            onClick: () => setActiveTab('tests'),
+          },
+          {
+            key: 'students',
+            label: tr("O'quvchilar", 'Ученики'),
+            shortLabel: tr("O'quvchilar", 'Ученики'),
+            icon: <GraduationCap size={19} />,
+            active: activeTab === 'students',
+            onClick: () => setActiveTab('students'),
+          },
+          {
+            key: 'stats',
+            label: tr('Statistika & Sinflar', 'Статистика и классы'),
+            shortLabel: tr('Statistika', 'Статистика'),
+            icon: <BarChart2 size={19} />,
+            active: activeTab === 'stats',
+            onClick: () => setActiveTab('stats'),
+          },
+          {
+            key: 'results',
+            label: tr('Natijalar Jurnali', 'Журнал результатов'),
+            shortLabel: tr('Natijalar', 'Результаты'),
+            icon: <Users size={19} />,
+            active: activeTab === 'results',
+            onClick: () => setActiveTab('results'),
+          },
+          {
+            key: 'profile',
+            label: tr('Mening Profilim', 'Мой профиль'),
+            shortLabel: tr('Profil', 'Профиль'),
+            icon: <User size={19} />,
+            active: activeTab === 'profile',
+            onClick: () => setActiveTab('profile'),
+          },
+        ];
+        const primaryItems = [allItems[0], allItems[1], allItems[2], allItems[6]];
+        return (
+          <MobilePortalNav
+            title={tr("O'qituvchi Bo'limlari", 'Разделы учителя')}
+            menuLabel={tr("Bo'limlar", 'Разделы')}
+            accent="cyan"
+            primaryItems={primaryItems}
+            allItems={allItems}
+          />
         );
       })()}
     </div>
