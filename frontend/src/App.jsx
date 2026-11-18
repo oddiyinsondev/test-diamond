@@ -31,7 +31,7 @@ export default function App() {
             <Navbar />
 
             {/* Main Content Area */}
-            <main className="container" style={{ flex: 1, paddingTop: '1.5rem' }}>
+            <main className="container app-main-container" style={{ flex: 1 }}>
               {portalMode === 'admin' ? (
                 <Routes>
                   <Route path="/" element={<AdminPortal />} />

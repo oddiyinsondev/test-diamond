@@ -609,7 +609,7 @@ export default function StudentPortal() {
       {activeTab === 'runner' && currentTest && (
         <div className="active-test-runner space-y-4 sm:space-y-6 animate-scale-in">
           {/* Top Bar with Timer and Progress */}
-          <div className="sticky top-14 sm:top-20 z-40 p-3 sm:p-4 rounded-2xl bg-slate-900/95 border border-cyan-500/30 backdrop-blur-md shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
+          <div className="sticky top-12 sm:top-20 z-40 p-2.5 sm:p-4 rounded-xl sm:rounded-2xl bg-slate-900/95 border border-cyan-500/30 backdrop-blur-md shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-1.5 mb-1">
                 <span className="badge badge-primary text-[10px] uppercase font-bold">
