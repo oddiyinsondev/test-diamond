@@ -1299,6 +1299,30 @@ export default function StudentPortal() {
                             </div>
                           )}
 
+                          {t.rewardMode !== 'none' && (
+                            <div className="mt-2.5 p-2 rounded-lg bg-gradient-to-r from-amber-500/10 via-slate-950/50 to-cyan-500/10 border border-amber-500/25 space-y-1 text-[11px]">
+                              {(t.rewardMode === 'ranks' || t.rewardMode === 'both') && (
+                                <div className="flex items-center gap-1.5 flex-wrap text-amber-300 font-bold">
+                                  <span>🏆 {tr("O'rinlar:", 'Места:')}</span>
+                                  <span className="bg-amber-500/20 px-1.5 py-0.5 rounded text-[10px]">🥇 +{t.rewardRank1Coins || 50}</span>
+                                  <span className="bg-slate-800 px-1.5 py-0.5 rounded text-[10px]">🥈 +{t.rewardRank2Coins || 30}</span>
+                                  <span className="bg-amber-800/30 px-1.5 py-0.5 rounded text-[10px]">🥉 +{t.rewardRank3Coins || 20}</span>
+                                  {Number(t.rewardParticipantCoins) > 0 && (
+                                    <span className="bg-cyan-500/20 text-cyan-300 px-1.5 py-0.5 rounded text-[10px]">🎖️ +{t.rewardParticipantCoins}</span>
+                                  )}
+                                </div>
+                              )}
+                              {(t.rewardMode === 'percentage' || t.rewardMode === 'both') && (
+                                <div className="flex items-center gap-1.5 flex-wrap font-medium text-[10.5px]">
+                                  <span className="text-slate-400 font-bold">📊 {tr('Foizlar:', 'Баллы:')}</span>
+                                  <span className="text-emerald-300">80%+: +{t.rewardTier80_100Coins || 40}</span>
+                                  <span className="text-cyan-300">60-80%: +{t.rewardTier60_80Coins || 20}</span>
+                                  <span className="text-amber-300">20-60%: +{t.rewardTier20_60Coins || 10}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                           {Number(t.rewardTopCount) > 0 && Number(t.rewardCoinsAmount) > 0 && (
                             <div className="mt-2.5 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300 font-bold flex items-center justify-between gap-2 flex-wrap">
                               <span>

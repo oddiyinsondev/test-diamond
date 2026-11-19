@@ -4,7 +4,8 @@ from django.contrib.auth.admin import UserAdmin
 from .models import (
     CustomUser, Test, Question, Option, TestResult, StudentAnswer,
     TeacherShowcase, TalentedStudent, ContactMessage, SiteSetting, SchoolClass,
-    CoinTransaction, ClassCoinTransaction, LessonSchedule
+    CoinTransaction, ClassCoinTransaction, LessonSchedule, Subject, TeacherSubjectClass,
+    ParentInterview
 )
 
 
@@ -88,7 +89,7 @@ class CustomUserAdmin(UserAdmin):
 
     fieldsets = UserAdmin.fieldsets + (
         ("Diamond Maktab Profili", {
-            'fields': ('role', 'full_name', 'phone', 'grade', 'subject', 'coins', 'avatar', 'bio')
+            'fields': ('role', 'full_name', 'phone', 'parent_name', 'parent_phone', 'grade', 'subject', 'coins', 'avatar', 'bio')
         }),
     )
 
@@ -264,4 +265,36 @@ class ClassCoinTransactionAdmin(admin.ModelAdmin):
         prefix = '+' if obj.amount > 0 else ''
         return format_html('<span style="color: {}; font-weight: 850;">🏫 {}{}</span>', color, prefix, obj.amount)
     amount_badge.short_description = "Miqdori"
+
+
+@admin.register(Subject)
+class SubjectAdmin(admin.ModelAdmin):
+    list_display = ('name', 'is_active', 'created_at')
+    list_filter = ('is_active',)
+    search_fields = ('name',)
+    list_editable = ('is_active',)
+    ordering = ('name',)
+
+
+@admin.register(TeacherSubjectClass)
+class TeacherSubjectClassAdmin(admin.ModelAdmin):
+    list_display = ('teacher', 'subject', 'school_class', 'created_at')
+    list_filter = ('subject', 'school_class', 'teacher')
+    search_fields = ('teacher__full_name', 'teacher__username', 'subject', 'school_class__name')
+    ordering = ('teacher__full_name', 'subject', 'school_class__name')
+
+
+@admin.register(ParentInterview)
+class ParentInterviewAdmin(admin.ModelAdmin):
+    list_display = ('student', 'class_name', 'tutor', 'parent_name', 'parent_phone', 'period_type', 'date', 'score_badge', 'call_status')
+    list_filter = ('period_type', 'call_status', 'date', 'school_class', 'tutor')
+    search_fields = ('student__full_name', 'student__username', 'parent_name', 'parent_phone', 'summary', 'tutor__full_name')
+    ordering = ('-date', '-created_at')
+
+    def score_badge(self, obj):
+        color = '#10b981' if obj.score >= 8 else ('#f59e0b' if obj.score >= 5 else '#ef4444')
+        return format_html('<b style="color:{}; font-size: 0.95rem;">{}/10 ({}%)</b>', color, obj.score, obj.get_score_percentage())
+    score_badge.short_description = "Ball (Foiz)"
+
+
 

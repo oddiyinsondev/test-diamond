@@ -73,9 +73,14 @@ import {
   FileSpreadsheet,
   LayoutGrid,
   List,
+  HeartHandshake,
+  PhoneCall,
+  Star,
+  MessageSquare,
+  ClipboardList,
 } from 'lucide-react';
 
-const ADMIN_VALID_TABS = ['teachers', 'tutors', 'students', 'tests', 'coins', 'classes', 'schedule', 'showcase'];
+const ADMIN_VALID_TABS = ['teachers', 'subjects', 'tutors', 'students', 'parentInterviews', 'tests', 'coins', 'classes', 'schedule', 'showcase'];
 
 export default function AdminPortal() {
   const { user, login, language, tr } = useAuth();
@@ -125,6 +130,15 @@ export default function AdminPortal() {
   );
   const [adminTopNCount, setAdminTopNCount] = useState(3);
   const [adminTopNAmount, setAdminTopNAmount] = useState(20);
+  const [adminRank1Coins, setAdminRank1Coins] = useState(50);
+  const [adminRank2Coins, setAdminRank2Coins] = useState(30);
+  const [adminRank3Coins, setAdminRank3Coins] = useState(20);
+  const [adminParticipantCoins, setAdminParticipantCoins] = useState(5);
+  const [adminTier80_100Coins, setAdminTier80_100Coins] = useState(40);
+  const [adminTier60_80Coins, setAdminTier60_80Coins] = useState(20);
+  const [adminTier20_60Coins, setAdminTier20_60Coins] = useState(10);
+  const [adminTierUnder20Coins, setAdminTierUnder20Coins] = useState(0);
+  const [adminRewardPanelTab, setAdminRewardPanelTab] = useState('ranks'); // 'ranks' | 'percentage' | 'quick'
   const [studentTestsPolicy, setStudentTestsPolicy] = useState({
     enabled: true,
     portalOpen: true,
@@ -234,6 +248,7 @@ export default function AdminPortal() {
     username: '',
     password: '123',
     subject: 'Matematika',
+    subjectAssignments: [{ subject: 'Matematika', classes: [] }],
     phone: '',
     bio: '',
   });
@@ -247,6 +262,7 @@ export default function AdminPortal() {
     username: '',
     password: '',
     subject: 'Matematika',
+    subjectAssignments: [{ subject: 'Matematika', classes: [] }],
     phone: '',
     bio: '',
     avatarFile: null,
@@ -304,6 +320,8 @@ export default function AdminPortal() {
     password: '123',
     grade: '9-A',
     phone: '',
+    parentName: '',
+    parentPhone: '',
   });
   const [studentAvatarFile, setStudentAvatarFile] = useState(null);
   const [studentAvatarPreview, setStudentAvatarPreview] = useState('');
@@ -316,6 +334,8 @@ export default function AdminPortal() {
     password: '',
     grade: '9-A',
     phone: '',
+    parentName: '',
+    parentPhone: '',
     avatarFile: null,
     avatarPreview: '',
     clearAvatar: false,
@@ -323,6 +343,17 @@ export default function AdminPortal() {
   });
   const [showEditStudentPw, setShowEditStudentPw] = useState(false);
   const [savingEditStudent, setSavingEditStudent] = useState(false);
+
+  // Admin Parent Interviews & Class Ratings State
+  const [parentStatsPeriod, setParentStatsPeriod] = useState('all');
+  const [parentStatsSearch, setParentStatsSearch] = useState('');
+  const [parentClassRankings, setParentClassRankings] = useState([]);
+  const [parentOverallSummary, setParentOverallSummary] = useState(null);
+  const [parentRecentInterviews, setParentRecentInterviews] = useState([]);
+  const [loadingParentStats, setLoadingParentStats] = useState(false);
+  const [selectedClassForInterviews, setSelectedClassForInterviews] = useState(null);
+  const [classInterviewsDetail, setClassInterviewsDetail] = useState(null);
+  const [loadingClassInterviewsDetail, setLoadingClassInterviewsDetail] = useState(false);
 
   // Class Form State
   const [classForm, setClassForm] = useState({
@@ -359,7 +390,7 @@ export default function AdminPortal() {
   const [awardOnlyActive, setAwardOnlyActive] = useState(true);
   const [awardTopNCount, setAwardTopNCount] = useState(3);
 
-  const subjectsList = [
+  const [subjectsList, setSubjectsList] = useState([
     'Matematika',
     'Fizika',
     'Informatika',
@@ -368,7 +399,16 @@ export default function AdminPortal() {
     'Kimyo',
     'Tarix',
     'Ona tili va Adabiyot',
-  ];
+  ]);
+  const [newSubjectInput, setNewSubjectInput] = useState('');
+  const [isAddingSubject, setIsAddingSubject] = useState(false);
+  const [savingNewSubject, setSavingNewSubject] = useState(false);
+  const [subjectsData, setSubjectsData] = useState([]);
+  const [subjectSearch, setSubjectSearch] = useState('');
+  const [isAddSubjectModalOpen, setIsAddSubjectModalOpen] = useState(false);
+  const [editingSubject, setEditingSubject] = useState(null);
+  const [subjectModalForm, setSubjectModalForm] = useState({ name: '' });
+  const [savingSubjectModal, setSavingSubjectModal] = useState(false);
 
   // Lesson Schedule (Ish Reja / Dars Jadvali) state
   const [scheduleData, setScheduleData] = useState(null);
@@ -388,7 +428,7 @@ export default function AdminPortal() {
     if (!isAdmin) return;
     setLoadingData(true);
     try {
-      const [statsRes, teachersRes, tutorsRes, studentsRes, classesRes, msgRes, coinsRes, testsRes, permRes, schedRes] = await Promise.allSettled([
+      const [statsRes, teachersRes, tutorsRes, studentsRes, classesRes, msgRes, coinsRes, testsRes, permRes, schedRes, subjectsRes] = await Promise.allSettled([
         api.admin.getStats(),
         api.admin.getTeachers(),
         api.admin.getTutors(),
@@ -399,12 +439,28 @@ export default function AdminPortal() {
         api.teacher.getTests(),
         api.admin.getTestPermissionSettings(),
         api.admin.getSchedule(),
+        api.admin.getSubjects(),
       ]);
 
       if (statsRes.status === 'fulfilled') setStats(statsRes.value || {});
       if (teachersRes.status === 'fulfilled') {
         const val = teachersRes.value;
         setTeachers(Array.isArray(val) ? val : (val?.teachers || []));
+      }
+      if (subjectsRes.status === 'fulfilled') {
+        const val = subjectsRes.value;
+        const list = Array.isArray(val) ? val : [];
+        setSubjectsData(list);
+        const names = list.map((s) => (typeof s === 'string' ? s : s?.name)).filter(Boolean);
+        if (names.length > 0) {
+          setSubjectsList((prev) => {
+            const combined = [...prev];
+            for (const item of names) {
+              if (!combined.includes(item)) combined.push(item);
+            }
+            return combined;
+          });
+        }
       }
       if (tutorsRes.status === 'fulfilled') {
         const val = tutorsRes.value;
@@ -576,6 +632,48 @@ export default function AdminPortal() {
     }
   }, [isAdmin, language]);
 
+  const loadParentInterviewStats = useCallback(async () => {
+    if (!isAdmin) return;
+    setLoadingParentStats(true);
+    try {
+      const res = await api.admin.getParentInterviewStats({
+        period: parentStatsPeriod,
+        search: parentStatsSearch,
+      });
+      if (res && res.success) {
+        setParentClassRankings(Array.isArray(res.classRankings) ? res.classRankings : []);
+        setParentOverallSummary(res.overallSummary || null);
+        setParentRecentInterviews(Array.isArray(res.recentInterviews) ? res.recentInterviews : []);
+      }
+    } catch (err) {
+      console.error('Failed to load parent interview stats:', err);
+    } finally {
+      setLoadingParentStats(false);
+    }
+  }, [isAdmin, parentStatsPeriod, parentStatsSearch]);
+
+  useEffect(() => {
+    if (isAdmin && (activeTab === 'parentInterviews' || activeTab === 'classes' || activeTab === 'tutors')) {
+      loadParentInterviewStats();
+    }
+  }, [isAdmin, activeTab, loadParentInterviewStats]);
+
+  const handleViewClassInterviews = async (classItem) => {
+    const clsId = classItem.classId || classItem.id;
+    setSelectedClassForInterviews(classItem);
+    setLoadingClassInterviewsDetail(true);
+    try {
+      const res = await api.admin.getClassParentInterviews(clsId);
+      if (res && res.success) {
+        setClassInterviewsDetail(res);
+      }
+    } catch (err) {
+      showToast(err.message || tr('Sinf statistikasi yuklanmadi!', 'Ошибка загрузки статистики класса!'), 'error');
+    } finally {
+      setLoadingClassInterviewsDetail(false);
+    }
+  };
+
   // Sync URL query params (?tab=tests, ?tab=create, ?edit_test=..., ?view_results=...)
   useEffect(() => {
     const tabParam = searchParams.get('tab');
@@ -635,6 +733,17 @@ export default function AdminPortal() {
       const res = await api.teacher.getTestParticipants(testItem.id, 'admin');
       setAdminParticipantsList(res?.participants || (Array.isArray(res) ? res : []));
       setAdminTestResultsMeta(res?.test || null);
+      if (res?.test) {
+        setAdminRank1Coins(res.test.rewardRank1Coins ?? 50);
+        setAdminRank2Coins(res.test.rewardRank2Coins ?? 30);
+        setAdminRank3Coins(res.test.rewardRank3Coins ?? 20);
+        setAdminParticipantCoins(res.test.rewardParticipantCoins ?? 5);
+
+        setAdminTier80_100Coins(res.test.rewardTier80_100Coins ?? 40);
+        setAdminTier60_80Coins(res.test.rewardTier60_80Coins ?? 20);
+        setAdminTier20_60Coins(res.test.rewardTier20_60Coins ?? 10);
+        setAdminTierUnder20Coins(res.test.rewardTierUnder20Coins ?? 0);
+      }
     } catch (err) {
       console.error(err);
       setAdminParticipantsList([]);
@@ -650,6 +759,17 @@ export default function AdminPortal() {
       const res = await api.teacher.getTestParticipants(testId, 'admin');
       setAdminParticipantsList(res?.participants || (Array.isArray(res) ? res : []));
       setAdminTestResultsMeta(res?.test || null);
+      if (res?.test) {
+        setAdminRank1Coins(res.test.rewardRank1Coins ?? 50);
+        setAdminRank2Coins(res.test.rewardRank2Coins ?? 30);
+        setAdminRank3Coins(res.test.rewardRank3Coins ?? 20);
+        setAdminParticipantCoins(res.test.rewardParticipantCoins ?? 5);
+
+        setAdminTier80_100Coins(res.test.rewardTier80_100Coins ?? 40);
+        setAdminTier60_80Coins(res.test.rewardTier60_80Coins ?? 20);
+        setAdminTier20_60Coins(res.test.rewardTier20_60Coins ?? 10);
+        setAdminTierUnder20Coins(res.test.rewardTierUnder20Coins ?? 0);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -666,15 +786,30 @@ export default function AdminPortal() {
     return { total, avg, max, coins };
   }, [adminParticipantsList]);
 
-  const handleAdminAwardTop3 = async () => {
+  const handleAdminAwardPodiumAndParticipants = async () => {
     if (!selectedAdminTestForResults || !adminParticipantsList.length) {
       showToast(tr("Taqsimlash uchun o'quvchilar mavjud emas!", 'Нет учеников для награждения!'), 'warning');
       return;
     }
+    const r1 = Math.max(0, Number(adminRank1Coins) || 0);
+    const r2 = Math.max(0, Number(adminRank2Coins) || 0);
+    const r3 = Math.max(0, Number(adminRank3Coins) || 0);
+    const part = Math.max(0, Number(adminParticipantCoins) || 0);
+
     setAdminDistributingCoins(true);
     try {
-      const res = await api.teacher.distributeCoins(selectedAdminTestForResults.id, { mode: 'top3' });
-      showToast(res.message || tr("Top 3 o'quvchiga coinlar muvaffaqiyatli berildi!", 'Койны успешно начислены Топ-3 ученикам!'), 'success');
+      const res = await api.teacher.distributeCoins(selectedAdminTestForResults.id, {
+        mode: 'ranks_custom',
+        rank1Coins: r1,
+        rank2Coins: r2,
+        rank3Coins: r3,
+        participantCoins: part,
+      });
+      showToast(
+        res.message ||
+          tr("1, 2, 3-o'rinlar va qatnashuvchilarga coinlar muvaffaqiyatli taqsimlandi!", 'Койны успешно распределены за места и участие!'),
+        'success'
+      );
       await reloadAdminTestParticipants(selectedAdminTestForResults.id);
       loadAdminData();
     } catch (err) {
@@ -683,6 +818,41 @@ export default function AdminPortal() {
       setAdminDistributingCoins(false);
     }
   };
+
+  const handleAdminAwardPercentageTiers = async () => {
+    if (!selectedAdminTestForResults || !adminParticipantsList.length) {
+      showToast(tr("Taqsimlash uchun o'quvchilar mavjud emas!", 'Нет учеников для награждения!'), 'warning');
+      return;
+    }
+    const t80 = Math.max(0, Number(adminTier80_100Coins) || 0);
+    const t60 = Math.max(0, Number(adminTier60_80Coins) || 0);
+    const t20 = Math.max(0, Number(adminTier20_60Coins) || 0);
+    const tU20 = Math.max(0, Number(adminTierUnder20Coins) || 0);
+
+    setAdminDistributingCoins(true);
+    try {
+      const res = await api.teacher.distributeCoins(selectedAdminTestForResults.id, {
+        mode: 'percentage_tiers',
+        tier80_100: t80,
+        tier60_80: t60,
+        tier20_60: t20,
+        tierUnder20: tU20,
+      });
+      showToast(
+        res.message ||
+          tr("Foiz oraliqlari bo'yicha coinlar muvaffaqiyatli taqsimlandi!", 'Койны по диапазонам результатов успешно распределены!'),
+        'success'
+      );
+      await reloadAdminTestParticipants(selectedAdminTestForResults.id);
+      loadAdminData();
+    } catch (err) {
+      showToast(err.message || tr('Coin tarqatishda xatolik!', 'Ошибка при распределении койнов!'), 'error');
+    } finally {
+      setAdminDistributingCoins(false);
+    }
+  };
+
+  const handleAdminAwardTop3 = handleAdminAwardPodiumAndParticipants;
 
   const handleAdminAwardTopN = async () => {
     if (!selectedAdminTestForResults || !adminParticipantsList.length) {
@@ -1121,15 +1291,173 @@ export default function AdminPortal() {
     }
   };
 
-  // Add Teacher (supports optional avatar photo upload)
+  // Subject & Classes assignment helpers for Teachers
+  const handleQuickAddSubject = async (formType = 'create', assignIdx = 0) => {
+    const clean = (newSubjectInput || '').trim();
+    if (!clean) {
+      showToast(tr('Fan nomini kiriting!', 'Введите название предмета!'), 'warning');
+      return;
+    }
+    setSavingNewSubject(true);
+    try {
+      const res = await api.admin.createSubject({ name: clean });
+      const createdName = res?.subject?.name || clean;
+      setSubjectsList((prev) => (prev.includes(createdName) ? prev : [...prev, createdName]));
+      if (formType === 'create') {
+        setTeacherForm((prev) => {
+          const list = [...(prev.subjectAssignments || [])];
+          if (list[assignIdx]) {
+            list[assignIdx] = { ...list[assignIdx], subject: createdName };
+          } else {
+            list.push({ subject: createdName, classes: [] });
+          }
+          return { ...prev, subjectAssignments: list };
+        });
+      } else {
+        setEditTeacherForm((prev) => {
+          const list = [...(prev.subjectAssignments || [])];
+          if (list[assignIdx]) {
+            list[assignIdx] = { ...list[assignIdx], subject: createdName };
+          } else {
+            list.push({ subject: createdName, classes: [] });
+          }
+          return { ...prev, subjectAssignments: list };
+        });
+      }
+      showToast(tr(`"${createdName}" fani muvaffaqiyatli saqlandi!`, `Предмет "${createdName}" успешно сохранен!`), 'success');
+      setNewSubjectInput('');
+      setIsAddingSubject(false);
+    } catch (err) {
+      showToast(err.message || tr("Fanni saqlashda xatolik!", 'Ошибка при сохранении предмета!'), 'error');
+    } finally {
+      setSavingNewSubject(false);
+    }
+  };
+
+  const addSubjectAssignment = (formType = 'create') => {
+    const currentAssignments = (formType === 'create' ? teacherForm : editTeacherForm).subjectAssignments || [];
+    const chosenSubjects = currentAssignments.map((a) => a.subject);
+    const firstUnused = subjectsList.find((s) => !chosenSubjects.includes(s)) || subjectsList[0] || 'Matematika';
+    const newAssign = { subject: firstUnused, classes: [] };
+    if (formType === 'create') {
+      setTeacherForm((prev) => ({
+        ...prev,
+        subjectAssignments: [...(prev.subjectAssignments || []), newAssign],
+      }));
+    } else {
+      setEditTeacherForm((prev) => ({
+        ...prev,
+        subjectAssignments: [...(prev.subjectAssignments || []), newAssign],
+      }));
+    }
+  };
+
+  const removeSubjectAssignment = (formType = 'create', index) => {
+    if (formType === 'create') {
+      setTeacherForm((prev) => {
+        const next = (prev.subjectAssignments || []).filter((_, i) => i !== index);
+        return {
+          ...prev,
+          subjectAssignments: next.length ? next : [{ subject: subjectsList[0] || 'Matematika', classes: [] }],
+        };
+      });
+    } else {
+      setEditTeacherForm((prev) => {
+        const next = (prev.subjectAssignments || []).filter((_, i) => i !== index);
+        return {
+          ...prev,
+          subjectAssignments: next.length ? next : [{ subject: subjectsList[0] || 'Matematika', classes: [] }],
+        };
+      });
+    }
+  };
+
+  const changeAssignmentSubject = (formType = 'create', index, newSubj) => {
+    if (formType === 'create') {
+      setTeacherForm((prev) => {
+        const next = [...(prev.subjectAssignments || [])];
+        if (next[index]) next[index] = { ...next[index], subject: newSubj };
+        return { ...prev, subjectAssignments: next };
+      });
+    } else {
+      setEditTeacherForm((prev) => {
+        const next = [...(prev.subjectAssignments || [])];
+        if (next[index]) next[index] = { ...next[index], subject: newSubj };
+        return { ...prev, subjectAssignments: next };
+      });
+    }
+  };
+
+  const toggleAssignmentClass = (formType = 'create', index, clsName) => {
+    if (formType === 'create') {
+      setTeacherForm((prev) => {
+        const next = [...(prev.subjectAssignments || [])];
+        const curCls = next[index]?.classes || [];
+        const updated = curCls.includes(clsName) ? curCls.filter((c) => c !== clsName) : [...curCls, clsName];
+        next[index] = { ...next[index], classes: updated };
+        return { ...prev, subjectAssignments: next };
+      });
+    } else {
+      setEditTeacherForm((prev) => {
+        const next = [...(prev.subjectAssignments || [])];
+        const curCls = next[index]?.classes || [];
+        const updated = curCls.includes(clsName) ? curCls.filter((c) => c !== clsName) : [...curCls, clsName];
+        next[index] = { ...next[index], classes: updated };
+        return { ...prev, subjectAssignments: next };
+      });
+    }
+  };
+
+  const selectAllClassesForAssignment = (formType = 'create', index) => {
+    const all = classesList.map((c) => c.name);
+    if (formType === 'create') {
+      setTeacherForm((prev) => {
+        const next = [...(prev.subjectAssignments || [])];
+        if (next[index]) next[index] = { ...next[index], classes: all };
+        return { ...prev, subjectAssignments: next };
+      });
+    } else {
+      setEditTeacherForm((prev) => {
+        const next = [...(prev.subjectAssignments || [])];
+        if (next[index]) next[index] = { ...next[index], classes: all };
+        return { ...prev, subjectAssignments: next };
+      });
+    }
+  };
+
+  const clearClassesForAssignment = (formType = 'create', index) => {
+    if (formType === 'create') {
+      setTeacherForm((prev) => {
+        const next = [...(prev.subjectAssignments || [])];
+        if (next[index]) next[index] = { ...next[index], classes: [] };
+        return { ...prev, subjectAssignments: next };
+      });
+    } else {
+      setEditTeacherForm((prev) => {
+        const next = [...(prev.subjectAssignments || [])];
+        if (next[index]) next[index] = { ...next[index], classes: [] };
+        return { ...prev, subjectAssignments: next };
+      });
+    }
+  };
+
+  // Add Teacher (supports subject assignments, classes & optional avatar)
   const handleCreateTeacher = async (e) => {
     e.preventDefault();
+    const assignments = teacherForm.subjectAssignments && teacherForm.subjectAssignments.length > 0
+      ? teacherForm.subjectAssignments
+      : [{ subject: 'Matematika', classes: [] }];
+    const primarySubject = assignments.map((a) => a.subject).filter(Boolean).join(', ') || 'Matematika';
+    const allAssignedClasses = [...new Set(assignments.flatMap((a) => a.classes || []))];
+
     try {
       const fd = new FormData();
       fd.append('fullName', teacherForm.fullName.trim());
       fd.append('username', teacherForm.username.trim());
       fd.append('password', teacherForm.password.trim());
-      fd.append('subject', teacherForm.subject);
+      fd.append('subject', primarySubject);
+      fd.append('subjectAssignments', JSON.stringify(assignments));
+      fd.append('assignedClasses', JSON.stringify(allAssignedClasses));
       fd.append('phone', teacherForm.phone.trim());
       fd.append('bio', (teacherForm.bio || '').trim());
       if (teacherAvatarFile) {
@@ -1143,6 +1471,7 @@ export default function AdminPortal() {
         username: '',
         password: '123',
         subject: 'Matematika',
+        subjectAssignments: [{ subject: subjectsList[0] || 'Matematika', classes: [] }],
         phone: '',
         bio: '',
       });
@@ -1157,11 +1486,26 @@ export default function AdminPortal() {
   // Open Edit Teacher Profile Modal
   const handleOpenEditTeacher = (tch) => {
     setEditingTeacher(tch);
+    let initialAssignments = [];
+    if (Array.isArray(tch.subjectAssignments) && tch.subjectAssignments.length > 0) {
+      initialAssignments = tch.subjectAssignments;
+    } else if (tch.subject && tch.subject !== 'Fan belgilanmagan' && tch.subject !== 'Предмет не указан') {
+      const sNames = tch.subject.split(',').map((x) => x.trim()).filter(Boolean);
+      initialAssignments = sNames.map((s) => ({
+        subject: s,
+        classes: Array.isArray(tch.assignedClasses) ? tch.assignedClasses : [],
+      }));
+    }
+    if (initialAssignments.length === 0) {
+      initialAssignments = [{ subject: subjectsList[0] || 'Matematika', classes: [] }];
+    }
+
     setEditTeacherForm({
       fullName: tch.fullName || '',
       username: tch.username || '',
       password: '',
       subject: tch.subject && tch.subject !== 'Fan belgilanmagan' && tch.subject !== 'Предмет не указан' ? tch.subject : 'Matematika',
+      subjectAssignments: initialAssignments,
       phone: tch.rawPhone !== undefined ? tch.rawPhone : (tch.phone && tch.phone !== '-' ? tch.phone : ''),
       bio: tch.bio || '',
       avatarFile: null,
@@ -1180,11 +1524,19 @@ export default function AdminPortal() {
       return;
     }
     setSavingEditTeacher(true);
+    const assignments = editTeacherForm.subjectAssignments && editTeacherForm.subjectAssignments.length > 0
+      ? editTeacherForm.subjectAssignments
+      : [{ subject: 'Matematika', classes: [] }];
+    const primarySubject = assignments.map((a) => a.subject).filter(Boolean).join(', ') || 'Matematika';
+    const allAssignedClasses = [...new Set(assignments.flatMap((a) => a.classes || []))];
+
     try {
       const fd = new FormData();
       fd.append('fullName', editTeacherForm.fullName.trim());
       fd.append('username', editTeacherForm.username.trim());
-      fd.append('subject', editTeacherForm.subject);
+      fd.append('subject', primarySubject);
+      fd.append('subjectAssignments', JSON.stringify(assignments));
+      fd.append('assignedClasses', JSON.stringify(allAssignedClasses));
       fd.append('phone', editTeacherForm.phone.trim());
       fd.append('bio', editTeacherForm.bio.trim());
       if (editTeacherForm.password.trim()) {
@@ -1431,6 +1783,8 @@ export default function AdminPortal() {
       fd.append('password', studentForm.password.trim());
       fd.append('grade', resolvedGrade);
       fd.append('phone', studentForm.phone.trim());
+      fd.append('parentName', (studentForm.parentName || '').trim());
+      fd.append('parentPhone', (studentForm.parentPhone || '').trim());
       if (studentAvatarFile) {
         fd.append('avatar', studentAvatarFile);
       }
@@ -1469,6 +1823,8 @@ export default function AdminPortal() {
       password: '',
       grade: std.grade && std.grade !== '-' ? std.grade : availableGrades[0] || '9-A',
       phone: std.phone && std.phone !== '-' ? std.phone : '',
+      parentName: std.parentName || '',
+      parentPhone: std.parentPhone || '',
       avatarFile: null,
       avatarPreview: std.avatarUrl || '',
       clearAvatar: false,
@@ -1491,6 +1847,8 @@ export default function AdminPortal() {
       fd.append('username', editStudentForm.username.trim());
       fd.append('grade', editStudentForm.grade);
       fd.append('phone', editStudentForm.phone.trim());
+      fd.append('parentName', (editStudentForm.parentName || '').trim());
+      fd.append('parentPhone', (editStudentForm.parentPhone || '').trim());
       if (editStudentForm.password.trim()) {
         fd.append('password', editStudentForm.password.trim());
       }
@@ -1901,15 +2259,99 @@ export default function AdminPortal() {
   // Filtered teachers
   const filteredTeachers = useMemo(() => {
     const list = Array.isArray(teachers) ? teachers : [];
+    const q = teacherSearch.trim().toLowerCase();
+    if (!q) return list;
     return list.filter((t) => {
-      const q = teacherSearch.toLowerCase();
-      return (
+      const matchBasic =
         t.fullName?.toLowerCase().includes(q) ||
         t.username?.toLowerCase().includes(q) ||
-        t.subject?.toLowerCase().includes(q)
+        t.subject?.toLowerCase().includes(q) ||
+        t.phone?.toLowerCase().includes(q);
+      const matchSubjects = Array.isArray(t.subjects) && t.subjects.some((s) => s.toLowerCase().includes(q));
+      const matchClasses = Array.isArray(t.assignedClasses) && t.assignedClasses.some((c) => c.toLowerCase().includes(q));
+      const matchAssignments = Array.isArray(t.subjectAssignments) && t.subjectAssignments.some((sa) =>
+        (sa.subject && sa.subject.toLowerCase().includes(q)) ||
+        (Array.isArray(sa.classes) && sa.classes.some((c) => c.toLowerCase().includes(q)))
       );
+      return matchBasic || matchSubjects || matchClasses || matchAssignments;
     });
   }, [teachers, teacherSearch]);
+
+  // Filtered subjects
+  const filteredSubjects = useMemo(() => {
+    const list = Array.isArray(subjectsData) ? subjectsData : [];
+    const q = subjectSearch.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((s) => {
+      const matchName =
+        (s.name || '').toLowerCase().includes(q) ||
+        localizeSubject(s.name, language).toLowerCase().includes(q);
+      const matchTeachers = Array.isArray(s.teachers) && s.teachers.some((t) => (t || '').toLowerCase().includes(q));
+      const matchClasses = Array.isArray(s.classes) && s.classes.some((c) => (c || '').toLowerCase().includes(q));
+      return matchName || matchTeachers || matchClasses;
+    });
+  }, [subjectsData, subjectSearch, language]);
+
+  const handleOpenAddSubjectModal = () => {
+    setEditingSubject(null);
+    setSubjectModalForm({ name: '' });
+    setIsAddSubjectModalOpen(true);
+  };
+
+  const handleOpenEditSubjectModal = (sub) => {
+    setEditingSubject(sub);
+    setSubjectModalForm({ name: sub.name || '' });
+    setIsAddSubjectModalOpen(true);
+  };
+
+  const handleSaveSubjectModal = async (e) => {
+    e.preventDefault();
+    const clean = (subjectModalForm.name || '').trim();
+    if (!clean) {
+      showToast(tr('Fan nomini kiriting!', 'Введите название предмета!'), 'warning');
+      return;
+    }
+    setSavingSubjectModal(true);
+    try {
+      if (editingSubject) {
+        await api.admin.updateSubject(editingSubject.id, { name: clean });
+        showToast(tr('Fan muvaffaqiyatli yangilandi!', 'Предмет успешно обновлен!'), 'success');
+      } else {
+        await api.admin.createSubject({ name: clean });
+        showToast(tr("Yangi fan muvaffaqiyatli qo'shildi!", 'Новый предмет успешно добавлен!'), 'success');
+      }
+      setIsAddSubjectModalOpen(false);
+      setEditingSubject(null);
+      setSubjectModalForm({ name: '' });
+      loadAdminData();
+    } catch (err) {
+      showToast(err.message || tr('Xatolik yuz berdi!', 'Произошла ошибка!'), 'error');
+    } finally {
+      setSavingSubjectModal(false);
+    }
+  };
+
+  const handleDeleteSubject = (sub) => {
+    setConfirmModalState({
+      isOpen: true,
+      title: tr(`"${sub.name}" fanini o'chirish`, `Удалить предмет "${sub.name}"`),
+      message: tr(
+        `Haqiqatan ham "${sub.name}" fanini o'chirmoqchimisiz? Ushbu fanga biriktirilgan o'qituvchilar yoki testlar bo'lishi mumkin.`,
+        `Вы действительно хотите удалить предмет "${sub.name}"? К этому предмету могут быть привязаны учителя или тесты.`
+      ),
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await api.admin.deleteSubject(sub.id);
+          showToast(tr("Fan muvaffaqiyatli o'chirildi!", 'Предмет успешно удален!'), 'info');
+          setConfirmModalState((prev) => ({ ...prev, isOpen: false }));
+          loadAdminData();
+        } catch (err) {
+          showToast(err.message || tr("O'chirishda xatolik!", 'Ошибка при удалении!'), 'error');
+        }
+      },
+    });
+  };
 
   // Filtered tutors
   const filteredTutors = useMemo(() => {
@@ -2204,6 +2646,23 @@ export default function AdminPortal() {
             <div className="admin-kpi-label">{tr("O'rtacha Natija", 'Средний балл')}</div>
           </div>
         </div>
+
+        <div
+          className="admin-kpi-card cursor-pointer hover:border-pink-500/50 transition-colors"
+          data-testid="admin-kpi-parent-interviews"
+          onClick={() => setActiveTab('parentInterviews')}
+          title={tr('Ota-onalar bilan suhbatlar va sinflar reytingiga o‘tish', 'Перейти к беседам с родителями и рейтингу классов')}
+        >
+          <div className="admin-kpi-icon bg-pink-500/20 text-pink-400 border border-pink-500/30">
+            <HeartHandshake size={24} />
+          </div>
+          <div>
+            <div className="admin-kpi-val text-pink-300">
+              {parentOverallSummary?.overallAvgPercentage != null ? `${parentOverallSummary.overallAvgPercentage}%` : '—'}
+            </div>
+            <div className="admin-kpi-label">{tr('Ota-onalar Qoniqishi', 'Оценка родителей')}</div>
+          </div>
+        </div>
       </div>
 
       {/* Two-Column App Layout: Left Sidebar + Right Content */}
@@ -2251,6 +2710,18 @@ export default function AdminPortal() {
 
             <button
               type="button"
+              className={`portal-nav-btn ${activeTab === 'subjects' ? 'active' : ''}`}
+              onClick={() => setActiveTab('subjects')}
+            >
+              <div className="portal-nav-icon">
+                <BookOpen size={18} />
+              </div>
+              <span className="portal-nav-label">{tr('Fanlar Boshqaruvi', 'Управление предметами')}</span>
+              <span className="portal-nav-badge">{subjectsData.length}</span>
+            </button>
+
+            <button
+              type="button"
               className={`portal-nav-btn ${activeTab === 'tutors' ? 'active' : ''}`}
               onClick={() => setActiveTab('tutors')}
             >
@@ -2271,6 +2742,22 @@ export default function AdminPortal() {
               </div>
               <span className="portal-nav-label">{tr("O'quvchilar", 'Ученики')}</span>
               <span className="portal-nav-badge">{students.length}</span>
+            </button>
+
+            <button
+              type="button"
+              className={`portal-nav-btn ${activeTab === 'parentInterviews' ? 'active' : ''}`}
+              onClick={() => setActiveTab('parentInterviews')}
+            >
+              <div className="portal-nav-icon">
+                <HeartHandshake size={18} className="text-pink-400" />
+              </div>
+              <span className="portal-nav-label">{tr('Ota-onalar Muloqoti & Reyting', 'Беседы с родителями и рейтинг')}</span>
+              {parentOverallSummary?.totalInterviews > 0 && (
+                <span className="portal-nav-badge bg-pink-500/20 text-pink-300 border border-pink-500/40 font-bold">
+                  {parentOverallSummary.totalInterviews}
+                </span>
+              )}
             </button>
 
             <button
@@ -2482,106 +2969,292 @@ export default function AdminPortal() {
 
                 {/* Admin Batch Coin Distribution Bar */}
                 {adminParticipantsList.length > 0 && (
-                  <div className="results-coin-bar flex-col items-stretch gap-3">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                  <div className="results-coin-bar flex-col items-stretch gap-3.5 p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-slate-950/80 to-cyan-500/10 border border-amber-500/35">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2.5 border-b border-slate-800">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center flex-shrink-0">
-                          <Sparkles size={16} />
+                        <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center justify-center flex-shrink-0 shadow-md">
+                          <Crown size={18} />
                         </div>
                         <div>
-                          <div className="text-xs font-bold text-white flex items-center gap-1.5 flex-wrap">
-                            <span>{tr("Test Qatnashchilarini Rag'batlantirish", 'Поощрение участников теста')}</span>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-black">
-                              {tr('Admin Mukofotlari', 'Награды админа')}
+                          <div className="text-sm font-extrabold text-white flex items-center gap-2 flex-wrap">
+                            <span>{tr("Test Qatnashchilariga Coin Taqsimlash", 'Распределение койнов участникам теста')}</span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40">
+                              {tr('Admin Boshqaruvi', 'Управление админа')}
                             </span>
-                            {Number(adminTestResultsMeta?.rewardTopCount) > 0 && Number(adminTestResultsMeta?.rewardCoinsAmount) > 0 && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-bold">
-                                ⚡ {tr(
-                                  `Avto-bonus: Top ${adminTestResultsMeta.rewardTopCount} faolga +${adminTestResultsMeta.rewardCoinsAmount} 💎`,
-                                  `Авто-бонус: Топ-${adminTestResultsMeta.rewardTopCount} активным +${adminTestResultsMeta.rewardCoinsAmount} 💎`
-                                )} ({adminTestResultsMeta.rewardSlotsUsed || 0}/{adminTestResultsMeta.rewardTopCount})
-                              </span>
-                            )}
                           </div>
                           <div className="text-[11px] text-slate-400">
                             {tr(
-                              "Yuqori ko'rsatkichli va faol qatnashgan o'quvchilarni 1 bosishda mukofotlang (takroriy urinishda ikki marta to'lanmaydi)",
-                              'Награждайте лучших и активных участников в 1 клик (за повторные попытки двойная оплата не начисляется)'
+                              "1, 2, 3-o'rinlar, qatnashuvchilar yoki 20-60%, 60-80%, 80-100% foiz oraliqlari uchun ixtiyoriy coin belgilab taqsimlang",
+                              'Назначьте произвольные койны за 1, 2, 3 места, участие или диапазоны процентов и распределите в 1 клик'
                             )}
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 flex-wrap">
+                      {/* Panel Tabs */}
+                      <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs gap-1">
                         <button
                           type="button"
-                          className="btn-batch-award-gold"
-                          onClick={handleAdminAwardTop3}
-                          disabled={adminDistributingCoins}
+                          className={`px-3 py-1 rounded-lg font-bold text-[11px] transition-all flex items-center gap-1 ${
+                            adminRewardPanelTab === 'ranks'
+                              ? 'bg-amber-500 text-slate-950 shadow-sm'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                          onClick={() => setAdminRewardPanelTab('ranks')}
                         >
-                          <Crown size={14} />
-                          <span>{tr("Top 3 O'quvchiga Coin (+50, +30, +20)", 'Койны Топ-3 (+50, +30, +20)')}</span>
+                          <Trophy size={12} /> {tr("1, 2, 3-o'rinlar", '1, 2, 3 места')}
                         </button>
-
                         <button
                           type="button"
-                          className="btn-batch-award-cyan"
-                          onClick={() => handleAdminAwardHighScorers(70, 20)}
-                          disabled={adminDistributingCoins}
+                          className={`px-3 py-1 rounded-lg font-bold text-[11px] transition-all flex items-center gap-1 ${
+                            adminRewardPanelTab === 'percentage'
+                              ? 'bg-cyan-500 text-slate-950 shadow-sm'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                          onClick={() => setAdminRewardPanelTab('percentage')}
                         >
-                          <Award size={14} />
-                          <span>{tr("70%+ A'lochilarga (+20)", '70%+ Отличникам (+20)')}</span>
+                          <Coins size={12} /> {tr('Foiz oraliqlari', 'По процентам')}
                         </button>
-
                         <button
                           type="button"
-                          className="btn-batch-award-indigo"
-                          onClick={() => handleAdminAwardAllParticipants(10)}
-                          disabled={adminDistributingCoins}
+                          className={`px-3 py-1 rounded-lg font-bold text-[11px] transition-all flex items-center gap-1 ${
+                            adminRewardPanelTab === 'quick'
+                              ? 'bg-purple-500 text-white shadow-sm'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                          onClick={() => setAdminRewardPanelTab('quick')}
                         >
-                          <Coins size={14} />
-                          <span>{tr('Barcha Ishtirokchilarga (+10)', 'Всем участникам (+10)')}</span>
+                          <Zap size={12} /> {tr('Tezkor', 'Быстро')}
                         </button>
                       </div>
                     </div>
 
-                    {/* Custom Top-N active participants distribution */}
-                    <div className="flex flex-wrap items-center gap-2 pt-2.5 border-t border-slate-800/80 text-xs">
-                      <span className="text-slate-300 font-bold flex items-center gap-1">
-                        <Zap size={13} className="text-amber-400" /> {tr('Top N faol qatnashchiga:', 'Топ-N активным участникам:')}
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[11px] text-slate-400">{tr('Soni:', 'Кол-во:')}</span>
-                        <input
-                          type="number"
-                          min={1}
-                          max={50}
-                          className="clean-input text-xs w-16 h-8 min-h-0 font-bold text-center"
-                          value={adminTopNCount}
-                          onChange={(e) => setAdminTopNCount(Math.max(1, Number(e.target.value) || 1))}
-                        />
+                    {/* TAB 1: Podium Ranks & Remaining Participants */}
+                    {adminRewardPanelTab === 'ranks' && (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                          {/* 1st place */}
+                          <div className="p-2.5 rounded-xl bg-slate-950/70 border border-amber-500/30">
+                            <label className="text-[11px] font-bold text-amber-300 block mb-1">
+                              🥇 {tr("1-o'rin uchun", 'За 1-е место')}
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              max={1000}
+                              className="clean-input text-xs font-bold text-amber-200 h-8"
+                              value={adminRank1Coins}
+                              onChange={(e) => setAdminRank1Coins(Math.max(0, Number(e.target.value) || 0))}
+                            />
+                          </div>
+                          {/* 2nd place */}
+                          <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-700">
+                            <label className="text-[11px] font-bold text-slate-200 block mb-1">
+                              🥈 {tr("2-o'rin uchun", 'За 2-е место')}
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              max={1000}
+                              className="clean-input text-xs font-bold text-slate-200 h-8"
+                              value={adminRank2Coins}
+                              onChange={(e) => setAdminRank2Coins(Math.max(0, Number(e.target.value) || 0))}
+                            />
+                          </div>
+                          {/* 3rd place */}
+                          <div className="p-2.5 rounded-xl bg-slate-950/70 border border-amber-700/40">
+                            <label className="text-[11px] font-bold text-amber-400 block mb-1">
+                              🥉 {tr("3-o'rin uchun", 'За 3-е место')}
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              max={1000}
+                              className="clean-input text-xs font-bold text-amber-300 h-8"
+                              value={adminRank3Coins}
+                              onChange={(e) => setAdminRank3Coins(Math.max(0, Number(e.target.value) || 0))}
+                            />
+                          </div>
+                          {/* Remaining participants */}
+                          <div className="p-2.5 rounded-xl bg-slate-950/70 border border-cyan-500/30">
+                            <label className="text-[11px] font-bold text-cyan-300 block mb-1">
+                              🎖️ {tr('Qolgan qatnashuvchilar', 'Остальные участники')}
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              max={500}
+                              className="clean-input text-xs font-bold text-cyan-200 h-8"
+                              value={adminParticipantCoins}
+                              onChange={(e) => setAdminParticipantCoins(Math.max(0, Number(e.target.value) || 0))}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+                          <span className="text-[11px] text-slate-400">
+                            💡 {tr(
+                              "1, 2, 3-o'rinlar eng yaxshi ball va eng kam sarflangan vaqt bo'yicha aniqlanadi. Qolgan barcha qatnashuvchilarga ishtirok coini beriladi.",
+                              '1, 2, 3 места определяются по наивысшему баллу и наименьшему времени. Остальным участникам начисляются коины за участие.'
+                            )}
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-warning btn-sm font-bold text-slate-950 flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20"
+                            onClick={handleAdminAwardPodiumAndParticipants}
+                            disabled={adminDistributingCoins}
+                          >
+                            {adminDistributingCoins ? <Loader2 size={14} className="animate-spin" /> : <Trophy size={15} />}
+                            <span>{tr("🏆 O'rinlar va Ishtirokchilarga Taqsimlash", '🏆 Начислить за места и участие')}</span>
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[11px] text-slate-400">{tr('Coin:', 'Койн:')}</span>
-                        <input
-                          type="number"
-                          min={1}
-                          max={500}
-                          className="clean-input text-xs w-20 h-8 min-h-0 font-bold text-amber-300 text-center"
-                          value={adminTopNAmount}
-                          onChange={(e) => setAdminTopNAmount(Math.max(1, Number(e.target.value) || 1))}
-                        />
+                    )}
+
+                    {/* TAB 2: Percentage-based Tiers */}
+                    {adminRewardPanelTab === 'percentage' && (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                          {/* 80-100% */}
+                          <div className="p-2.5 rounded-xl bg-slate-950/70 border border-emerald-500/30">
+                            <label className="text-[11px] font-bold text-emerald-300 block mb-1">
+                              🟢 80% — 100% ({tr("A'lo", 'Отлично')})
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              max={500}
+                              className="clean-input text-xs font-bold text-emerald-200 h-8"
+                              value={adminTier80_100Coins}
+                              onChange={(e) => setAdminTier80_100Coins(Math.max(0, Number(e.target.value) || 0))}
+                            />
+                          </div>
+                          {/* 60-80% */}
+                          <div className="p-2.5 rounded-xl bg-slate-950/70 border border-cyan-500/30">
+                            <label className="text-[11px] font-bold text-cyan-300 block mb-1">
+                              🟡 60% — 80% ({tr('Yaxshi', 'Хорошо')})
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              max={500}
+                              className="clean-input text-xs font-bold text-cyan-200 h-8"
+                              value={adminTier60_80Coins}
+                              onChange={(e) => setAdminTier60_80Coins(Math.max(0, Number(e.target.value) || 0))}
+                            />
+                          </div>
+                          {/* 20-60% */}
+                          <div className="p-2.5 rounded-xl bg-slate-950/70 border border-amber-500/30">
+                            <label className="text-[11px] font-bold text-amber-300 block mb-1">
+                              🟠 20% — 60% ({tr("O'rtacha", 'Средне')})
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              max={500}
+                              className="clean-input text-xs font-bold text-amber-200 h-8"
+                              value={adminTier20_60Coins}
+                              onChange={(e) => setAdminTier20_60Coins(Math.max(0, Number(e.target.value) || 0))}
+                            />
+                          </div>
+                          {/* 0-20% */}
+                          <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800">
+                            <label className="text-[11px] font-bold text-slate-400 block mb-1">
+                              ⚪ 0% — 20% ({tr('Qoniqarsiz', 'Слабо')})
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              max={500}
+                              className="clean-input text-xs font-bold text-slate-400 h-8"
+                              value={adminTierUnder20Coins}
+                              onChange={(e) => setAdminTierUnder20Coins(Math.max(0, Number(e.target.value) || 0))}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+                          <span className="text-[11px] text-slate-400">
+                            💡 {tr(
+                              "Har bir o'quvchi o'zining to'plagan foiz oralig'iga mos coin oladi (masalan, 20-60% ga 10 coin, 60-80% ga 20 coin, 80-100% ga 40 coin).",
+                              'Каждый ученик получает койны согласно своему диапазону процентов (например: 20-60% — 10, 60-80% — 20, 80-100% — 40).'
+                            )}
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-diamond-cyan btn-sm font-bold flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/20"
+                            onClick={handleAdminAwardPercentageTiers}
+                            disabled={adminDistributingCoins}
+                          >
+                            {adminDistributingCoins ? <Loader2 size={14} className="animate-spin" /> : <Coins size={15} />}
+                            <span>{tr("📊 Foiz Oraliqlari Bo'yicha Taqsimlash", '📊 Начислить по диапазонам процентов')}</span>
+                          </button>
+                        </div>
                       </div>
-                      <button
-                        type="button"
-                        className="btn btn-warning btn-xs font-bold text-slate-950 h-8 px-3 flex items-center gap-1"
-                        onClick={handleAdminAwardTopN}
-                        disabled={adminDistributingCoins}
-                      >
-                        <Coins size={13} />
-                        <span>{tr(`Top ${adminTopNCount} faolga +${adminTopNAmount} Coin berish`, `Выдать Топ-${adminTopNCount} +${adminTopNAmount} койнов`)}</span>
-                      </button>
-                    </div>
+                    )}
+
+                    {/* TAB 3: Quick presets (Top N, All, 70%+) */}
+                    {adminRewardPanelTab === 'quick' && (
+                      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="text-slate-300 font-bold flex items-center gap-1">
+                            <Zap size={13} className="text-amber-400" /> {tr('Top N faol qatnashchiga:', 'Топ-N активным участникам:')}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] text-slate-400">{tr('Soni:', 'Кол-во:')}</span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={50}
+                              className="clean-input text-xs w-16 h-8 min-h-0 font-bold text-center"
+                              value={adminTopNCount}
+                              onChange={(e) => setAdminTopNCount(Math.max(1, Number(e.target.value) || 1))}
+                            />
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] text-slate-400">{tr('Coin:', 'Койн:')}</span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={500}
+                              className="clean-input text-xs w-20 h-8 min-h-0 font-bold text-amber-300 text-center"
+                              value={adminTopNAmount}
+                              onChange={(e) => setAdminTopNAmount(Math.max(1, Number(e.target.value) || 1))}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-warning btn-xs font-bold text-slate-950 h-8 px-3 flex items-center gap-1"
+                            onClick={handleAdminAwardTopN}
+                            disabled={adminDistributingCoins}
+                          >
+                            <Coins size={13} />
+                            <span>{tr(`Top ${adminTopNCount} faolga +${adminTopNAmount} Coin berish`, `Выдать Топ-${adminTopNCount} +${adminTopNAmount} койнов`)}</span>
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <button
+                            type="button"
+                            className="btn-batch-award-cyan"
+                            onClick={() => handleAdminAwardHighScorers(70, 20)}
+                            disabled={adminDistributingCoins}
+                          >
+                            <Award size={14} />
+                            <span>{tr("70%+ A'lochilarga (+20)", '70%+ Отличникам (+20)')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-batch-award-indigo"
+                            onClick={() => handleAdminAwardAllParticipants(10)}
+                            disabled={adminDistributingCoins}
+                          >
+                            <Coins size={14} />
+                            <span>{tr('Barcha Ishtirokchilarga (+10)', 'Всем участникам (+10)')}</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -3187,7 +3860,7 @@ export default function AdminPortal() {
                   <thead>
                     <tr>
                       <th>{tr('Ustoz', 'Учитель')}</th>
-                      <th>{tr('Fan', 'Предмет')}</th>
+                      <th>{tr('Fan va Sinflar', 'Предмет и классы')}</th>
                       <th>{tr('Login', 'Логин')}</th>
                       <th>{tr('Telefon', 'Телефон')}</th>
                       <th>{tr('Testlar', 'Тесты')}</th>
@@ -3214,9 +3887,45 @@ export default function AdminPortal() {
                           </div>
                         </td>
                         <td>
-                          <span className="badge badge-primary text-[11px] font-semibold">
-                            {tch.subject === 'Fan belgilanmagan' ? tr('Fan belgilanmagan', 'Предмет не указан') : localizeSubject(tch.subject, language)}
-                          </span>
+                          <div className="flex flex-col gap-1.5 py-1 max-w-[280px]">
+                            {Array.isArray(tch.subjectAssignments) && tch.subjectAssignments.length > 0 ? (
+                              tch.subjectAssignments.map((sa, idx) => (
+                                <div key={idx} className="flex flex-wrap items-center gap-1.5">
+                                  <span className="badge badge-primary text-[11px] font-bold">
+                                    {localizeSubject(sa.subject, language)}
+                                  </span>
+                                  {Array.isArray(sa.classes) && sa.classes.length > 0 ? (
+                                    <div className="flex flex-wrap items-center gap-1">
+                                      {sa.classes.map((c) => (
+                                        <span key={c} className="px-1.5 py-0.5 rounded bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-[10px] font-mono font-bold">
+                                          {localizeGrade(c, language)}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-500 italic">
+                                      ({tr('Sinflarsiz', 'Без классов')})
+                                    </span>
+                                  )}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="badge badge-primary text-[11px] font-semibold">
+                                  {tch.subject === 'Fan belgilanmagan' ? tr('Fan belgilanmagan', 'Предмет не указан') : localizeSubject(tch.subject, language)}
+                                </span>
+                                {Array.isArray(tch.assignedClasses) && tch.assignedClasses.length > 0 && (
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    {tch.assignedClasses.map((c) => (
+                                      <span key={c} className="px-1.5 py-0.5 rounded bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-[10px] font-mono font-bold">
+                                        {localizeGrade(c, language)}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </td>
                         <td className="font-mono text-xs text-slate-300">{tch.username}</td>
                         <td className="text-xs text-slate-400">{tch.phone || '-'}</td>
@@ -3251,6 +3960,225 @@ export default function AdminPortal() {
                       <tr>
                         <td colSpan={7} className="text-center py-8 text-slate-400 text-xs">
                           {tr("O'qituvchilar topilmadi.", 'Учителя не найдены.')}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 1.2: SUBJECTS MANAGEMENT */}
+          {activeTab === 'subjects' && (
+            <div className="space-y-5 animate-fade-in">
+              {/* Header Banner */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/80 p-4 rounded-2xl border border-cyan-500/30">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <BookOpen className="text-cyan-400" size={20} />
+                    {tr('Maktab Fanlari Boshqaruvi', 'Управление предметами школы')}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {tr(
+                      "Maktabda o'qitiladigan barcha fanlar ro'yxati, ularga biriktirilgan o'qituvchilar, sinflar va testlar statistikasi",
+                      'Список всех изучаемых предметов в школе, привязанные учителя, классы и статистика тестов'
+                    )}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  data-testid="admin-add-subject-btn"
+                  className="btn btn-diamond-cyan btn-sm flex items-center gap-1.5 font-bold shadow-md shadow-cyan-500/20"
+                  onClick={handleOpenAddSubjectModal}
+                >
+                  <Plus size={16} /> {tr("Yangi Fan Qo'shish", 'Добавить новый предмет')}
+                </button>
+              </div>
+
+              {/* KPI Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                    <BookOpen size={20} />
+                  </div>
+                  <div>
+                    <div className="text-lg font-black text-white">{subjectsData.length}</div>
+                    <div className="text-[11px] text-slate-400">{tr('Jami Fanlar', 'Всего предметов')}</div>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                    <ChalkboardTeacher size={20} />
+                  </div>
+                  <div>
+                    <div className="text-lg font-black text-white">
+                      {subjectsData.reduce((acc, s) => acc + (s.teachersCount || 0), 0)}
+                    </div>
+                    <div className="text-[11px] text-slate-400">{tr("O'qituvchi Biriktirilgan", 'Привязок учителей')}</div>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                    <FileCheck2 size={20} />
+                  </div>
+                  <div>
+                    <div className="text-lg font-black text-white">
+                      {subjectsData.reduce((acc, s) => acc + (s.testsCount || 0), 0)}
+                    </div>
+                    <div className="text-[11px] text-slate-400">{tr('Yaratilgan Testlar', 'Создано тестов')}</div>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                    <School size={20} />
+                  </div>
+                  <div>
+                    <div className="text-lg font-black text-white">
+                      {new Set(subjectsData.flatMap((s) => s.classes || [])).size}
+                    </div>
+                    <div className="text-[11px] text-slate-400">{tr('Qamrab Olingan Sinflar', 'Охвачено классов')}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Search bar & summary */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/70 p-4 rounded-xl border border-slate-800">
+                <div className="input-with-icon flex-1 max-w-md">
+                  <Search size={16} className="input-icon" />
+                  <input
+                    type="text"
+                    className="clean-input text-xs"
+                    placeholder={tr("Fan nomi, o'qituvchi yoki sinf bo'yicha qidiruv...", 'Поиск по названию предмета, учителю или классу...')}
+                    value={subjectSearch}
+                    onChange={(e) => setSubjectSearch(e.target.value)}
+                  />
+                </div>
+                <div className="text-xs text-slate-400">
+                  {tr(`Topildi: ${filteredSubjects.length} ta fan`, `Найдено: ${filteredSubjects.length} предметов`)}
+                </div>
+              </div>
+
+              {/* Subjects Table */}
+              <div className="table-responsive bg-slate-900/60 rounded-xl border border-slate-800/80 overflow-x-auto">
+                <table className="diamond-table w-full text-left">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '60px' }}>#</th>
+                      <th>{tr('Fan Nomi', 'Название предмета')}</th>
+                      <th>{tr("Biriktirilgan O'qituvchilar", 'Привязанные учителя')}</th>
+                      <th>{tr('Biriktirilgan Sinflar', 'Привязанные классы')}</th>
+                      <th>{tr('Testlar', 'Тесты')}</th>
+                      <th>{tr('Holati', 'Статус')}</th>
+                      <th className="text-right">{tr('Amallar', 'Действия')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredSubjects.map((sub, idx) => {
+                      const localizedName = localizeSubject(sub.name, language);
+                      return (
+                        <tr key={sub.id || idx}>
+                          <td className="text-slate-500 font-mono text-xs">{idx + 1}</td>
+                          <td>
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 flex-shrink-0">
+                                <BookOpen size={16} />
+                              </div>
+                              <div>
+                                <div className="font-bold text-white text-xs sm:text-sm">
+                                  {localizedName}
+                                </div>
+                                {localizedName !== sub.name && (
+                                  <div className="text-[10px] text-slate-400">{sub.name}</div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            {Array.isArray(sub.teachers) && sub.teachers.length > 0 ? (
+                              <div className="flex flex-wrap gap-1 max-w-xs">
+                                {sub.teachers.map((tName, tIdx) => (
+                                  <span
+                                    key={tIdx}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-[11px] text-emerald-300 font-medium"
+                                  >
+                                    <ChalkboardTeacher size={11} /> {tName}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-slate-500 italic">
+                                {tr("O'qituvchi biriktirilmagan", 'Учитель не привязан')}
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            {Array.isArray(sub.classes) && sub.classes.length > 0 ? (
+                              <div className="flex flex-wrap gap-1 max-w-xs">
+                                {sub.classes.map((clsName, cIdx) => (
+                                  <span
+                                    key={cIdx}
+                                    className="px-2 py-0.5 rounded-md bg-cyan-500/15 border border-cyan-500/30 text-[11px] text-cyan-300 font-bold"
+                                  >
+                                    {clsName}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-slate-500 italic">
+                                {tr('Sinf biriktirilmagan', 'Классы не привязаны')}
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-[11px] font-bold text-amber-300">
+                              <FileCheck2 size={12} /> {sub.testsCount || 0}
+                            </span>
+                          </td>
+                          <td>
+                            <span className="badge badge-success flex items-center gap-1 w-fit">
+                              <CheckCircle size={11} /> {tr('Faol', 'Активен')}
+                            </span>
+                          </td>
+                          <td className="text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                className="btn-icon-blue"
+                                onClick={() => handleOpenEditSubjectModal(sub)}
+                                title={tr('Fanni tahrirlash', 'Редактировать предмет')}
+                              >
+                                <Edit size={15} />
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-icon-red"
+                                onClick={() => handleDeleteSubject(sub)}
+                                title={tr("Fanni o'chirish", 'Удалить предмет')}
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+
+                    {filteredSubjects.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="text-center py-10 text-slate-400 text-xs">
+                          <BookOpen size={28} className="mx-auto mb-2 text-slate-600 opacity-60" />
+                          <div>{tr('Fanlar topilmadi.', 'Предметы не найдены.')}</div>
+                          <button
+                            type="button"
+                            className="mt-3 btn btn-diamond-cyan btn-xs"
+                            onClick={handleOpenAddSubjectModal}
+                          >
+                            <Plus size={14} /> {tr("Yangi Fan Qo'shish", 'Добавить новый предмет')}
+                          </button>
                         </td>
                       </tr>
                     )}
@@ -3942,7 +4870,7 @@ export default function AdminPortal() {
                       <th>{tr("O'quvchi", 'Ученик')}</th>
                       <th>{tr('Sinfi', 'Класс')}</th>
                       <th>{tr('Login', 'Логин')}</th>
-                      <th>{tr('Telefon', 'Телефон')}</th>
+                      <th>{tr('Telefon & Ota-onasi', 'Телефон и родители')}</th>
                       <th>{tr('Diamond Coins', 'Diamond-койны')}</th>
                       <th className="text-right">{tr('Amallar', 'Действия')}</th>
                     </tr>
@@ -3971,7 +4899,17 @@ export default function AdminPortal() {
                           <span className="badge badge-info text-[11px] font-semibold">{localizeGrade(std.grade || '-', language)}</span>
                         </td>
                         <td className="font-mono text-xs text-slate-300">{std.username}</td>
-                        <td className="text-xs text-slate-400">{std.phone || '-'}</td>
+                        <td>
+                          <div className="text-xs text-slate-300 font-medium">{std.phone || '-'}</div>
+                          {(std.parentName || std.parentPhone) && (
+                            <div className="text-[11px] text-pink-300/90 flex items-center gap-1 mt-0.5">
+                              <HeartHandshake size={11} className="text-pink-400 shrink-0" />
+                              <span className="truncate max-w-[170px]" title={`${std.parentName || ''}: ${std.parentPhone || ''}`}>
+                                {std.parentName ? `${std.parentName}: ` : ''}{std.parentPhone || ''}
+                              </span>
+                            </div>
+                          )}
+                        </td>
                         <td>
                           <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold">
                             <Coins size={12} />
@@ -5255,6 +6193,323 @@ export default function AdminPortal() {
             </div>
           )}
 
+          {/* TAB: PARENT INTERVIEWS & CLASS RANKINGS */}
+          {activeTab === 'parentInterviews' && (
+            <div className="space-y-5 animate-fade-in">
+              {/* Header card with filters and refresh */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/80 p-4 rounded-2xl border border-pink-500/30">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <HeartHandshake className="text-pink-400" size={22} />
+                    <span>{tr('Ota-onalar Bilan Muloqot va Sinflar Foiz Reytingi', 'Беседы с родителями и рейтинг классов по процентам')}</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {tr(
+                      "Tyuterlarning haftalik/oylik ota-onalar bilan suhbat natijalari, berilgan 1-10 ballar va sinflarning qamrov foizi bo'yicha umumiy reytingi",
+                      'Результаты бесед тьюторов с родителями за неделю/месяц, баллы 1-10 и рейтинг классов по процентам'
+                    )}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Period filter */}
+                  <select
+                    className="clean-select text-xs py-1.5 px-3 bg-slate-950 border-pink-500/30"
+                    value={parentStatsPeriod}
+                    onChange={(e) => setParentStatsPeriod(e.target.value)}
+                  >
+                    <option value="all">{tr('Barcha davrlar', 'Все периоды')}</option>
+                    <option value="month">{tr('Shu oy', 'Этот месяц')}</option>
+                    <option value="week">{tr('Shu hafta', 'Эта неделя')}</option>
+                    <option value="weekly">{tr('Haftalik suhbatlar', 'Еженедельные')}</option>
+                    <option value="monthly">{tr('Oylik suhbatlar', 'Ежемесячные')}</option>
+                  </select>
+
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm flex items-center gap-1.5"
+                    onClick={loadParentInterviewStats}
+                    disabled={loadingParentStats}
+                  >
+                    <RefreshCw size={14} className={loadingParentStats ? 'animate-spin' : ''} />
+                    <span>{tr('Yangilash', 'Обновить')}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* KPI Summary Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {/* 1st Place Class */}
+                <div className="admin-kpi-card border-amber-500/40 bg-gradient-to-br from-amber-500/10 to-transparent">
+                  <div className="admin-kpi-icon bg-amber-500/20 text-amber-400 border border-amber-500/40">
+                    <Trophy size={22} />
+                  </div>
+                  <div>
+                    <div className="admin-kpi-val text-amber-300">
+                      {parentOverallSummary?.topClass ? `${parentOverallSummary.topClass.className}` : '—'}
+                    </div>
+                    <div className="text-[11px] font-bold text-amber-400">
+                      {parentOverallSummary?.topClass ? `${parentOverallSummary.topClass.avgScorePercentage}% (${parentOverallSummary.topClass.avgScore}/10 ball)` : tr("Ma'lumot yo'q", 'Нет данных')}
+                    </div>
+                    <div className="admin-kpi-label">{tr('1-o‘rindagi Sinf', '1-е место')}</div>
+                  </div>
+                </div>
+
+                {/* Overall School Percentage */}
+                <div className="admin-kpi-card border-pink-500/40 bg-gradient-to-br from-pink-500/10 to-transparent">
+                  <div className="admin-kpi-icon bg-pink-500/20 text-pink-400 border border-pink-500/40">
+                    <TrendingUp size={22} />
+                  </div>
+                  <div>
+                    <div className="admin-kpi-val text-pink-300">
+                      {parentOverallSummary?.overallAvgPercentage != null ? `${parentOverallSummary.overallAvgPercentage}%` : '—'}
+                    </div>
+                    <div className="text-[11px] font-bold text-slate-300">
+                      {parentOverallSummary?.overallAvgScore != null ? `${parentOverallSummary.overallAvgScore} / 10 ball` : '—'}
+                    </div>
+                    <div className="admin-kpi-label">{tr("Maktab Bo'yicha O'rtacha", 'Средний балл по школе')}</div>
+                  </div>
+                </div>
+
+                {/* Total Interviews */}
+                <div className="admin-kpi-card border-cyan-500/40 bg-gradient-to-br from-cyan-500/10 to-transparent">
+                  <div className="admin-kpi-icon bg-cyan-500/20 text-cyan-400 border border-cyan-500/40">
+                    <PhoneCall size={22} />
+                  </div>
+                  <div>
+                    <div className="admin-kpi-val text-cyan-300">
+                      {parentOverallSummary?.totalInterviews || 0}
+                    </div>
+                    <div className="text-[11px] text-slate-400">
+                      {parentOverallSummary?.activeClassesCount || 0} {tr('ta faol sinf', 'акт. классов')}
+                    </div>
+                    <div className="admin-kpi-label">{tr('O‘tkazilgan Suhbatlar', 'Проведено бесед')}</div>
+                  </div>
+                </div>
+
+                {/* Coverage % */}
+                <div className="admin-kpi-card border-emerald-500/40 bg-gradient-to-br from-emerald-500/10 to-transparent">
+                  <div className="admin-kpi-icon bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                    <Users size={22} />
+                  </div>
+                  <div>
+                    <div className="admin-kpi-val text-emerald-300">
+                      {parentOverallSummary?.overallCoveragePercentage != null ? `${parentOverallSummary.overallCoveragePercentage}%` : '—'}
+                    </div>
+                    <div className="text-[11px] text-slate-300 font-bold">
+                      {parentOverallSummary?.contactedStudentsCount || 0} / {parentOverallSummary?.totalStudentsCount || 0} {tr("o'quvchi", 'учеников')}
+                    </div>
+                    <div className="admin-kpi-label">{tr('Ota-onalar Qamrovi', 'Охват родителей')}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Score Distribution Pills */}
+              {parentOverallSummary?.scoreDistribution && (
+                <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <span className="font-bold text-slate-300">{tr('Baholar Taqsimoti:', 'Распределение оценок:')}</span>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold">
+                      ⭐ 9-10 (A'lo): {parentOverallSummary.scoreDistribution['tier_9_10'] || 0} ta
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 font-bold">
+                      🌟 7-8 (Yaxshi): {parentOverallSummary.scoreDistribution['tier_7_8'] || 0} ta
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold">
+                      ⚠️ 5-6 (Qoniqarli): {parentOverallSummary.scoreDistribution['tier_5_6'] || 0} ta
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 font-bold">
+                      ❗ 1-4 (E'tibor talab): {parentOverallSummary.scoreDistribution['tier_1_4'] || 0} ta
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Class Rankings Table */}
+              <div className="bg-slate-900/80 rounded-2xl border border-slate-800 p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Award className="text-amber-400" size={20} />
+                    <h4 className="text-sm font-black text-white uppercase tracking-wider">
+                      {tr('Sinflar Reytingi (Ota-onalar Balli & Foiz Bo‘yicha)', 'Рейтинг классов (по баллам и процентам родителей)')}
+                    </h4>
+                  </div>
+                  <div className="input-with-icon sm:w-64">
+                    <Search size={14} className="input-icon" />
+                    <input
+                      type="text"
+                      className="clean-input text-xs py-1"
+                      placeholder={tr('Sinf yoki tyuter qidirish...', 'Поиск класса или тьютора...')}
+                      value={parentStatsSearch}
+                      onChange={(e) => setParentStatsSearch(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="table-responsive bg-slate-950/60 rounded-xl border border-slate-800/80 overflow-x-auto">
+                  <table className="diamond-table w-full text-left">
+                    <thead>
+                      <tr>
+                        <th className="w-16">{tr('O‘rin', 'Место')}</th>
+                        <th>{tr('Sinf', 'Класс')}</th>
+                        <th>{tr('Tyuter', 'Тьютор')}</th>
+                        <th>{tr('Qamrov', 'Охват')}</th>
+                        <th>{tr('Suhbatlar', 'Беседы')}</th>
+                        <th>{tr('O‘rtacha Ball', 'Средний балл')}</th>
+                        <th>{tr('Natija (Foiz)', 'Результат (%)')}</th>
+                        <th className="text-right">{tr('Batafsil', 'Подробнее')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {parentClassRankings.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="text-center py-8 text-slate-400 text-xs">
+                            {tr("Ushbu davr bo'yicha suhbatlar mavjud emas.", 'За выбранный период бесед не найдено.')}
+                          </td>
+                        </tr>
+                      ) : (
+                        parentClassRankings.map((cls, idx) => {
+                          const rank = idx + 1;
+                          const pct = cls.avgScorePercentage || 0;
+                          return (
+                            <tr key={cls.classId || cls.id} className="hover:bg-slate-900/60 transition-colors">
+                              <td>
+                                <div className="flex items-center gap-1 font-black text-xs">
+                                  {rank === 1 && <span className="text-base">🥇</span>}
+                                  {rank === 2 && <span className="text-base">🥈</span>}
+                                  {rank === 3 && <span className="text-base">🥉</span>}
+                                  <span className={rank <= 3 ? 'text-amber-300 font-extrabold' : 'text-slate-400'}>
+                                    #{rank}
+                                  </span>
+                                </div>
+                              </td>
+                              <td>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-extrabold text-white text-xs">{cls.className}</span>
+                                  <span className="badge badge-info text-[10px]">{cls.language === 'ru' ? 'RU' : 'UZ'}</span>
+                                </div>
+                              </td>
+                              <td>
+                                <div className="text-xs font-semibold text-purple-300">
+                                  {cls.tutorName || tr('Biriktirilmagan', 'Не назначен')}
+                                </div>
+                              </td>
+                              <td>
+                                <div className="space-y-1 min-w-[120px]">
+                                  <div className="flex items-center justify-between text-[11px]">
+                                    <span className="text-slate-300 font-bold">{cls.coveragePercentage || 0}%</span>
+                                    <span className="text-slate-500 text-[10px]">{cls.contactedStudentsCount}/{cls.totalStudents}</span>
+                                  </div>
+                                  <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                    <div
+                                      className="bg-emerald-400 h-1.5 rounded-full transition-all duration-500"
+                                      style={{ width: `${Math.min(100, cls.coveragePercentage || 0)}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              </td>
+                              <td>
+                                <span className="text-xs font-mono text-cyan-300 font-bold">{cls.interviewsCount} ta</span>
+                              </td>
+                              <td>
+                                <div className="inline-flex items-center gap-1 text-xs font-bold text-amber-300">
+                                  <Star size={13} className="fill-amber-400 text-amber-400" />
+                                  <span>{cls.avgScore != null ? cls.avgScore : '—'}</span>
+                                  <span className="text-[10px] text-slate-500">/ 10</span>
+                                </div>
+                              </td>
+                              <td>
+                                <div className="inline-flex items-center gap-2">
+                                  <span className={`px-2.5 py-1 rounded-full text-xs font-black border ${
+                                    pct >= 80
+                                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                      : pct >= 60
+                                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                                      : pct >= 40
+                                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                      : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                  }`}>
+                                    {pct}%
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="text-right">
+                                <button
+                                  type="button"
+                                  className="btn btn-xs bg-pink-500/15 hover:bg-pink-500/25 border border-pink-500/40 text-pink-300 font-bold flex items-center gap-1 ml-auto"
+                                  onClick={() => handleViewClassInterviews(cls)}
+                                >
+                                  <Eye size={12} />
+                                  <span>{tr('Sinf Natijalari', 'Результаты класса')}</span>
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Recent Parent Interviews Stream */}
+              {parentRecentInterviews.length > 0 && (
+                <div className="bg-slate-900/80 rounded-2xl border border-slate-800 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-black text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                      <Clock size={15} className="text-pink-400" />
+                      <span>{tr('Oxirgi Kiritilgan Suhbatlar', 'Последние проведенные беседы')}</span>
+                    </h4>
+                    <span className="text-[11px] text-slate-400">
+                      {parentRecentInterviews.length} {tr('ta suhbat', 'бесед(ы)')}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                    {parentRecentInterviews.map((iv) => (
+                      <div
+                        key={iv.id}
+                        className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-2 hover:border-pink-500/30 transition-colors"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="font-bold text-white text-xs flex items-center gap-1.5">
+                              <span>{iv.studentFullName}</span>
+                              <span className="badge badge-info text-[10px]">{iv.className}</span>
+                            </div>
+                            <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
+                              <Phone size={10} className="text-cyan-400" />
+                              <span>{iv.parentName ? `${iv.parentName}: ` : ''}{iv.parentPhone || '—'}</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className="px-2 py-0.5 rounded-full text-xs font-black bg-pink-500/20 text-pink-300 border border-pink-500/40">
+                              ⭐ {iv.score} / 10 ({iv.scorePercentage}%)
+                            </span>
+                            <div className="text-[10px] text-slate-400 mt-0.5">
+                              {iv.periodDisplay || iv.periodType} • {iv.date}
+                            </div>
+                          </div>
+                        </div>
+
+                        {iv.summary && (
+                          <p className="text-slate-300 text-xs italic bg-slate-900/60 p-2 rounded-lg border border-slate-800/60">
+                            "{iv.summary}"
+                          </p>
+                        )}
+
+                        <div className="text-[10px] text-purple-300/80 flex items-center gap-1">
+                          <UserCheck size={11} />
+                          <span>{tr('Tyuter:', 'Тьютор:')} {iv.tutorName}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* TAB 4: CLASSES MANAGEMENT */}
           {activeTab === 'classes' && (
             <div className="space-y-5 animate-fade-in">
@@ -5728,6 +6983,14 @@ export default function AdminPortal() {
                             onClick={() => setViewingClassStudents(cls)}
                           >
                             <Users size={12} /> {tr("O'quvchilar", 'Ученики')} ({stdCount})
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-xs bg-pink-500/15 hover:bg-pink-500/25 border border-pink-500/40 text-pink-300 text-[11px] font-bold flex items-center gap-1"
+                            onClick={() => handleViewClassInterviews(cls)}
+                            title={tr('Ota-onalar bilan suhbat natijalarini ko‘rish', 'Посмотреть результаты бесед с родителями')}
+                          >
+                            <HeartHandshake size={12} /> {tr('Ota-onalar', 'Родители')}
                           </button>
                           <button
                             type="button"
@@ -6707,6 +7970,102 @@ export default function AdminPortal() {
         </main>
       </div>
 
+      {/* MODAL: ADD / EDIT SUBJECT */}
+      {isAddSubjectModalOpen && (
+        <div className="modal-backdrop" onClick={() => setIsAddSubjectModalOpen(false)}>
+          <div className="modal-content animate-scale-in max-w-md" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title flex items-center gap-2">
+                <BookOpen className="text-cyan-400" size={20} />
+                {editingSubject
+                  ? tr('Fanni Tahrirlash', 'Редактировать предмет')
+                  : tr("Yangi Fan Qo'shish", 'Добавить новый предмет')}
+              </h3>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setIsAddSubjectModalOpen(false)}
+              >
+                &times;
+              </button>
+            </div>
+            <form onSubmit={handleSaveSubjectModal} className="modal-body space-y-4 pt-3">
+              <div>
+                <label className="input-label">
+                  {tr('Fan Nomi *', 'Название предмета *')}
+                </label>
+                <input
+                  type="text"
+                  className="clean-input"
+                  placeholder={tr('Masalan: Fizika, Robototexnika, Mental Arifmetika...', 'Например: Физика, Робототехника...')}
+                  value={subjectModalForm.name}
+                  onChange={(e) => setSubjectModalForm({ ...subjectModalForm, name: e.target.value })}
+                  required
+                  autoFocus
+                />
+                <p className="text-[11px] text-slate-400 mt-1.5">
+                  {editingSubject
+                    ? tr(
+                        "Fanning yangi nomini kiriting. O'qituvchilar, testlar va jadvallarda fan nomi avtomatik yangilanadi.",
+                        'Введите новое название. Название предмета автоматически обновится у учителей, в тестах и расписании.'
+                      )
+                    : tr(
+                        "Yangi qo'shilgan fan darhol o'qituvchi biriktirish, test yaratish va dars jadvalida ko'rinadi.",
+                        'Новый предмет сразу станет доступен для привязки к учителям, создания тестов и расписания.'
+                      )}
+                </p>
+              </div>
+
+              {!editingSubject && (
+                <div className="space-y-1.5">
+                  <div className="text-[11px] text-slate-400 font-medium">
+                    {tr('Tavsiya etilgan namunalar:', 'Рекомендуемые примеры:')}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {['Informatika', 'Robototexnika', 'Mental Arifmetika', 'Astronomiya', 'Chizmachilik', 'Iqtisodiyot', 'Fransuz tili', 'Nemis tili']
+                      .filter((s) => !subjectsData.some((sub) => (sub.name || '').toLowerCase() === s.toLowerCase()))
+                      .slice(0, 5)
+                      .map((sample) => (
+                        <button
+                          key={sample}
+                          type="button"
+                          className="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-300 border border-slate-700 text-[11px] transition-all"
+                          onClick={() => setSubjectModalForm({ name: sample })}
+                        >
+                          + {sample}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="modal-footer pt-3 flex items-center justify-end gap-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setIsAddSubjectModalOpen(false)}
+                  disabled={savingSubjectModal}
+                >
+                  {tr('Bekor qilish', 'Отмена')}
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-diamond-cyan btn-sm flex items-center gap-1.5 font-bold"
+                  disabled={savingSubjectModal || !subjectModalForm.name.trim()}
+                >
+                  {savingSubjectModal && <Loader2 size={14} className="animate-spin" />}
+                  <span>
+                    {editingSubject
+                      ? tr('Saqlash', 'Сохранить')
+                      : tr("Qo'shish", 'Добавить')}
+                  </span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* MODAL: ADD TEACHER */}
       {isAddTeacherOpen && (
         <div className="modal-backdrop" onClick={() => setIsAddTeacherOpen(false)}>
@@ -6797,30 +8156,172 @@ export default function AdminPortal() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="input-label">{tr("O'qitadigan Fani *", 'Преподаваемый предмет *')}</label>
-                  <select
-                    className="clean-select"
-                    value={teacherForm.subject}
-                    onChange={(e) => setTeacherForm({ ...teacherForm, subject: e.target.value })}
+              <div>
+                <label className="input-label">{tr('Telefon raqam', 'Номер телефона')}</label>
+                <input
+                  type="text"
+                  className="clean-input"
+                  placeholder="+998 90 123 45 67"
+                  value={teacherForm.phone}
+                  onChange={(e) => setTeacherForm({ ...teacherForm, phone: e.target.value })}
+                />
+              </div>
+
+              {/* Biriktiriladigan Fanlar va Sinflar */}
+              <div className="space-y-2.5 p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                <div className="flex items-center justify-between">
+                  <label className="input-label text-xs font-bold text-cyan-300 flex items-center gap-1.5 m-0">
+                    <BookOpen size={14} className="text-cyan-400" />
+                    <span>{tr("Biriktiriladigan Fanlar va Sinflar *", 'Прикрепляемые предметы и классы *')}</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingSubject(!isAddingSubject)}
+                    className="text-[11px] font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 transition-all"
                   >
-                    {subjectsList.map((s) => (
-                      <option key={s} value={s}>
-                        {localizeSubject(s, language)}
-                      </option>
-                    ))}
-                  </select>
+                    <Plus size={12} />
+                    <span>{tr("Yangi fan qo'shish", 'Добавить предмет')}</span>
+                  </button>
                 </div>
-                <div>
-                  <label className="input-label">{tr('Telefon raqam', 'Номер телефона')}</label>
-                  <input
-                    type="text"
-                    className="clean-input"
-                    placeholder="+998 90 123 45 67"
-                    value={teacherForm.phone}
-                    onChange={(e) => setTeacherForm({ ...teacherForm, phone: e.target.value })}
-                  />
+
+                {/* Quick Add Subject Input */}
+                {isAddingSubject && (
+                  <div className="p-2.5 rounded-xl bg-cyan-950/60 border border-cyan-500/40 space-y-2 animate-scale-in">
+                    <div className="text-[11px] font-bold text-cyan-200">
+                      {tr("Yangi fan nomini kiriting:", 'Введите название нового предмета:')}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        className="clean-input text-xs py-1.5 flex-1"
+                        placeholder={tr("Masalan: Geografiya, Rus tili...", 'Например: География, Русский язык...')}
+                        value={newSubjectInput}
+                        onChange={(e) => setNewSubjectInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleQuickAddSubject('create', 0);
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        disabled={savingNewSubject || !newSubjectInput.trim()}
+                        onClick={() => handleQuickAddSubject('create', 0)}
+                        className="btn btn-diamond-cyan btn-sm py-1.5 px-3 text-xs font-bold flex-shrink-0"
+                      >
+                        {savingNewSubject ? <Loader2 size={13} className="animate-spin" /> : tr("Saqlash", 'Сохранить')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAddingSubject(false);
+                          setNewSubjectInput('');
+                        }}
+                        className="btn btn-secondary btn-sm py-1.5 px-2.5 text-xs flex-shrink-0"
+                      >
+                        {tr("Bekor", 'Отмена')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* List of Subject-Class Assignments */}
+                <div className="space-y-3">
+                  {(teacherForm.subjectAssignments || [{ subject: subjectsList[0] || 'Matematika', classes: [] }]).map((assign, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/90 space-y-2.5 shadow-sm"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-1">
+                          <span className="text-[11px] font-bold text-slate-400 whitespace-nowrap">
+                            {tr("Fan:", 'Предмет:')}
+                          </span>
+                          <select
+                            className="clean-select text-xs py-1.5 font-bold flex-1"
+                            value={assign.subject}
+                            onChange={(e) => changeAssignmentSubject('create', idx, e.target.value)}
+                          >
+                            {(subjectsList.includes(assign.subject) ? subjectsList : [assign.subject, ...subjectsList].filter(Boolean)).map((s) => (
+                              <option key={s} value={s}>
+                                {localizeSubject(s, language)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        {(teacherForm.subjectAssignments?.length || 0) > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeSubjectAssignment('create', idx)}
+                            className="p-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/15 transition-all"
+                            title={tr("Ushbu fanni o'chirish", 'Удалить этот предмет')}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Classes Multi-select for this subject */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-slate-400 font-medium">
+                            {tr("Biriktirilgan sinflar:", 'Прикрепленные классы:')}{' '}
+                            <span className="text-cyan-300 font-bold">
+                              {assign.classes?.length || 0} {tr('ta sinf', 'кл.')}
+                            </span>
+                          </span>
+                          <div className="flex items-center gap-2 text-[10px]">
+                            <button
+                              type="button"
+                              className="text-cyan-400 hover:text-cyan-300 font-bold"
+                              onClick={() => selectAllClassesForAssignment('create', idx)}
+                            >
+                              {tr('Barchasi', 'Все')}
+                            </button>
+                            {(assign.classes?.length || 0) > 0 && (
+                              <button
+                                type="button"
+                                className="text-rose-400 hover:text-rose-300 font-bold"
+                                onClick={() => clearClassesForAssignment('create', idx)}
+                              >
+                                {tr('Tozalash', 'Очистить')}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="max-h-28 overflow-y-auto grid grid-cols-3 sm:grid-cols-4 gap-1 p-1.5 rounded-lg bg-slate-900/60 border border-slate-800/80">
+                          {classesList.map((cls) => {
+                            const checked = Array.isArray(assign.classes) && assign.classes.includes(cls.name);
+                            return (
+                              <button
+                                key={cls.id || cls.name}
+                                type="button"
+                                onClick={() => toggleAssignmentClass('create', idx, cls.name)}
+                                className={`px-2 py-1 rounded text-[10px] font-bold border text-center transition-all ${
+                                  checked
+                                    ? 'bg-cyan-500/25 border-cyan-400 text-cyan-200'
+                                    : 'bg-slate-900/40 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                                }`}
+                              >
+                                {checked ? '✓ ' : ''}{localizeGrade(cls.name, language)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => addSubjectAssignment('create')}
+                    className="w-full py-1.5 px-3 rounded-lg border border-dashed border-cyan-500/40 hover:border-cyan-400 text-cyan-300 hover:text-cyan-200 text-xs font-bold flex items-center justify-center gap-1.5 bg-cyan-500/5 hover:bg-cyan-500/10 transition-all"
+                  >
+                    <Plus size={13} />
+                    <span>{tr("+ Yana boshqa fan va sinf biriktirish", '+ Прикрепить ещё предмет и классы')}</span>
+                  </button>
                 </div>
               </div>
 
@@ -6977,33 +8478,172 @@ export default function AdminPortal() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="input-label">{tr("O'qitadigan Fani *", 'Преподаваемый предмет *')}</label>
-                  <select
-                    className="clean-select"
-                    value={editTeacherForm.subject}
-                    onChange={(e) => setEditTeacherForm({ ...editTeacherForm, subject: e.target.value })}
+              <div>
+                <label className="input-label">{tr('Telefon raqam', 'Номер телефона')}</label>
+                <input
+                  type="text"
+                  className="clean-input"
+                  placeholder="+998 90 123 45 67"
+                  value={editTeacherForm.phone}
+                  onChange={(e) => setEditTeacherForm({ ...editTeacherForm, phone: e.target.value })}
+                />
+              </div>
+
+              {/* Biriktiriladigan Fanlar va Sinflar */}
+              <div className="space-y-2.5 p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                <div className="flex items-center justify-between">
+                  <label className="input-label text-xs font-bold text-cyan-300 flex items-center gap-1.5 m-0">
+                    <BookOpen size={14} className="text-cyan-400" />
+                    <span>{tr("Biriktiriladigan Fanlar va Sinflar *", 'Прикрепляемые предметы и классы *')}</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingSubject(!isAddingSubject)}
+                    className="text-[11px] font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 transition-all"
                   >
-                    {(subjectsList.includes(editTeacherForm.subject)
-                      ? subjectsList
-                      : [editTeacherForm.subject, ...subjectsList].filter(Boolean)
-                    ).map((s) => (
-                      <option key={s} value={s}>
-                        {localizeSubject(s, language)}
-                      </option>
-                    ))}
-                  </select>
+                    <Plus size={12} />
+                    <span>{tr("Yangi fan qo'shish", 'Добавить предмет')}</span>
+                  </button>
                 </div>
-                <div>
-                  <label className="input-label">{tr('Telefon raqam', 'Номер телефона')}</label>
-                  <input
-                    type="text"
-                    className="clean-input"
-                    placeholder="+998 90 123 45 67"
-                    value={editTeacherForm.phone}
-                    onChange={(e) => setEditTeacherForm({ ...editTeacherForm, phone: e.target.value })}
-                  />
+
+                {/* Quick Add Subject Input */}
+                {isAddingSubject && (
+                  <div className="p-2.5 rounded-xl bg-cyan-950/60 border border-cyan-500/40 space-y-2 animate-scale-in">
+                    <div className="text-[11px] font-bold text-cyan-200">
+                      {tr("Yangi fan nomini kiriting:", 'Введите название нового предмета:')}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        className="clean-input text-xs py-1.5 flex-1"
+                        placeholder={tr("Masalan: Geografiya, Rus tili...", 'Например: География, Русский язык...')}
+                        value={newSubjectInput}
+                        onChange={(e) => setNewSubjectInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleQuickAddSubject('edit', 0);
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        disabled={savingNewSubject || !newSubjectInput.trim()}
+                        onClick={() => handleQuickAddSubject('edit', 0)}
+                        className="btn btn-diamond-cyan btn-sm py-1.5 px-3 text-xs font-bold flex-shrink-0"
+                      >
+                        {savingNewSubject ? <Loader2 size={13} className="animate-spin" /> : tr("Saqlash", 'Сохранить')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAddingSubject(false);
+                          setNewSubjectInput('');
+                        }}
+                        className="btn btn-secondary btn-sm py-1.5 px-2.5 text-xs flex-shrink-0"
+                      >
+                        {tr("Bekor", 'Отмена')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* List of Subject-Class Assignments */}
+                <div className="space-y-3">
+                  {(editTeacherForm.subjectAssignments || [{ subject: subjectsList[0] || 'Matematika', classes: [] }]).map((assign, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/90 space-y-2.5 shadow-sm"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-1">
+                          <span className="text-[11px] font-bold text-slate-400 whitespace-nowrap">
+                            {tr("Fan:", 'Предмет:')}
+                          </span>
+                          <select
+                            className="clean-select text-xs py-1.5 font-bold flex-1"
+                            value={assign.subject}
+                            onChange={(e) => changeAssignmentSubject('edit', idx, e.target.value)}
+                          >
+                            {(subjectsList.includes(assign.subject) ? subjectsList : [assign.subject, ...subjectsList].filter(Boolean)).map((s) => (
+                              <option key={s} value={s}>
+                                {localizeSubject(s, language)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        {(editTeacherForm.subjectAssignments?.length || 0) > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeSubjectAssignment('edit', idx)}
+                            className="p-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/15 transition-all"
+                            title={tr("Ushbu fanni o'chirish", 'Удалить этот предмет')}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Classes Multi-select for this subject */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-slate-400 font-medium">
+                            {tr("Biriktirilgan sinflar:", 'Прикрепленные классы:')}{' '}
+                            <span className="text-cyan-300 font-bold">
+                              {assign.classes?.length || 0} {tr('ta sinf', 'кл.')}
+                            </span>
+                          </span>
+                          <div className="flex items-center gap-2 text-[10px]">
+                            <button
+                              type="button"
+                              className="text-cyan-400 hover:text-cyan-300 font-bold"
+                              onClick={() => selectAllClassesForAssignment('edit', idx)}
+                            >
+                              {tr('Barchasi', 'Все')}
+                            </button>
+                            {(assign.classes?.length || 0) > 0 && (
+                              <button
+                                type="button"
+                                className="text-rose-400 hover:text-rose-300 font-bold"
+                                onClick={() => clearClassesForAssignment('edit', idx)}
+                              >
+                                {tr('Tozalash', 'Очистить')}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="max-h-28 overflow-y-auto grid grid-cols-3 sm:grid-cols-4 gap-1 p-1.5 rounded-lg bg-slate-900/60 border border-slate-800/80">
+                          {classesList.map((cls) => {
+                            const checked = Array.isArray(assign.classes) && assign.classes.includes(cls.name);
+                            return (
+                              <button
+                                key={cls.id || cls.name}
+                                type="button"
+                                onClick={() => toggleAssignmentClass('edit', idx, cls.name)}
+                                className={`px-2 py-1 rounded text-[10px] font-bold border text-center transition-all ${
+                                  checked
+                                    ? 'bg-cyan-500/25 border-cyan-400 text-cyan-200'
+                                    : 'bg-slate-900/40 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                                }`}
+                              >
+                                {checked ? '✓ ' : ''}{localizeGrade(cls.name, language)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => addSubjectAssignment('edit')}
+                    className="w-full py-1.5 px-3 rounded-lg border border-dashed border-cyan-500/40 hover:border-cyan-400 text-cyan-300 hover:text-cyan-200 text-xs font-bold flex items-center justify-center gap-1.5 bg-cyan-500/5 hover:bg-cyan-500/10 transition-all"
+                  >
+                    <Plus size={13} />
+                    <span>{tr("+ Yana boshqa fan va sinf biriktirish", '+ Прикрепить ещё предмет и классы')}</span>
+                  </button>
                 </div>
               </div>
 
@@ -7179,13 +8819,36 @@ export default function AdminPortal() {
                   )}
                 </div>
                 <div>
-                  <label className="input-label">{tr('Telefon (ota-onasi)', 'Телефон (родителей)')}</label>
+                  <label className="input-label">{tr("O'quvchi telefoni", 'Телефон ученика')}</label>
                   <input
                     type="text"
                     className="clean-input"
                     placeholder="+998 90 000 00 00"
                     value={studentForm.phone}
                     onChange={(e) => setStudentForm({ ...studentForm, phone: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="input-label">{tr('Ota-onasi Ismi-sharifi', 'ФИО родителя')}</label>
+                  <input
+                    type="text"
+                    className="clean-input"
+                    placeholder={tr('Masalan: Karimov Alisher', 'Например: Каримов Алишер')}
+                    value={studentForm.parentName || ''}
+                    onChange={(e) => setStudentForm({ ...studentForm, parentName: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="input-label">{tr('Ota-onasi telefon raqami', 'Телефон родителя')}</label>
+                  <input
+                    type="text"
+                    className="clean-input"
+                    placeholder="+998 90 000 00 00"
+                    value={studentForm.parentPhone || ''}
+                    onChange={(e) => setStudentForm({ ...studentForm, parentPhone: e.target.value })}
                   />
                 </div>
               </div>
@@ -7856,12 +9519,35 @@ export default function AdminPortal() {
                   </select>
                 </div>
                 <div>
-                  <label className="input-label">{tr('Telefon (ota-onasi)', 'Телефон (родителей)')}</label>
+                  <label className="input-label">{tr("O'quvchi telefoni", 'Телефон ученика')}</label>
                   <input
                     type="text"
                     className="clean-input"
                     value={editStudentForm.phone}
                     onChange={(e) => setEditStudentForm({ ...editStudentForm, phone: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="input-label">{tr('Ota-onasi Ismi-sharifi', 'ФИО родителя')}</label>
+                  <input
+                    type="text"
+                    className="clean-input"
+                    placeholder={tr('Masalan: Karimov Alisher', 'Например: Каримов Алишер')}
+                    value={editStudentForm.parentName || ''}
+                    onChange={(e) => setEditStudentForm({ ...editStudentForm, parentName: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="input-label">{tr('Ota-onasi telefon raqami', 'Телефон родителя')}</label>
+                  <input
+                    type="text"
+                    className="clean-input"
+                    placeholder="+998 90 000 00 00"
+                    value={editStudentForm.parentPhone || ''}
+                    onChange={(e) => setEditStudentForm({ ...editStudentForm, parentPhone: e.target.value })}
                   />
                 </div>
               </div>
@@ -9192,6 +10878,198 @@ export default function AdminPortal() {
         </div>
       )}
 
+      {/* MODAL: CLASS PARENT INTERVIEWS DRILLDOWN */}
+      {selectedClassForInterviews && (
+        <div className="modal-backdrop" onClick={() => { setSelectedClassForInterviews(null); setClassInterviewsDetail(null); }}>
+          <div className="modal-content animate-scale-in max-w-4xl" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="flex items-center gap-2">
+                <HeartHandshake className="text-pink-400" size={22} />
+                <div>
+                  <h3 className="modal-title flex items-center gap-2 text-base">
+                    <span>{selectedClassForInterviews.className || selectedClassForInterviews.name} {tr('Sinfi: Ota-onalar Bilan Muloqot Natijalari', 'Класс: Результаты бесед с родителями')}</span>
+                    <span className="badge badge-info text-xs">{selectedClassForInterviews.language === 'ru' ? 'RU' : "O'zbek"}</span>
+                  </h3>
+                  <div className="text-xs text-slate-400 mt-0.5">
+                    {tr('Biriktirilgan tyuter:', 'Закрепленный тьютор:')}{' '}
+                    <span className="text-purple-300 font-bold">{selectedClassForInterviews.tutorName || tr('Biriktirilmagan', 'Не назначен')}</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => { setSelectedClassForInterviews(null); setClassInterviewsDetail(null); }}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="modal-body space-y-4 pt-3 max-h-[75vh] overflow-y-auto">
+              {loadingClassInterviewsDetail ? (
+                <div className="flex items-center justify-center py-12 gap-2 text-slate-400">
+                  <Loader2 size={24} className="animate-spin text-pink-400" />
+                  <span>{tr("Sinf ma'lumotlari yuklanmoqda...", 'Загрузка данных класса...')}</span>
+                </div>
+              ) : classInterviewsDetail ? (
+                <>
+                  {/* Summary Bar */}
+                  {(() => {
+                    const scObj = classInterviewsDetail.schoolClass || classInterviewsDetail.class || {};
+                    return (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                        <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-center">
+                          <div className="text-[10px] text-slate-400 font-bold uppercase">{tr("O'quvchilar soni", 'Кол-во учеников')}</div>
+                          <div className="text-lg font-black text-white">{scObj.studentsCount ?? scObj.totalStudents ?? 0}</div>
+                        </div>
+                        <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-center">
+                          <div className="text-[10px] text-slate-400 font-bold uppercase">{tr('Qamrov foizi', 'Охват')}</div>
+                          <div className="text-lg font-black text-emerald-300">
+                            {scObj.coveragePercentage || 0}%
+                          </div>
+                        </div>
+                        <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-center">
+                          <div className="text-[10px] text-slate-400 font-bold uppercase">{tr("O'rtacha ball (1-10)", 'Средний балл (1-10)')}</div>
+                          <div className="text-lg font-black text-amber-300">
+                            {scObj.avgScore || 0} <span className="text-xs text-slate-400">/ 10</span>
+                          </div>
+                        </div>
+                        <div className="p-3 rounded-xl bg-pink-500/10 border border-pink-500/30 text-center">
+                          <div className="text-[10px] text-pink-300 font-bold uppercase">{tr('Sinf Natija Foizi', 'Итоговый % класса')}</div>
+                          <div className="text-xl font-black text-pink-400">
+                            {scObj.avgScorePercentage || 0}%
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Students Roster & Latest Interview */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-bold uppercase text-slate-400 tracking-wider">
+                      {tr("Sinf O'quvchilari va Ota-onalar Natijalari", 'Ученики класса и результаты родителей')}
+                    </h4>
+                    <div className="space-y-2">
+                      {(classInterviewsDetail.students || []).map((st) => {
+                        const stId = st.id || st.studentId;
+                        const stName = st.fullName || st.studentFullName;
+                        const stUser = st.username || st.studentUsername;
+                        const pName = st.parentName && st.parentName !== '-' ? st.parentName : '';
+                        const pPhone = st.parentPhone && st.parentPhone !== '-' ? st.parentPhone : (st.phone && st.phone !== '-' ? st.phone : '');
+                        const stIvs = Array.isArray(st.interviews) ? st.interviews : (Array.isArray(st.allInterviews) ? st.allInterviews : []);
+
+                        return (
+                          <div
+                            key={stId}
+                            className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 transition-colors space-y-2"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-lg bg-slate-800 border border-cyan-500/40 flex items-center justify-center font-bold text-cyan-300 text-xs shrink-0">
+                                  {stName?.charAt(0) || 'S'}
+                                </div>
+                                <div>
+                                  <div className="font-bold text-white text-xs">{stName}</div>
+                                  <div className="text-[10px] text-slate-400 font-mono">@{stUser}</div>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-2 text-xs">
+                                {/* Parent Contact */}
+                                <div className="flex items-center gap-1 text-[11px] bg-slate-900 px-2 py-1 rounded-md border border-slate-800 text-slate-300">
+                                  <Phone size={12} className="text-cyan-400" />
+                                  <span>{pName ? `${pName}: ` : ''}{pPhone || tr("Raqam yo'q", 'Нет номера')}</span>
+                                  {pPhone && (
+                                    <a
+                                      href={`tel:${pPhone}`}
+                                      className="text-cyan-400 hover:text-cyan-300 ml-1"
+                                      title={tr("Qo'ng'iroq qilish", 'Позвонить')}
+                                    >
+                                      <PhoneCall size={12} />
+                                    </a>
+                                  )}
+                                </div>
+
+                                {/* Latest Score Badge */}
+                                {st.latestInterview ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`px-2 py-0.5 rounded-full text-xs font-extrabold border ${
+                                      st.latestInterview.score >= 8
+                                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                        : st.latestInterview.score >= 6
+                                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                                        : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                    }`}>
+                                      ⭐ {st.latestInterview.score} / 10 ({st.latestInterview.scorePercentage}%)
+                                    </span>
+                                    <span className="text-[10px] text-slate-400">
+                                      {st.latestInterview.periodDisplay || st.latestInterview.periodType}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                                    {tr("Suhbat o'tkazilmagan", 'Беседа не проведена')}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Latest Xulosa / Summary if available */}
+                            {st.latestInterview && (
+                              <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800/80 text-xs space-y-1">
+                                <div className="flex items-center justify-between text-[10px] text-slate-400">
+                                  <span className="font-semibold text-slate-300">
+                                    {tr('Suhbat xulosasi', 'Резюме беседы')} ({st.latestInterview.date})
+                                  </span>
+                                  <span>{st.interviewsCount} {tr('ta suhbat o‘tkazilgan', 'бесед(ы) проведено')}</span>
+                                </div>
+                                <p className="text-slate-300 text-xs italic">
+                                  "{st.latestInterview.summary || tr('Xulosa kiritilmagan', 'Резюме не указано')}"
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Past Interviews History (if > 1) */}
+                            {stIvs.length > 1 && (
+                              <details className="text-[11px] text-slate-400 group">
+                                <summary className="cursor-pointer font-bold text-cyan-400 hover:text-cyan-300 py-1">
+                                  {tr("Oldingi barcha suhbatlar tarixi", 'История предыдущих бесед')} ({stIvs.length})
+                                </summary>
+                                <div className="space-y-1.5 pt-1.5 pl-2 border-l-2 border-slate-800 mt-1">
+                                  {stIvs.map((iv) => (
+                                    <div key={iv.id} className="p-2 rounded bg-slate-900/50 border border-slate-800/50 text-xs">
+                                      <div className="flex items-center justify-between text-[10px] text-slate-400">
+                                        <span className="font-bold text-slate-300">{iv.date} • {iv.periodDisplay || iv.periodType}</span>
+                                        <span className="font-bold text-amber-300">⭐ {iv.score} / 10 ({iv.scorePercentage}%)</span>
+                                      </div>
+                                      <div className="text-slate-300 text-[11px] mt-0.5">"{iv.summary}"</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </details>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              ) : null}
+            </div>
+
+            <div className="modal-footer flex justify-end pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => { setSelectedClassForInterviews(null); setClassInterviewsDetail(null); }}
+              >
+                {tr('Yopish', 'Закрыть')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Confirmation Modal */}
       <ConfirmModal
         isOpen={confirmModalState.isOpen}
@@ -9237,6 +11115,15 @@ export default function AdminPortal() {
             onClick: () => setActiveTab('students'),
           },
           {
+            key: 'parentInterviews',
+            label: tr('Ota-onalar Muloqoti & Reyting', 'Беседы с родителями и рейтинг'),
+            shortLabel: tr('Ota-onalar', 'Родители'),
+            icon: <HeartHandshake size={19} className="text-pink-400" />,
+            active: activeTab === 'parentInterviews',
+            badge: parentOverallSummary?.totalInterviews > 0 ? String(parentOverallSummary.totalInterviews) : '',
+            onClick: () => setActiveTab('parentInterviews'),
+          },
+          {
             key: 'tests',
             label: tr('Testlar Boshqaruvi', 'Управление тестами'),
             shortLabel: tr('Testlar', 'Тесты'),
@@ -9265,6 +11152,15 @@ export default function AdminPortal() {
             active: activeTab === 'teachers',
             badge: teachers.length > 0 ? String(teachers.length) : '',
             onClick: () => setActiveTab('teachers'),
+          },
+          {
+            key: 'subjects',
+            label: tr('Fanlar Boshqaruvi', 'Управление предметами'),
+            shortLabel: tr('Fanlar', 'Предметы'),
+            icon: <BookOpen size={19} />,
+            active: activeTab === 'subjects',
+            badge: subjectsData.length > 0 ? String(subjectsData.length) : '',
+            onClick: () => setActiveTab('subjects'),
           },
           {
             key: 'tutors',

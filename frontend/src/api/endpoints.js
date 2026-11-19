@@ -45,6 +45,21 @@ export const api = {
         method: 'POST',
         body: data instanceof FormData ? data : JSON.stringify(data),
       }),
+    getSubjects: () => apiClient('/api/admin/subjects/'),
+    createSubject: (data) =>
+      apiClient('/api/admin/subjects/', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    updateSubject: (subjectId, data) =>
+      apiClient(`/api/admin/subjects/${subjectId}/`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    deleteSubject: (subjectId) =>
+      apiClient(`/api/admin/subjects/${subjectId}/`, {
+        method: 'DELETE',
+      }),
     getTutors: () => apiClient('/api/admin/tutors/'),
     createTutor: (data) =>
       apiClient('/api/admin/tutors/', {
@@ -155,6 +170,15 @@ export const api = {
         method: 'DELETE',
       }),
     downloadScheduleTemplateUrl: () => '/api/admin/schedule/template/',
+    getParentInterviewStats: (params = {}) => {
+      const q = new URLSearchParams();
+      if (params.period && params.period !== 'all') q.set('period', params.period);
+      if (params.search) q.set('search', params.search);
+      const qs = q.toString();
+      return apiClient(`/api/admin/parent-interviews/stats/${qs ? `?${qs}` : ''}`);
+    },
+    getClassParentInterviews: (classId) =>
+      apiClient(`/api/admin/parent-interviews/classes/${classId}/`),
   },
 
   // --- TEACHER PORTAL ---
@@ -265,6 +289,29 @@ export const api = {
       }),
     deleteStudent: (studentId) =>
       apiClient(`/api/tutor/students/${studentId}/`, {
+        method: 'DELETE',
+      }),
+    getParentInterviews: (params = {}) => {
+      const q = new URLSearchParams();
+      if (params.period && params.period !== 'all') q.set('period', params.period);
+      if (params.grade && params.grade !== 'all') q.set('grade', params.grade);
+      if (params.studentId) q.set('studentId', params.studentId);
+      if (params.search) q.set('search', params.search);
+      const qs = q.toString();
+      return apiClient(`/api/tutor/parent-interviews/${qs ? `?${qs}` : ''}`);
+    },
+    createParentInterview: (data) =>
+      apiClient('/api/tutor/parent-interviews/', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    updateParentInterview: (interviewId, data) =>
+      apiClient(`/api/tutor/parent-interviews/${interviewId}/`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    deleteParentInterview: (interviewId) =>
+      apiClient(`/api/tutor/parent-interviews/${interviewId}/`, {
         method: 'DELETE',
       }),
   },

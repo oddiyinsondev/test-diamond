@@ -34,9 +34,18 @@ import {
   KeyRound,
   Copy,
   Check,
+  MessageSquare,
+  PhoneCall,
+  Star,
+  Award,
+  FileText,
+  CheckCircle2,
+  ClipboardList,
+  HeartHandshake,
+  X,
 } from 'lucide-react';
 
-const TUTOR_VALID_TABS = ['students', 'coins', 'profile'];
+const TUTOR_VALID_TABS = ['students', 'interviews', 'coins', 'profile'];
 
 export default function TutorPortal() {
   const { user, login, updateProfile, refreshUser, language, tr } = useAuth();
@@ -90,6 +99,8 @@ export default function TutorPortal() {
     password: '123',
     grade: '',
     phone: '',
+    parentName: '',
+    parentPhone: '',
     bio: '',
   });
   const [studentAvatarFile, setStudentAvatarFile] = useState(null);
@@ -110,11 +121,44 @@ export default function TutorPortal() {
     password: '',
     grade: '',
     phone: '',
+    parentName: '',
+    parentPhone: '',
     bio: '',
     avatarFile: null,
     avatarPreview: '',
     clearAvatar: false,
     hasCustomAvatar: false,
+  });
+
+  // Parent Interviews state
+  const [parentInterviews, setParentInterviews] = useState([]);
+  const [loadingInterviews, setLoadingInterviews] = useState(false);
+  const [parentInterviewsSummary, setParentInterviewsSummary] = useState({
+    totalInterviews: 0,
+    uniqueContactedStudents: 0,
+    totalAssignedStudents: 0,
+    coveragePercentage: 0,
+    avgScore: 0,
+    avgScorePercentage: 0,
+    weeklyCount: 0,
+    monthlyCount: 0,
+  });
+  const [interviewSearch, setInterviewSearch] = useState('');
+  const [interviewPeriodFilter, setInterviewPeriodFilter] = useState('all');
+  const [interviewClassFilter, setInterviewClassFilter] = useState('all');
+  const [isInterviewModalOpen, setIsInterviewModalOpen] = useState(false);
+  const [editingInterview, setEditingInterview] = useState(null);
+  const [savingInterview, setSavingInterview] = useState(false);
+  const [interviewForm, setInterviewForm] = useState({
+    studentId: '',
+    parentName: '',
+    parentPhone: '',
+    periodType: 'weekly',
+    date: new Date().toISOString().split('T')[0],
+    score: 10,
+    summary: '',
+    callStatus: 'completed',
+    syncParentPhone: true,
   });
 
   // Confirm delete modal
@@ -314,6 +358,8 @@ export default function TutorPortal() {
       password: '123',
       grade: defaultGrade,
       phone: '',
+      parentName: '',
+      parentPhone: '',
       bio: '',
     });
     setStudentAvatarFile(null);
@@ -358,6 +404,8 @@ export default function TutorPortal() {
       fd.append('password', studentForm.password.trim());
       fd.append('grade', studentForm.grade);
       fd.append('phone', studentForm.phone.trim());
+      fd.append('parentName', (studentForm.parentName || '').trim());
+      fd.append('parentPhone', (studentForm.parentPhone || '').trim());
       fd.append('bio', (studentForm.bio || '').trim());
       if (studentAvatarFile) {
         fd.append('avatar', studentAvatarFile);
@@ -397,6 +445,8 @@ export default function TutorPortal() {
       password: '',
       grade: std.grade && std.grade !== '-' ? std.grade : assignedClasses[0]?.name || '',
       phone: std.rawPhone !== undefined ? std.rawPhone : std.phone && std.phone !== '-' ? std.phone : '',
+      parentName: std.parentName || '',
+      parentPhone: std.parentPhone || '',
       bio: std.bio || '',
       avatarFile: null,
       avatarPreview: std.avatarUrl || '',
@@ -426,6 +476,8 @@ export default function TutorPortal() {
       fd.append('username', editStudentForm.username.trim());
       fd.append('grade', editStudentForm.grade);
       fd.append('phone', editStudentForm.phone.trim());
+      fd.append('parentName', (editStudentForm.parentName || '').trim());
+      fd.append('parentPhone', (editStudentForm.parentPhone || '').trim());
       fd.append('bio', (editStudentForm.bio || '').trim());
       if (editStudentForm.password.trim()) {
         fd.append('password', editStudentForm.password.trim());
@@ -456,13 +508,122 @@ export default function TutorPortal() {
       await loadTutorData();
     } catch (err) {
       showToast(
-        err.message ||
-          tr("O'quvchini yangilashda xatolik!", 'Ошибка при обновлении ученика!'),
+        err.message || tr("O'quvchini yangilashda xatolik!", 'Ошибка при обновлении ученика!'),
         'error'
       );
     } finally {
       setSavingEditStudent(false);
     }
+  };
+
+  const loadParentInterviews = useCallback(async () => {
+    if (!isTutor) return;
+    setLoadingInterviews(true);
+    try {
+      const res = await api.tutor.getParentInterviews({
+        period: interviewPeriodFilter,
+        grade: interviewClassFilter,
+        search: interviewSearch,
+      });
+      if (res && res.success) {
+        setParentInterviews(Array.isArray(res.interviews) ? res.interviews : []);
+        if (res.summary) {
+          setParentInterviewsSummary(res.summary);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load parent interviews:', err);
+    } finally {
+      setLoadingInterviews(false);
+    }
+  }, [isTutor, interviewPeriodFilter, interviewClassFilter, interviewSearch]);
+
+  useEffect(() => {
+    if (isTutor) {
+      loadParentInterviews();
+    }
+  }, [isTutor, loadParentInterviews]);
+
+  const handleOpenAddInterview = (targetStudent = null) => {
+    const std = targetStudent || (students.length > 0 ? students[0] : null);
+    setEditingInterview(null);
+    setInterviewForm({
+      studentId: std ? std.id : '',
+      parentName: std?.parentName || '',
+      parentPhone: std?.parentPhone || (std?.phone && std.phone !== '-' ? std.phone : '') || '',
+      periodType: 'weekly',
+      date: new Date().toISOString().split('T')[0],
+      score: 10,
+      summary: '',
+      callStatus: 'completed',
+      syncParentPhone: true,
+    });
+    setIsInterviewModalOpen(true);
+  };
+
+  const handleOpenEditInterview = (iv) => {
+    setEditingInterview(iv);
+    setInterviewForm({
+      studentId: iv.studentId || '',
+      parentName: iv.parentName || '',
+      parentPhone: iv.parentPhone || '',
+      periodType: iv.periodType || 'weekly',
+      date: iv.date || new Date().toISOString().split('T')[0],
+      score: iv.score || 10,
+      summary: iv.summary || '',
+      callStatus: iv.callStatus || 'completed',
+      syncParentPhone: true,
+    });
+    setIsInterviewModalOpen(true);
+  };
+
+  const handleSaveInterview = async (e) => {
+    e.preventDefault();
+    if (!interviewForm.studentId) {
+      showToast(tr("O'quvchini tanlang!", 'Выберите ученика!'), 'warning');
+      return;
+    }
+    if (!interviewForm.summary.trim()) {
+      showToast(tr('Suhbat xulosasini kiriting!', 'Введите заключение беседы!'), 'warning');
+      return;
+    }
+    setSavingInterview(true);
+    try {
+      if (editingInterview) {
+        await api.tutor.updateParentInterview(editingInterview.id, interviewForm);
+        showToast(tr("Suhbat xulosasi muvaffaqiyatli yangilandi!", 'Заключение беседы успешно обновлено!'), 'success');
+      } else {
+        await api.tutor.createParentInterview(interviewForm);
+        showToast(tr("Ota-ona bilan suhbat xulosasi muvaffaqiyatli saqlandi!", 'Заключение беседы с родителем успешно сохранено!'), 'success');
+      }
+      setIsInterviewModalOpen(false);
+      await loadParentInterviews();
+      await loadTutorData();
+    } catch (err) {
+      showToast(err.message || tr('Xatolik yuz berdi!', 'Произошла ошибка!'), 'error');
+    } finally {
+      setSavingInterview(false);
+    }
+  };
+
+  const handleDeleteInterview = (iv) => {
+    setConfirmModalState({
+      isOpen: true,
+      title: tr("Suhbat yozuvini o'chirish", 'Удалить запись беседы'),
+      message: tr(
+        `Rostdan ham ${iv.studentName} (${iv.className}) bo'yicha o'tkazilgan suhbat yozuvini o'chirmoqchimisiz?`,
+        `Вы действительно хотите удалить запись беседы по ученику ${iv.studentName} (${iv.className})?`
+      ),
+      onConfirm: async () => {
+        try {
+          await api.tutor.deleteParentInterview(iv.id);
+          showToast(tr("Suhbat yozuvi o'chirildi!", 'Запись беседы удалена!'), 'success');
+          await loadParentInterviews();
+        } catch (err) {
+          showToast(err.message || tr("O'chirishda xatolik!", 'Ошибка при удалении!'), 'error');
+        }
+      },
+    });
   };
 
   const handleSaveQuickStudentPw = async (e) => {
@@ -923,6 +1084,18 @@ export default function TutorPortal() {
 
             <button
               type="button"
+              className={`portal-nav-btn ${activeTab === 'interviews' ? 'active' : ''}`}
+              onClick={() => setActiveTab('interviews')}
+            >
+              <div className="portal-nav-icon">
+                <HeartHandshake size={18} />
+              </div>
+              <span className="portal-nav-label">{tr('Ota-onalar bilan suhbatlar', 'Беседы с родителями')}</span>
+              <span className="portal-nav-badge">{parentInterviews.length}</span>
+            </button>
+
+            <button
+              type="button"
               className={`portal-nav-btn nav-coin ${activeTab === 'coins' ? 'active' : ''}`}
               onClick={() => setActiveTab('coins')}
             >
@@ -1226,7 +1399,7 @@ export default function TutorPortal() {
                       <th>{tr("O'quvchi", 'Ученик')}</th>
                       <th>{tr('Sinfi', 'Класс')}</th>
                       <th>{tr('Login', 'Логин')}</th>
-                      <th>{tr('Telefon', 'Телефон')}</th>
+                      <th>{tr('Telefon & Ota-onasi', 'Телефон и родители')}</th>
                       <th>{tr('Diamond Coins', 'Diamond-койны')}</th>
                       <th>{tr("O'zlashtirish", 'Успеваемость')}</th>
                       <th className="text-right">{tr('Amallar', 'Действия')}</th>
@@ -1259,7 +1432,32 @@ export default function TutorPortal() {
                           </span>
                         </td>
                         <td className="font-mono text-xs text-slate-300">{std.username}</td>
-                        <td className="text-xs text-slate-400">{std.phone || '-'}</td>
+                        <td className="text-xs">
+                          <div className="text-slate-300 font-mono text-[11px]">{std.phone || '-'}</div>
+                          {(std.parentName || std.parentPhone) ? (
+                            <div className="text-[10px] text-purple-300/90 mt-0.5 flex flex-wrap items-center gap-1">
+                              <Users size={10} className="text-purple-400 flex-shrink-0" />
+                              <span className="font-semibold text-slate-300 truncate max-w-[120px]">{std.parentName || tr('Ota-onasi', 'Родитель')}:</span>
+                              {std.parentPhone ? (
+                                <a
+                                  href={`tel:${std.parentPhone}`}
+                                  className="text-cyan-300 hover:underline font-mono"
+                                  title={tr("Qo'ng'iroq qilish", 'Позвонить')}
+                                >
+                                  {std.parentPhone}
+                                </a>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditStudent(std)}
+                              className="text-[10px] text-amber-400/80 hover:text-amber-300 italic"
+                            >
+                              + {tr('Ota-ona raqami', 'Номер родителей')}
+                            </button>
+                          )}
+                        </td>
                         <td>
                           <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold">
                             <Coins size={12} />
@@ -1276,6 +1474,14 @@ export default function TutorPortal() {
                         </td>
                         <td className="text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              className="btn-icon text-purple-400 hover:bg-purple-500/20 p-1.5 rounded-lg transition-colors"
+                              onClick={() => handleOpenAddInterview(std)}
+                              title={tr("Ota-ona bilan suhbat natijasini kiritish", 'Внести результат беседы с родителями')}
+                            >
+                              <PhoneCall size={15} />
+                            </button>
                             <button
                               type="button"
                               className="btn-icon text-amber-400 hover:bg-amber-500/20 p-1.5 rounded-lg transition-colors"
@@ -1315,6 +1521,278 @@ export default function TutorPortal() {
                             "O'quvchilar topilmadi. Yuqoridagi tugma orqali yangi o'quvchi qo'shing.",
                             'Ученики не найдены. Нажмите кнопку выше, чтобы добавить ученика.'
                           )}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: PARENT INTERVIEWS (OTA-ONALAR BILAN SUHBATLAR) */}
+          {activeTab === 'interviews' && (
+            <div className="space-y-5 animate-fade-in">
+              {/* Summary KPIs */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 shadow-md">
+                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <PhoneCall size={14} className="text-cyan-400" />
+                    <span>{tr('Jami Suhbatlar', 'Всего бесед')}</span>
+                  </div>
+                  <div className="text-2xl font-black text-white mt-1">
+                    {parentInterviewsSummary.totalInterviews ?? parentInterviews.length}
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">
+                    {tr('Haftalik:', 'Недельных:')} <strong className="text-cyan-300">{parentInterviewsSummary.weeklyCount || 0}</strong> • {tr('Oylik:', 'Месячных:')} <strong className="text-purple-300">{parentInterviewsSummary.monthlyCount || 0}</strong>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 shadow-md">
+                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Users size={14} className="text-emerald-400" />
+                    <span>{tr('Ota-onalar Qamrovi', 'Охват родителей')}</span>
+                  </div>
+                  <div className="text-2xl font-black text-emerald-400 mt-1">
+                    {parentInterviewsSummary.coveragePercentage ?? 0}%
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">
+                    {parentInterviewsSummary.uniqueContactedStudents || 0} / {parentInterviewsSummary.totalAssignedStudents || students.length} {tr("o'quvchi oilasi", 'семей')}
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 shadow-md">
+                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Star size={14} className="text-amber-400" />
+                    <span>{tr("O'rtacha Ball (1-10)", 'Средний балл (1-10)')}</span>
+                  </div>
+                  <div className="text-2xl font-black text-amber-300 mt-1 flex items-baseline gap-1.5">
+                    <span>{parentInterviewsSummary.avgScore || 0}</span>
+                    <span className="text-xs font-normal text-slate-400">/ 10</span>
+                  </div>
+                  <div className="text-[10px] text-amber-400/80 mt-0.5">
+                    {tr('Foiz ekvivalenti:', 'В процентах:')} <strong>{parentInterviewsSummary.avgScorePercentage || 0}%</strong>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-gradient-to-br from-purple-900/30 to-indigo-900/20 border border-purple-500/30 shadow-md flex flex-col justify-between">
+                  <div className="text-[11px] font-bold text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <HeartHandshake size={14} className="text-purple-400" />
+                    <span>{tr('Yangi Muloqot', 'Новая беседа')}</span>
+                  </div>
+                  <div className="text-xs text-slate-300 mt-1">
+                    {tr("Haftada yoki oyda o'tkazilgan suhbatni kiriting", 'Внесите итог еженедельной или ежемесячной беседы')}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenAddInterview(null)}
+                    className="btn btn-diamond-cyan btn-xs font-bold mt-2 flex items-center justify-center gap-1.5"
+                  >
+                    <Plus size={13} />
+                    <span>{tr('Suhbat Kiritish', 'Внести беседу')}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Search & Filter Toolbar */}
+              <div className="admin-search-strip flex-col sm:flex-row gap-2.5">
+                <div className="flex flex-wrap items-center gap-2.5 flex-1 w-full">
+                  <div className="input-with-icon flex-1 w-full sm:min-w-[200px] sm:max-w-sm">
+                    <Search size={16} className="input-icon" />
+                    <input
+                      type="text"
+                      className="clean-input text-xs"
+                      placeholder={tr("O'quvchi, ota-ona yoki xulosa bo'yicha qidirish...", 'Поиск по ученику, родителю или заключению...')}
+                      value={interviewSearch}
+                      onChange={(e) => setInterviewSearch(e.target.value)}
+                    />
+                  </div>
+
+                  <select
+                    className="clean-select text-xs w-full sm:w-auto sm:min-w-[150px]"
+                    value={interviewPeriodFilter}
+                    onChange={(e) => setInterviewPeriodFilter(e.target.value)}
+                  >
+                    <option value="all">{tr('Barcha davrlar', 'Все периоды')}</option>
+                    <option value="weekly">{tr('Haftalik suhbatlar', 'Еженедельные беседы')}</option>
+                    <option value="monthly">{tr('Oylik suhbatlar', 'Ежемесячные беседы')}</option>
+                    <option value="quarterly">{tr('Choraklik suhbatlar', 'Четвертные беседы')}</option>
+                  </select>
+
+                  <select
+                    className="clean-select text-xs w-full sm:w-auto sm:min-w-[150px]"
+                    value={interviewClassFilter}
+                    onChange={(e) => setInterviewClassFilter(e.target.value)}
+                  >
+                    <option value="all">{tr('Barcha sinflar', 'Все классы')}</option>
+                    {assignedClasses.map((c) => (
+                      <option key={c.id} value={c.name}>
+                        {localizeGrade(c.name, language)}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={loadParentInterviews}
+                    className="btn btn-secondary btn-xs p-2 text-slate-300 hover:text-white"
+                    title={tr('Yangilash', 'Обновить')}
+                  >
+                    <RefreshCw size={14} className={loadingInterviews ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenAddInterview(null)}
+                  className="btn btn-diamond-cyan btn-sm font-bold flex items-center gap-1.5 flex-shrink-0"
+                >
+                  <Plus size={16} />
+                  <span>{tr('Yangi Suhbat Kiritish', 'Добавить беседу')}</span>
+                </button>
+              </div>
+
+              {/* Table of Interviews */}
+              <div className="table-responsive bg-slate-900/70 rounded-2xl border border-slate-800 overflow-x-auto shadow-xl">
+                <table className="diamond-table w-full text-left">
+                  <thead>
+                    <tr>
+                      <th>{tr("O'quvchi & Sinf", 'Ученик и класс')}</th>
+                      <th>{tr('Ota-onasi & Aloqa', 'Родитель и контакт')}</th>
+                      <th>{tr('Suhbat Davri', 'Период')}</th>
+                      <th>{tr('Sanasi', 'Дата')}</th>
+                      <th>{tr('Baho (1-10 Ball)', 'Оценка (1-10 баллов)')}</th>
+                      <th style={{ minWidth: '220px' }}>{tr('Suhbat Xulosasi', 'Заключение беседы')}</th>
+                      <th>{tr('Holati', 'Статус')}</th>
+                      <th className="text-right">{tr('Amallar', 'Действия')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {parentInterviews.map((iv) => {
+                      const scoreColor =
+                        iv.score >= 8
+                          ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                          : iv.score >= 6
+                          ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                          : 'bg-rose-500/15 border-rose-500/40 text-rose-300';
+                      return (
+                        <tr key={iv.id}>
+                          <td>
+                            <div className="flex items-center gap-2.5">
+                              <img
+                                src={
+                                  iv.studentAvatarUrl ||
+                                  `https://api.dicebear.com/7.x/initials/svg?seed=${iv.studentUsername || 'ST'}&backgroundColor=0284c7`
+                                }
+                                alt=""
+                                className="w-8 h-8 rounded-lg object-cover border border-purple-500/40 flex-shrink-0"
+                              />
+                              <div>
+                                <div className="font-bold text-white text-xs">{iv.studentName}</div>
+                                <div className="text-[10px] text-purple-300 font-semibold">
+                                  {localizeGrade(iv.className, language)}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="text-xs text-white font-medium">
+                              {iv.parentName || tr('(Ism kiritilmagan)', '(Имя не указано)')}
+                            </div>
+                            {iv.parentPhone ? (
+                              <a
+                                href={`tel:${iv.parentPhone}`}
+                                className="text-[11px] font-mono text-cyan-300 hover:underline inline-flex items-center gap-1 mt-0.5"
+                              >
+                                <Phone size={10} />
+                                <span>{iv.parentPhone}</span>
+                              </a>
+                            ) : (
+                              <span className="text-[10px] text-slate-500 italic">
+                                {tr('Raqam yo‘q', 'Нет номера')}
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            <span className="px-2 py-0.5 rounded-md bg-purple-500/15 border border-purple-500/30 text-purple-300 text-[10px] font-bold">
+                              {iv.periodLabel || iv.periodType}
+                            </span>
+                          </td>
+                          <td className="text-xs text-slate-300 font-mono whitespace-nowrap">
+                            {iv.dateFormatted || iv.date}
+                          </td>
+                          <td>
+                            <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-bold text-xs ${scoreColor}`}>
+                              <Star size={12} className="fill-current" />
+                              <span>{iv.score} / 10</span>
+                              <span className="text-[10px] opacity-80 font-mono">({iv.scorePercentage}%)</span>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="text-xs text-slate-200 line-clamp-2 max-w-sm" title={iv.summary}>
+                              {iv.summary}
+                            </div>
+                          </td>
+                          <td>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                iv.callStatus === 'completed'
+                                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                                  : iv.callStatus === 'no_answer'
+                                  ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                                  : 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                              }`}
+                            >
+                              {iv.statusLabel || iv.callStatus}
+                            </span>
+                          </td>
+                          <td className="text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                className="btn-icon text-cyan-400 hover:bg-cyan-500/20 p-1.5 rounded-lg transition-colors"
+                                onClick={() => handleOpenEditInterview(iv)}
+                                title={tr('Tahrirlash', 'Редактировать')}
+                              >
+                                <Edit size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-icon text-rose-400 hover:bg-rose-500/20 p-1.5 rounded-lg transition-colors"
+                                onClick={() => handleDeleteInterview(iv)}
+                                title={tr("O'chirish", 'Удалить')}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+
+                    {parentInterviews.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="text-center py-12 text-slate-400 text-xs">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <HeartHandshake size={36} className="text-purple-400/40" />
+                            <div className="font-bold text-slate-300">
+                              {tr("Ota-onalar bilan suhbatlar hali kiritilmagan", 'Беседы с родителями ещё не внесены')}
+                            </div>
+                            <p className="text-slate-400 max-w-md text-[11px]">
+                              {tr(
+                                "Tyuterlar haftada yoki oyda o'quvchilar ota-onalari bilan gaplashib, natijasi va 1 dan 10 gacha bahosini shu yerga kiritib boradilar.",
+                                'Тьюторы еженедельно или ежемесячно общаются с родителями учеников и вносят сюда заключение и оценку от 1 до 10.'
+                              )}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAddInterview(null)}
+                              className="btn btn-diamond-cyan btn-sm font-bold mt-2 flex items-center gap-1.5"
+                            >
+                              <Plus size={15} />
+                              <span>{tr('Dastlabki suhbatni kiritish', 'Внести первую беседу')}</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )}
@@ -1893,13 +2371,36 @@ export default function TutorPortal() {
                   </select>
                 </div>
                 <div>
-                  <label className="input-label">{tr('Telefon (ota-onasi)', 'Телефон (родителей)')}</label>
+                  <label className="input-label">{tr("O'quvchi telefoni", 'Телефон ученика')}</label>
                   <input
                     type="text"
                     className="clean-input"
                     placeholder="+998 90 000 00 00"
                     value={studentForm.phone}
                     onChange={(e) => setStudentForm({ ...studentForm, phone: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="input-label">{tr('Ota-onasi F.I.SH', 'Ф.И.О. родителей')}</label>
+                  <input
+                    type="text"
+                    className="clean-input text-xs"
+                    placeholder={tr('Masalan: Karimov Anvar', 'Например: Каримов Анвар')}
+                    value={studentForm.parentName}
+                    onChange={(e) => setStudentForm({ ...studentForm, parentName: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="input-label">{tr('Ota-onasi telefoni', 'Телефон родителей')}</label>
+                  <input
+                    type="text"
+                    className="clean-input text-xs font-mono"
+                    placeholder="+998 90 123 45 67"
+                    value={studentForm.parentPhone}
+                    onChange={(e) => setStudentForm({ ...studentForm, parentPhone: e.target.value })}
                   />
                 </div>
               </div>
@@ -2087,13 +2588,38 @@ export default function TutorPortal() {
                   </select>
                 </div>
                 <div>
-                  <label className="input-label">{tr('Telefon (ota-onasi)', 'Телефон (родителей)')}</label>
+                  <label className="input-label">{tr("O'quvchi shaxsiy telefoni", 'Телефон ученика')}</label>
                   <input
                     type="text"
                     className="clean-input"
                     value={editStudentForm.phone}
                     onChange={(e) =>
                       setEditStudentForm({ ...editStudentForm, phone: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="input-label">{tr('Ota-onasi F.I.SH', 'Ф.И.О. родителей')}</label>
+                  <input
+                    type="text"
+                    className="clean-input text-xs"
+                    value={editStudentForm.parentName}
+                    onChange={(e) =>
+                      setEditStudentForm({ ...editStudentForm, parentName: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="input-label">{tr('Ota-onasi telefoni', 'Телефон родителей')}</label>
+                  <input
+                    type="text"
+                    className="clean-input text-xs font-mono"
+                    value={editStudentForm.parentPhone}
+                    onChange={(e) =>
+                      setEditStudentForm({ ...editStudentForm, parentPhone: e.target.value })
                     }
                   />
                 </div>
@@ -2189,6 +2715,239 @@ export default function TutorPortal() {
         </div>
       )}
 
+      {/* MODAL: PARENT INTERVIEW (OTA-ONA BILAN SUHBAT NATIJASI) */}
+      {isInterviewModalOpen && (
+        <div className="modal-backdrop" onClick={() => setIsInterviewModalOpen(false)}>
+          <div
+            className="modal-content animate-scale-in max-h-[92vh] overflow-y-auto"
+            style={{ maxWidth: '580px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h3 className="modal-title flex items-center gap-2">
+                <HeartHandshake className="text-purple-400" size={20} />
+                <span>
+                  {editingInterview
+                    ? tr('Suhbat Natijasini Tahrirlash', 'Редактировать результат беседы')
+                    : tr('Ota-ona Bilan Suhbat Natijasini Kiritish', 'Внести результат беседы с родителями')}
+                </span>
+              </h3>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setIsInterviewModalOpen(false)}
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveInterview} className="modal-body space-y-4 pt-3">
+              {/* Student selector */}
+              <div>
+                <label className="input-label flex items-center gap-1.5">
+                  <GraduationCap size={14} className="text-purple-400" />
+                  <span>{tr("O'quvchini tanlang *", 'Выберите ученика *')}</span>
+                </label>
+                <select
+                  className="clean-select font-semibold"
+                  value={interviewForm.studentId}
+                  onChange={(e) => {
+                    const chosenId = e.target.value;
+                    const st = students.find((s) => String(s.id) === String(chosenId));
+                    setInterviewForm((prev) => ({
+                      ...prev,
+                      studentId: chosenId,
+                      parentName: st?.parentName || prev.parentName,
+                      parentPhone: st?.parentPhone || (st?.phone && st.phone !== '-' ? st.phone : '') || prev.parentPhone,
+                    }));
+                  }}
+                  required
+                >
+                  <option value="">{tr("-- O'quvchini tanlang --", '-- Выберите ученика --')}</option>
+                  {students.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.fullName} ({st.grade})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Parent info row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-slate-950/70 border border-slate-800">
+                <div>
+                  <label className="input-label flex items-center gap-1">
+                    <Users size={12} className="text-slate-400" />
+                    <span>{tr('Ota-onasi F.I.SH', 'Ф.И.О. родителя')}</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="clean-input text-xs"
+                    placeholder={tr('Masalan: Karimov Anvar (Otasi)', 'Например: Каримов Анвар (Отец)')}
+                    value={interviewForm.parentName}
+                    onChange={(e) => setInterviewForm({ ...interviewForm, parentName: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="input-label flex items-center gap-1">
+                    <Phone size={12} className="text-cyan-400" />
+                    <span>{tr('Telefon raqami', 'Номер телефона')}</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="clean-input text-xs font-mono"
+                    placeholder="+998 90 123 45 67"
+                    value={interviewForm.parentPhone}
+                    onChange={(e) => setInterviewForm({ ...interviewForm, parentPhone: e.target.value })}
+                  />
+                </div>
+                <div className="sm:col-span-2 flex items-center gap-2 pt-1 text-[11px] text-slate-300">
+                  <input
+                    type="checkbox"
+                    id="syncParentPhone"
+                    checked={interviewForm.syncParentPhone}
+                    onChange={(e) => setInterviewForm({ ...interviewForm, syncParentPhone: e.target.checked })}
+                    className="rounded border-slate-700 text-purple-600 focus:ring-purple-500"
+                  />
+                  <label htmlFor="syncParentPhone" className="cursor-pointer">
+                    {tr("O'quvchi profilidagi ota-ona raqamini ham avtomatik yangilash", 'Также обновить контакт родителей в профиле ученика')}
+                  </label>
+                </div>
+              </div>
+
+              {/* Period & Date row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="input-label">{tr('Suhbat davri *', 'Период беседы *')}</label>
+                  <select
+                    className="clean-select text-xs"
+                    value={interviewForm.periodType}
+                    onChange={(e) => setInterviewForm({ ...interviewForm, periodType: e.target.value })}
+                  >
+                    <option value="weekly">{tr('Haftalik suhbat', 'Еженедельная беседа')}</option>
+                    <option value="monthly">{tr('Oylik suhbat', 'Ежемесячная беседа')}</option>
+                    <option value="quarterly">{tr('Choraklik suhbat', 'Четвертная беседа')}</option>
+                    <option value="other">{tr('Boshqa', 'Другое')}</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">{tr('Suhbat sanasi *', 'Дата беседы *')}</label>
+                  <input
+                    type="date"
+                    className="clean-input text-xs font-mono"
+                    value={interviewForm.date}
+                    onChange={(e) => setInterviewForm({ ...interviewForm, date: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Score (1 dan 10 gacha ball) */}
+              <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="input-label flex items-center gap-1.5 text-xs font-black text-amber-300 m-0">
+                    <Star size={14} className="fill-amber-400 text-amber-400" />
+                    <span>{tr('Suhbat Natijasiga Ball (1 dan 10 gacha) *', 'Оценка беседы (от 1 до 10 баллов) *')}</span>
+                  </label>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-black font-mono bg-amber-500/15 border border-amber-500/40 text-amber-300">
+                    {interviewForm.score} / 10 ({Math.round(interviewForm.score * 10)}%)
+                  </span>
+                </div>
+
+                {/* Interactive 1 to 10 score picker pills */}
+                <div className="grid grid-cols-10 gap-1 sm:gap-1.5">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
+                    const isSelected = Number(interviewForm.score) === num;
+                    const btnColor =
+                      num >= 8
+                        ? isSelected
+                          ? 'bg-emerald-500 text-white border-emerald-400 shadow-lg scale-105'
+                          : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
+                        : num >= 6
+                        ? isSelected
+                          ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-lg scale-105'
+                          : 'bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
+                        : isSelected
+                        ? 'bg-rose-500 text-white border-rose-400 shadow-lg scale-105'
+                        : 'bg-rose-500/10 text-rose-300 border-rose-500/30 hover:bg-rose-500/20';
+
+                    return (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setInterviewForm({ ...interviewForm, score: num })}
+                        className={`h-9 rounded-lg font-black text-xs border transition-all flex items-center justify-center ${btnColor}`}
+                        title={`${num} ball (${num * 10}%)`}
+                      >
+                        {num}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 px-1">
+                  <span className="text-rose-400">1-4: Qoniqarsiz</span>
+                  <span className="text-amber-400">5-7: O'rtacha</span>
+                  <span className="text-emerald-400">8-10: A'lo darajada</span>
+                </div>
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="input-label">{tr('Suhbat holati', 'Статус беседы')}</label>
+                <select
+                  className="clean-select text-xs"
+                  value={interviewForm.callStatus}
+                  onChange={(e) => setInterviewForm({ ...interviewForm, callStatus: e.target.value })}
+                >
+                  <option value="completed">{tr("✔ Suhbat to'liq o'tkazildi", '✔ Беседа проведена')}</option>
+                  <option value="no_answer">{tr("❌ Javob bermadi / Ko'tarmadi", '❌ Не ответил(а)')}</option>
+                  <option value="rescheduled">{tr("⏳ Qayta bog'lanish belgilandi", '⏳ Назначен повторный звонок')}</option>
+                </select>
+              </div>
+
+              {/* Summary textarea */}
+              <div>
+                <label className="input-label flex items-center justify-between">
+                  <span>{tr('Suhbat Xulosasi va Natijasi *', 'Заключение и итоги беседы *')}</span>
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    {tr('Batafsil fikrlar va kelishuvlar', 'Подробные замечания и договоренности')}
+                  </span>
+                </label>
+                <textarea
+                  className="clean-input text-xs"
+                  rows={4}
+                  placeholder={tr(
+                    "O'quvchining darslarga qatnashishi, uy vazifalari, fanga qiziqishi, intizomi va ota-onaning bildirgan taklif yoki fikrlari...",
+                    'Посещаемость, выполнение ДЗ, интерес к предметам, дисциплина, предложения или замечания родителей...'
+                  )}
+                  value={interviewForm.summary}
+                  onChange={(e) => setInterviewForm({ ...interviewForm, summary: e.target.value })}
+                  required
+                />
+              </div>
+
+              {/* Footer */}
+              <div className="modal-footer flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setIsInterviewModalOpen(false)}
+                >
+                  {tr('Bekor qilish', 'Отмена')}
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingInterview}
+                  className="btn btn-diamond-cyan btn-sm font-bold flex items-center gap-1.5"
+                >
+                  {savingInterview ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  <span>{tr('Xulosani Saqlash', 'Сохранить заключение')}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* CONFIRM DELETE MODAL */}
       <ConfirmModal
         isOpen={confirmModalState.isOpen}
@@ -2213,6 +2972,15 @@ export default function TutorPortal() {
             active: activeTab === 'students',
             badge: students.length > 0 ? String(students.length) : '',
             onClick: () => setActiveTab('students'),
+          },
+          {
+            key: 'interviews',
+            label: tr('Ota-onalar bilan suhbatlar', 'Беседы с родителями'),
+            shortLabel: tr('Suhbatlar', 'Беседы'),
+            icon: <HeartHandshake size={19} />,
+            active: activeTab === 'interviews',
+            badge: parentInterviews.length > 0 ? String(parentInterviews.length) : '',
+            onClick: () => setActiveTab('interviews'),
           },
           {
             key: 'coins',

@@ -45,6 +45,7 @@ ALLOWED_HOSTS = [
     '89.39.94.194',
     '127.0.0.1',
     'localhost',
+    'testserver',
 ]
 
 

@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils import timezone
 
 class CustomUser(AbstractUser):
     ROLE_CHOICES = (
@@ -11,6 +13,8 @@ class CustomUser(AbstractUser):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='student')
     full_name = models.CharField(max_length=255, blank=True)
     phone = models.CharField(max_length=50, blank=True, null=True)
+    parent_name = models.CharField(max_length=255, blank=True, default='', verbose_name="Ota-onasi F.I.Sh")
+    parent_phone = models.CharField(max_length=50, blank=True, default='', verbose_name="Ota-onasi telefon raqami")
     grade = models.CharField(max_length=50, blank=True, null=True, help_text="Masalan: 9-A (faqat o'quvchilar uchun)")
     subject = models.CharField(max_length=100, blank=True, null=True, help_text="Masalan: Matematika (faqat o'qituvchilar uchun)")
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
@@ -48,6 +52,19 @@ class Test(models.Model):
     end_time = models.DateTimeField(null=True, blank=True, verbose_name="Tugash vaqti")
     max_attempts = models.PositiveIntegerField(default=1, verbose_name="Ruxsat etilgan urinishlar soni (0 bo'lsa cheksiz)")
     is_student_allowed = models.BooleanField(default=False, verbose_name="O'quvchilarga test ishlashga ruxsat")
+    
+    # Kengaytirilgan Diamond Coin Mukofot Tizimi (1,2,3-o'rinlar, qatnashuvchilar va 20-60%, 60-80%, 80-100% foiz oraliqlari)
+    reward_mode = models.CharField(max_length=30, default='both', verbose_name="Coin berish tartibi (both, percentage, ranks, none)")
+    reward_rank1_coins = models.PositiveIntegerField(default=50, verbose_name="1-o'rin uchun coin")
+    reward_rank2_coins = models.PositiveIntegerField(default=30, verbose_name="2-o'rin uchun coin")
+    reward_rank3_coins = models.PositiveIntegerField(default=20, verbose_name="3-o'rin uchun coin")
+    reward_participant_coins = models.PositiveIntegerField(default=5, verbose_name="Qolgan qatnashuvchilar uchun coin")
+    reward_tier_80_100_coins = models.PositiveIntegerField(default=40, verbose_name="80-100% natija uchun coin")
+    reward_tier_60_80_coins = models.PositiveIntegerField(default=20, verbose_name="60-80% natija uchun coin")
+    reward_tier_20_60_coins = models.PositiveIntegerField(default=10, verbose_name="20-60% natija uchun coin")
+    reward_tier_under20_coins = models.PositiveIntegerField(default=0, verbose_name="0-20% natija uchun coin")
+
+    # Orqaga moslik (legacy)
     reward_top_count = models.PositiveIntegerField(default=0, verbose_name="Faol qatnashadigan birinchi N nafar o'quvchiga coin bonusi")
     reward_coins_amount = models.PositiveIntegerField(default=0, verbose_name="Testda faol qatnashgan o'quvchiga qo'shimcha bonus coin")
     reward_min_score = models.PositiveIntegerField(default=0, verbose_name="Bonus coin olish uchun minimal natija (%)")
@@ -310,6 +327,48 @@ class SchoolClass(models.Model):
         return f"{self.name} ({lang_label})"
 
 
+class Subject(models.Model):
+    """Maktabdagi barcha o'qitiladigan fanlar (Admin tomonidan dinamik boshqariladi)"""
+    name = models.CharField(max_length=150, unique=True, verbose_name="Fan nomi")
+    is_active = models.BooleanField(default=True, verbose_name="Faol")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Yaratilgan vaqti")
+
+    class Meta:
+        verbose_name = "Fan"
+        verbose_name_plural = "Fanlar"
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class TeacherSubjectClass(models.Model):
+    """O'qituvchining biriktirilgan fani va har bir fan uchun biriktirilgan sinfi"""
+    teacher = models.ForeignKey(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name='subject_assignments',
+        limit_choices_to={'role': 'teacher'},
+        verbose_name="O'qituvchi",
+    )
+    subject = models.CharField(max_length=150, verbose_name="Fan nomi")
+    school_class = models.ForeignKey(
+        SchoolClass,
+        on_delete=models.CASCADE,
+        related_name='teacher_assignments',
+        verbose_name="Biriktirilgan sinf",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Biriktirilgan vaqti")
+
+    class Meta:
+        verbose_name = "O'qituvchi fan-sinf biriktirmasi"
+        verbose_name_plural = "O'qituvchi fan-sinf biriktirmalari"
+        unique_together = ('teacher', 'subject', 'school_class')
+
+    def __str__(self):
+        return f"{self.teacher.full_name} — {self.subject} ({self.school_class.name})"
+
+
 class ClassCoinTransaction(models.Model):
     """Faol sinflarning o'z hisobiga berilgan coinlar tarixi (Audit log)"""
     school_class = models.ForeignKey(SchoolClass, on_delete=models.CASCADE, related_name='coin_transactions', verbose_name="Sinf")
@@ -384,6 +443,78 @@ class LessonSchedule(models.Model):
     def __str__(self):
         day_label = dict(self.DAY_CHOICES).get(self.day_of_week, str(self.day_of_week))
         return f"{day_label} {self.start_time.strftime('%H:%M')}-{self.end_time.strftime('%H:%M')} | {self.class_name}: {self.subject}"
+
+
+class ParentInterview(models.Model):
+    """Tyuterlarning o'quvchilar ota-onalari bilan o'tkazgan suhbatlari, xulosalari va baholari"""
+    PERIOD_CHOICES = (
+        ('weekly', 'Haftalik'),
+        ('monthly', 'Oylik'),
+        ('quarterly', 'Choraklik'),
+        ('other', 'Boshqa'),
+    )
+    STATUS_CHOICES = (
+        ('completed', "Suhbat o'tkazildi"),
+        ('no_answer', "Javob bermadi"),
+        ('rescheduled', "Qayta qo'ng'iroq belgilandi"),
+    )
+
+    tutor = models.ForeignKey(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name='tutor_parent_interviews',
+        limit_choices_to={'role': 'tutor'},
+        verbose_name="Tyuter",
+    )
+    student = models.ForeignKey(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name='student_parent_interviews',
+        limit_choices_to={'role': 'student'},
+        verbose_name="O'quvchi",
+    )
+    school_class = models.ForeignKey(
+        SchoolClass,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='parent_interviews',
+        verbose_name="Biriktirilgan sinf",
+    )
+    class_name = models.CharField(max_length=50, blank=True, default="", verbose_name="Sinf nomi (Tarixiy)")
+    parent_name = models.CharField(max_length=255, blank=True, default="", verbose_name="Ota-onasi F.I.Sh")
+    parent_phone = models.CharField(max_length=50, blank=True, default="", verbose_name="Ota-onasi telefon raqami")
+    period_type = models.CharField(max_length=20, choices=PERIOD_CHOICES, default='weekly', verbose_name="Suhbat davri")
+    date = models.DateField(default=timezone.now, verbose_name="Suhbat sanasi")
+    score = models.PositiveSmallIntegerField(
+        default=10,
+        validators=[MinValueValidator(1), MaxValueValidator(10)],
+        verbose_name="Baho / Ball (1-10)",
+    )
+    summary = models.TextField(verbose_name="Suhbat xulosasi / Natijasi")
+    call_status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='completed', verbose_name="Suhbat holati")
+    admin_notes = models.TextField(blank=True, default="", verbose_name="Admin izohi (ixtiyoriy)")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Kiritilgan vaqt")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Yangilangan vaqt")
+
+    class Meta:
+        verbose_name = "Ota-ona bilan suhbat"
+        verbose_name_plural = "Ota-onalar bilan suhbatlar"
+        ordering = ['-date', '-created_at']
+
+    def get_score_percentage(self):
+        return round((self.score / 10.0) * 100)
+
+    def save(self, *args, **kwargs):
+        if not self.class_name and self.school_class:
+            self.class_name = self.school_class.name
+        elif not self.class_name and self.student and self.student.grade:
+            self.class_name = self.student.grade
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.student.full_name} ({self.class_name}) — {self.get_period_type_display()}: {self.score}/10"
+
 
 
 

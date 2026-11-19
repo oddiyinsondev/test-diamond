@@ -28,6 +28,8 @@ import {
   Search,
   Lock,
   Unlock,
+  Crown,
+  Trophy,
 } from 'lucide-react';
 
 const OPTION_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
@@ -95,6 +97,15 @@ export default function AdminTestBuilder({
     targetClasses: [normalizedClasses[0] || '9-A'],
     durationMinutes: 30,
     maxAttempts: 1,
+    rewardMode: 'both',
+    rewardRank1Coins: 50,
+    rewardRank2Coins: 30,
+    rewardRank3Coins: 20,
+    rewardParticipantCoins: 5,
+    rewardTier80_100Coins: 40,
+    rewardTier60_80Coins: 20,
+    rewardTier20_60Coins: 10,
+    rewardTierUnder20Coins: 0,
     rewardTopCount: 0,
     rewardCoinsAmount: 20,
     rewardMinScore: 60,
@@ -131,6 +142,15 @@ export default function AdminTestBuilder({
         targetClasses: [normalizedClasses[0] || '9-A'],
         durationMinutes: 30,
         maxAttempts: 1,
+        rewardMode: 'both',
+        rewardRank1Coins: 50,
+        rewardRank2Coins: 30,
+        rewardRank3Coins: 20,
+        rewardParticipantCoins: 5,
+        rewardTier80_100Coins: 40,
+        rewardTier60_80Coins: 20,
+        rewardTier20_60Coins: 10,
+        rewardTierUnder20Coins: 0,
         rewardTopCount: 0,
         rewardCoinsAmount: 20,
         rewardMinScore: 60,
@@ -174,6 +194,15 @@ export default function AdminTestBuilder({
           initialTestSummary.duration_minutes ||
           30,
         maxAttempts: initialTestSummary.maxAttempts || 1,
+        rewardMode: initialTestSummary.rewardMode || 'both',
+        rewardRank1Coins: Number(initialTestSummary.rewardRank1Coins ?? 50),
+        rewardRank2Coins: Number(initialTestSummary.rewardRank2Coins ?? 30),
+        rewardRank3Coins: Number(initialTestSummary.rewardRank3Coins ?? 20),
+        rewardParticipantCoins: Number(initialTestSummary.rewardParticipantCoins ?? 5),
+        rewardTier80_100Coins: Number(initialTestSummary.rewardTier80_100Coins ?? 40),
+        rewardTier60_80Coins: Number(initialTestSummary.rewardTier60_80Coins ?? 20),
+        rewardTier20_60Coins: Number(initialTestSummary.rewardTier20_60Coins ?? 10),
+        rewardTierUnder20Coins: Number(initialTestSummary.rewardTierUnder20Coins ?? 0),
         rewardTopCount: Number(initialTestSummary.rewardTopCount ?? 0),
         rewardCoinsAmount: Number(initialTestSummary.rewardCoinsAmount ?? 20) || 20,
         rewardMinScore: Number(initialTestSummary.rewardMinScore ?? 60),
@@ -234,6 +263,15 @@ export default function AdminTestBuilder({
             : [normalizedClasses[0] || '9-A'],
           durationMinutes: fullTest.durationMinutes || 30,
           maxAttempts: fullTest.maxAttempts || 1,
+          rewardMode: fullTest.rewardMode || 'both',
+          rewardRank1Coins: Number(fullTest.rewardRank1Coins ?? 50),
+          rewardRank2Coins: Number(fullTest.rewardRank2Coins ?? 30),
+          rewardRank3Coins: Number(fullTest.rewardRank3Coins ?? 20),
+          rewardParticipantCoins: Number(fullTest.rewardParticipantCoins ?? 5),
+          rewardTier80_100Coins: Number(fullTest.rewardTier80_100Coins ?? 40),
+          rewardTier60_80Coins: Number(fullTest.rewardTier60_80Coins ?? 20),
+          rewardTier20_60Coins: Number(fullTest.rewardTier20_60Coins ?? 10),
+          rewardTierUnder20Coins: Number(fullTest.rewardTierUnder20Coins ?? 0),
           rewardTopCount: Number(fullTest.rewardTopCount ?? 0),
           rewardCoinsAmount: Number(fullTest.rewardCoinsAmount ?? 20) || 20,
           rewardMinScore: Number(fullTest.rewardMinScore ?? 60),
@@ -649,6 +687,15 @@ export default function AdminTestBuilder({
       targetClasses: testForm.targetClasses,
       durationMinutes: Number(testForm.durationMinutes) || 30,
       maxAttempts: Number(testForm.maxAttempts) || 1,
+      rewardMode: testForm.rewardMode || 'both',
+      rewardRank1Coins: Math.max(0, Number(testForm.rewardRank1Coins) || 0),
+      rewardRank2Coins: Math.max(0, Number(testForm.rewardRank2Coins) || 0),
+      rewardRank3Coins: Math.max(0, Number(testForm.rewardRank3Coins) || 0),
+      rewardParticipantCoins: Math.max(0, Number(testForm.rewardParticipantCoins) || 0),
+      rewardTier80_100Coins: Math.max(0, Number(testForm.rewardTier80_100Coins) || 0),
+      rewardTier60_80Coins: Math.max(0, Number(testForm.rewardTier60_80Coins) || 0),
+      rewardTier20_60Coins: Math.max(0, Number(testForm.rewardTier20_60Coins) || 0),
+      rewardTierUnder20Coins: Math.max(0, Number(testForm.rewardTierUnder20Coins) || 0),
       rewardTopCount: Math.max(0, Number(testForm.rewardTopCount) || 0),
       rewardCoinsAmount: Math.max(0, Number(testForm.rewardCoinsAmount) || 0),
       rewardMinScore: Math.min(100, Math.max(0, Number(testForm.rewardMinScore) || 0)),
@@ -1096,184 +1143,360 @@ export default function AdminTestBuilder({
           </div>
         </div>
 
-        {/* Reward Panel A: Auto Bonus on Test Completion for First N Active Participants */}
-        <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-slate-950/70 to-cyan-500/5 border border-amber-500/30 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        {/* Diamond Coin Reward System (1,2,3 Places, Participants & Percentage Tiers) */}
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-slate-950/80 to-cyan-500/10 border border-amber-500/35 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-slate-800">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-300 flex-shrink-0">
-                <Zap size={18} />
+              <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-300 flex-shrink-0 shadow-md">
+                <Crown size={20} />
               </div>
               <div>
-                <div className="text-xs font-extrabold text-white flex items-center gap-2 flex-wrap">
+                <div className="text-sm font-black text-white flex items-center gap-2 flex-wrap">
                   <span>
                     {tr(
-                      "Testda Faol Qatnashgan O'quvchilarga Avtomatik Coin Bonusi",
-                      'Автоматический коин-бонус активным участникам теста'
+                      "Diamond Coin Mukofot Tizimi (O'rinlar va Foiz Oraliqlari)",
+                      'Система Diamond Coin (Места и Диапазоны Процентов)'
                     )}
                   </span>
-                  {Number(testForm.rewardTopCount) > 0 && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-black">
-                      {language === 'ru'
-                        ? `Топ-${testForm.rewardTopCount} активным +${testForm.rewardCoinsAmount} 💎`
-                        : `Top ${testForm.rewardTopCount} faolga +${testForm.rewardCoinsAmount} 💎`}
-                    </span>
-                  )}
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold">
+                    {testForm.rewardMode === 'none'
+                      ? tr('Coinsiz', 'Без коинов')
+                      : testForm.rewardMode === 'ranks'
+                      ? tr("Faqat O'rinlar", 'Только места')
+                      : testForm.rewardMode === 'percentage'
+                      ? tr('Faqat Foizlar', 'Только проценты')
+                      : tr('Gibrid (Tavsiya)', 'Гибрид')}
+                  </span>
                 </div>
                 <div className="text-[11px] text-slate-400">
                   {tr(
-                    "Testni birinchi bo'lib belgilangan natijadan yuqori topshirgan N nafar faol o'quvchiga avtomatik bonus coin beriladi",
-                    'Первым N ученикам, успешно сдавшим тест выше минимального балла, автоматически начисляется бонус'
+                    "Admin dastlabki 1, 2, 3-o'rinlar, qatnashuvchilar hamda 20-60%, 60-80%, 80-100% foiz oraliqlari uchun ixtiyoriy coin belgilashi mumkin",
+                    'Администратор может настроить произвольные койны за 1, 2, 3 места, участие и диапазоны 20-60%, 60-80%, 80-100%'
                   )}
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {[0, 3, 5, 10].map((cnt) => (
+            {/* Mode selection buttons */}
+            <div className="flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs flex-wrap gap-1">
+              {[
+                { id: 'both', label: tr('Gibrid (Ikkalasi)', 'Гибрид (Оба)') },
+                { id: 'ranks', label: tr("O'rinlar (1, 2, 3)", 'Места (1, 2, 3)') },
+                { id: 'percentage', label: tr('Foizlar (20-100%)', 'Проценты (20-100%)') },
+                { id: 'none', label: tr('Coinsiz', 'Без коинов') },
+              ].map((m) => (
                 <button
-                  key={cnt}
+                  key={m.id}
                   type="button"
-                  className={`coin-pill-btn text-[11px] ${
-                    Number(testForm.rewardTopCount) === cnt ? 'active' : ''
+                  className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all ${
+                    testForm.rewardMode === m.id
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
                   }`}
-                  onClick={() =>
-                    setTestForm((prev) => ({ ...prev, rewardTopCount: cnt }))
-                  }
+                  onClick={() => setTestForm((prev) => ({ ...prev, rewardMode: m.id }))}
                 >
-                  {cnt === 0 ? tr('Bonussiz', 'Без бонуса') : `${tr('Top', 'Топ')} ${cnt}`}
+                  {m.label}
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="input-label text-[11px] text-amber-200 font-semibold">
-                {tr("Nechta faol o'quvchiga bonus? (N)", 'Скольким активным ученикам? (N)')}
-              </label>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                className="clean-input text-xs font-bold"
-                value={testForm.rewardTopCount}
-                onChange={(e) =>
-                  setTestForm((prev) => ({
-                    ...prev,
-                    rewardTopCount: Math.max(0, Number(e.target.value) || 0),
-                  }))
-                }
-              />
-            </div>
+          {testForm.rewardMode !== 'none' && (
+            <div className="space-y-4">
+              {/* BLOCK 1: Podium Ranks & Participants */}
+              {(testForm.rewardMode === 'ranks' || testForm.rewardMode === 'both') && (
+                <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-amber-200 flex items-center gap-1.5">
+                      <Trophy size={14} className="text-amber-400" />
+                      {tr(
+                        "Dastlabki 1, 2, 3-o'rinlar va Qolgan Qatnashuvchilar uchun Coinlar",
+                        'Койны за 1, 2, 3 призовые места и остальных участников'
+                      )}
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      {tr('Ixtiyoriy sozlanadi', 'Настраивается произвольно')}
+                    </span>
+                  </div>
 
-            <div>
-              <label className="input-label text-[11px] text-amber-200 font-semibold">
-                {tr("Har biriga qo'shimcha Coin (+M)", 'Бонусные коины каждому (+M)')}
-              </label>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="number"
-                  min={0}
-                  max={500}
-                  disabled={Number(testForm.rewardTopCount) <= 0}
-                  className="clean-input text-xs font-bold text-amber-300"
-                  value={testForm.rewardCoinsAmount}
-                  onChange={(e) =>
-                    setTestForm((prev) => ({
-                      ...prev,
-                      rewardCoinsAmount: Math.max(0, Number(e.target.value) || 0),
-                    }))
-                  }
-                />
-                {[10, 20, 50].map((amt) => (
-                  <button
-                    key={amt}
-                    type="button"
-                    disabled={Number(testForm.rewardTopCount) <= 0}
-                    className={`row-quick-coin-btn text-[10px] ${
-                      Number(testForm.rewardCoinsAmount) === amt
-                        ? 'bg-amber-500/40 border-amber-400 text-amber-200'
-                        : ''
-                    }`}
-                    onClick={() =>
-                      setTestForm((prev) => ({ ...prev, rewardCoinsAmount: amt }))
-                    }
-                  >
-                    +{amt}
-                  </button>
-                ))}
-              </div>
-            </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {/* 1-place */}
+                    <div className="p-2.5 rounded-xl bg-slate-950/60 border border-amber-500/30">
+                      <label className="text-[11px] font-bold text-amber-300 flex items-center gap-1 mb-1">
+                        🥇 {tr("1-o'rin", '1-е место')}
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={1000}
+                        className="clean-input text-xs font-bold text-amber-200"
+                        value={testForm.rewardRank1Coins}
+                        onChange={(e) =>
+                          setTestForm((prev) => ({
+                            ...prev,
+                            rewardRank1Coins: Math.max(0, Number(e.target.value) || 0),
+                          }))
+                        }
+                      />
+                      <div className="flex items-center gap-1 mt-1.5">
+                        {[30, 50, 100].map((amt) => (
+                          <button
+                            key={amt}
+                            type="button"
+                            className={`row-quick-coin-btn text-[10px] ${testForm.rewardRank1Coins === amt ? 'bg-amber-500/40 text-amber-200' : ''}`}
+                            onClick={() => setTestForm((prev) => ({ ...prev, rewardRank1Coins: amt }))}
+                          >
+                            +{amt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
 
-            <div>
-              <label className="input-label text-[11px] text-amber-200 font-semibold">
-                {tr('Minimal ball talabi (%)', 'Минимальный балл (%)')}
-              </label>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  disabled={Number(testForm.rewardTopCount) <= 0}
-                  className="clean-input text-xs font-bold"
-                  value={testForm.rewardMinScore}
-                  onChange={(e) =>
-                    setTestForm((prev) => ({
-                      ...prev,
-                      rewardMinScore: Math.min(100, Math.max(0, Number(e.target.value) || 0)),
-                    }))
-                  }
-                />
-                {[0, 60, 80].map((ms) => (
-                  <button
-                    key={ms}
-                    type="button"
-                    disabled={Number(testForm.rewardTopCount) <= 0}
-                    className={`row-quick-coin-btn text-[10px] ${
-                      Number(testForm.rewardMinScore) === ms
-                        ? 'bg-cyan-500/30 border-cyan-400 text-cyan-200'
-                        : ''
-                    }`}
-                    onClick={() =>
-                      setTestForm((prev) => ({ ...prev, rewardMinScore: ms }))
-                    }
-                  >
-                    {ms === 0 ? tr('Barcha', 'Все') : `${ms}%+`}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+                    {/* 2-place */}
+                    <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-700">
+                      <label className="text-[11px] font-bold text-slate-200 flex items-center gap-1 mb-1">
+                        🥈 {tr("2-o'rin", '2-е место')}
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={1000}
+                        className="clean-input text-xs font-bold text-slate-200"
+                        value={testForm.rewardRank2Coins}
+                        onChange={(e) =>
+                          setTestForm((prev) => ({
+                            ...prev,
+                            rewardRank2Coins: Math.max(0, Number(e.target.value) || 0),
+                          }))
+                        }
+                      />
+                      <div className="flex items-center gap-1 mt-1.5">
+                        {[20, 30, 50].map((amt) => (
+                          <button
+                            key={amt}
+                            type="button"
+                            className={`row-quick-coin-btn text-[10px] ${testForm.rewardRank2Coins === amt ? 'bg-slate-700 text-white' : ''}`}
+                            onClick={() => setTestForm((prev) => ({ ...prev, rewardRank2Coins: amt }))}
+                          >
+                            +{amt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
 
-          {Number(testForm.rewardTopCount) > 0 && (
-            <div className="p-2.5 rounded-xl bg-slate-950/70 border border-amber-500/25 text-[11px] text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <span>
-                {language === 'ru' ? (
-                  <>
-                    ⚡ Первым <strong>{testForm.rewardTopCount}</strong> ученикам, сдавшим тест{' '}
-                    {Number(testForm.rewardMinScore) > 0
-                      ? `с результатом не менее ${testForm.rewardMinScore}%`
-                      : 'успешно'}
-                    , автоматически начислится{' '}
-                    <strong className="text-amber-300">+{testForm.rewardCoinsAmount} Diamond Coin</strong>.
-                  </>
-                ) : (
-                  <>
-                    ⚡ Testni birinchi <strong>{testForm.rewardTopCount} nafar</strong> bo&apos;lib{' '}
-                    {Number(testForm.rewardMinScore) > 0 ? (
-                      <>kamida <strong>{testForm.rewardMinScore}%</strong> natija bilan </>
-                    ) : (
-                      'muvaffaqiyatli '
-                    )}
-                    topshirgan o&apos;quvchilar hisobiga avtomatik{' '}
-                    <strong className="text-amber-300">+{testForm.rewardCoinsAmount} Diamond Coin</strong> qo&apos;shiladi.
-                  </>
-                )}
-              </span>
-              {editingTestId && (
-                <span className="px-2 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-cyan-300 font-bold whitespace-nowrap">
-                  {tr('Ishlatildi:', 'Использовано:')} {rewardSlotsUsed} / {testForm.rewardTopCount}
-                </span>
+                    {/* 3-place */}
+                    <div className="p-2.5 rounded-xl bg-slate-950/60 border border-amber-700/40">
+                      <label className="text-[11px] font-bold text-amber-400 flex items-center gap-1 mb-1">
+                        🥉 {tr("3-o'rin", '3-е место')}
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={1000}
+                        className="clean-input text-xs font-bold text-amber-300"
+                        value={testForm.rewardRank3Coins}
+                        onChange={(e) =>
+                          setTestForm((prev) => ({
+                            ...prev,
+                            rewardRank3Coins: Math.max(0, Number(e.target.value) || 0),
+                          }))
+                        }
+                      />
+                      <div className="flex items-center gap-1 mt-1.5">
+                        {[10, 20, 30].map((amt) => (
+                          <button
+                            key={amt}
+                            type="button"
+                            className={`row-quick-coin-btn text-[10px] ${testForm.rewardRank3Coins === amt ? 'bg-amber-600/40 text-amber-200' : ''}`}
+                            onClick={() => setTestForm((prev) => ({ ...prev, rewardRank3Coins: amt }))}
+                          >
+                            +{amt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Remaining participants */}
+                    <div className="p-2.5 rounded-xl bg-slate-950/60 border border-cyan-500/30">
+                      <label className="text-[11px] font-bold text-cyan-300 flex items-center gap-1 mb-1">
+                        🎖️ {tr('Qolgan qatnashuvchilar', 'Остальные участники')}
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={500}
+                        className="clean-input text-xs font-bold text-cyan-200"
+                        value={testForm.rewardParticipantCoins}
+                        onChange={(e) =>
+                          setTestForm((prev) => ({
+                            ...prev,
+                            rewardParticipantCoins: Math.max(0, Number(e.target.value) || 0),
+                          }))
+                        }
+                      />
+                      <div className="flex items-center gap-1 mt-1.5">
+                        {[0, 3, 5, 10].map((amt) => (
+                          <button
+                            key={amt}
+                            type="button"
+                            className={`row-quick-coin-btn text-[10px] ${testForm.rewardParticipantCoins === amt ? 'bg-cyan-500/40 text-cyan-200' : ''}`}
+                            onClick={() => setTestForm((prev) => ({ ...prev, rewardParticipantCoins: amt }))}
+                          >
+                            {amt === 0 ? '0' : `+${amt}`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* BLOCK 2: Percentage-based Tiers (20-60%, 60-80%, 80-100%) */}
+              {(testForm.rewardMode === 'percentage' || testForm.rewardMode === 'both') && (
+                <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-cyan-200 flex items-center gap-1.5">
+                      <Coins size={14} className="text-cyan-400" />
+                      {tr(
+                        "Natija Foiz Oraliqlari Bo'yicha Avto-Coin (20-60%, 60-80%, 80-100%)",
+                        'Авто-коины по диапазонам результатов (20-60%, 60-80%, 80-100%)'
+                      )}
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      {tr("Test topshirilganda beriladi", 'Выдаётся при сдаче теста')}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {/* 80% - 100% */}
+                    <div className="p-2.5 rounded-xl bg-slate-950/60 border border-emerald-500/30">
+                      <label className="text-[11px] font-bold text-emerald-300 flex items-center gap-1 mb-1">
+                        🟢 80% — 100% ({tr("A'lo", 'Отлично')})
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={500}
+                        className="clean-input text-xs font-bold text-emerald-200"
+                        value={testForm.rewardTier80_100Coins}
+                        onChange={(e) =>
+                          setTestForm((prev) => ({
+                            ...prev,
+                            rewardTier80_100Coins: Math.max(0, Number(e.target.value) || 0),
+                          }))
+                        }
+                      />
+                      <div className="flex items-center gap-1 mt-1.5">
+                        {[20, 40, 50].map((amt) => (
+                          <button
+                            key={amt}
+                            type="button"
+                            className={`row-quick-coin-btn text-[10px] ${testForm.rewardTier80_100Coins === amt ? 'bg-emerald-500/40 text-emerald-200' : ''}`}
+                            onClick={() => setTestForm((prev) => ({ ...prev, rewardTier80_100Coins: amt }))}
+                          >
+                            +{amt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 60% - 80% */}
+                    <div className="p-2.5 rounded-xl bg-slate-950/60 border border-cyan-500/30">
+                      <label className="text-[11px] font-bold text-cyan-300 flex items-center gap-1 mb-1">
+                        🟡 60% — 80% ({tr('Yaxshi', 'Хорошо')})
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={500}
+                        className="clean-input text-xs font-bold text-cyan-200"
+                        value={testForm.rewardTier60_80Coins}
+                        onChange={(e) =>
+                          setTestForm((prev) => ({
+                            ...prev,
+                            rewardTier60_80Coins: Math.max(0, Number(e.target.value) || 0),
+                          }))
+                        }
+                      />
+                      <div className="flex items-center gap-1 mt-1.5">
+                        {[10, 20, 30].map((amt) => (
+                          <button
+                            key={amt}
+                            type="button"
+                            className={`row-quick-coin-btn text-[10px] ${testForm.rewardTier60_80Coins === amt ? 'bg-cyan-500/40 text-cyan-200' : ''}`}
+                            onClick={() => setTestForm((prev) => ({ ...prev, rewardTier60_80Coins: amt }))}
+                          >
+                            +{amt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 20% - 60% */}
+                    <div className="p-2.5 rounded-xl bg-slate-950/60 border border-amber-500/30">
+                      <label className="text-[11px] font-bold text-amber-300 flex items-center gap-1 mb-1">
+                        🟠 20% — 60% ({tr("O'rtacha", 'Средне')})
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={500}
+                        className="clean-input text-xs font-bold text-amber-200"
+                        value={testForm.rewardTier20_60Coins}
+                        onChange={(e) =>
+                          setTestForm((prev) => ({
+                            ...prev,
+                            rewardTier20_60Coins: Math.max(0, Number(e.target.value) || 0),
+                          }))
+                        }
+                      />
+                      <div className="flex items-center gap-1 mt-1.5">
+                        {[5, 10, 15].map((amt) => (
+                          <button
+                            key={amt}
+                            type="button"
+                            className={`row-quick-coin-btn text-[10px] ${testForm.rewardTier20_60Coins === amt ? 'bg-amber-500/40 text-amber-200' : ''}`}
+                            onClick={() => setTestForm((prev) => ({ ...prev, rewardTier20_60Coins: amt }))}
+                          >
+                            +{amt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 0% - 20% */}
+                    <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800">
+                      <label className="text-[11px] font-bold text-slate-400 flex items-center gap-1 mb-1">
+                        ⚪ 0% — 20% ({tr('Qoniqarsiz', 'Слабо')})
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={500}
+                        className="clean-input text-xs font-bold text-slate-400"
+                        value={testForm.rewardTierUnder20Coins}
+                        onChange={(e) =>
+                          setTestForm((prev) => ({
+                            ...prev,
+                            rewardTierUnder20Coins: Math.max(0, Number(e.target.value) || 0),
+                          }))
+                        }
+                      />
+                      <div className="flex items-center gap-1 mt-1.5">
+                        {[0, 2, 5].map((amt) => (
+                          <button
+                            key={amt}
+                            type="button"
+                            className={`row-quick-coin-btn text-[10px] ${testForm.rewardTierUnder20Coins === amt ? 'bg-slate-700 text-white' : ''}`}
+                            onClick={() => setTestForm((prev) => ({ ...prev, rewardTierUnder20Coins: amt }))}
+                          >
+                            {amt === 0 ? '0' : `+${amt}`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           )}

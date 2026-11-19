@@ -206,7 +206,8 @@ def _evaluate_test_student_access(test, now=None, site_settings=None, lang='uz')
 from core.models import (
     CustomUser, Test, Question, Option, TestResult, StudentAnswer,
     TeacherShowcase, TalentedStudent, ContactMessage, SiteSetting, SchoolClass,
-    CoinTransaction, ClassCoinTransaction, LessonSchedule
+    CoinTransaction, ClassCoinTransaction, LessonSchedule, Subject, TeacherSubjectClass,
+    ParentInterview
 )
 from core.importer import (
     parse_questions_from_file, generate_sample_word, generate_sample_excel
@@ -222,6 +223,155 @@ from core.schedule_utils import (
 )
 
 SUBJECTS_LIST = ['Matematika', 'Fizika', 'Informatika', 'Ingliz tili', 'Biologiya', 'Kimyo', 'Tarix', 'Ona tili va Adabiyot']
+
+
+def get_all_subjects_list():
+    """Barcha faol fanlar ro'yxati (DB Subject jadvali va standart ro'yxat)"""
+    try:
+        db_subjects = list(Subject.objects.filter(is_active=True).values_list('name', flat=True))
+    except Exception:
+        db_subjects = []
+    combined = []
+    for s in SUBJECTS_LIST:
+        if s not in combined:
+            combined.append(s)
+    for s in db_subjects:
+        if s not in combined:
+            combined.append(s)
+    return combined
+
+
+def get_teacher_assignments(teacher):
+    """
+    O'qituvchining biriktirilgan fanlari va har bir fan uchun sinflar ro'yxatini qaytarish:
+    [
+        { 'subject': 'Matematika', 'classes': ['5-A-UZ', '6-A-UZ'] },
+        { 'subject': 'Informatika', 'classes': ['9-A-UZ'] }
+    ]
+    """
+    if not teacher or getattr(teacher, 'role', '') != 'teacher':
+        return []
+    try:
+        assignments = (
+            TeacherSubjectClass.objects.filter(teacher=teacher)
+            .select_related('school_class')
+            .order_by('subject', 'school_class__grade_level', 'school_class__name')
+        )
+        grouped = {}
+        for a in assignments:
+            s = (a.subject or '').strip()
+            if not s:
+                continue
+            c_name = a.school_class.name if a.school_class else ''
+            if s not in grouped:
+                grouped[s] = []
+            if c_name and c_name not in grouped[s]:
+                grouped[s].append(c_name)
+
+        result = [{'subject': s, 'classes': cls_list} for s, cls_list in grouped.items()]
+    except Exception:
+        result = []
+
+    # Fallback to teacher.subject if no TeacherSubjectClass rows exist
+    if not result and getattr(teacher, 'subject', None):
+        raw_subjects = [x.strip() for x in str(teacher.subject).split(',') if x.strip()]
+        for rs in raw_subjects:
+            result.append({'subject': rs, 'classes': []})
+    return result
+
+
+def _cls_sort_key(cname):
+    m = re.match(r'^\s*(\d+)', str(cname or ''))
+    return (int(m.group(1)) if m else 999, str(cname or '').lower())
+
+
+def get_teacher_assigned_classes(teacher):
+    """O'qituvchiga barcha fanlar bo'yicha biriktirilgan barcha faol sinflar ro'yxati"""
+    if not teacher or getattr(teacher, 'role', '') != 'teacher':
+        return []
+    try:
+        classes = list(
+            TeacherSubjectClass.objects.filter(teacher=teacher)
+            .values_list('school_class__name', flat=True)
+            .distinct()
+        )
+        return sorted(classes, key=_cls_sort_key)
+    except Exception:
+        return []
+
+
+def sync_teacher_assignments(teacher, raw_assignments=None, single_subject=None, single_classes=None):
+    """
+    O'qituvchining fan-sinf biriktirmalarini sinxronlash.
+    raw_assignments: list yoki JSON string: [{'subject': '...', 'classes': ['...', ...]}, ...]
+    """
+    if not teacher:
+        return []
+    parsed = []
+    if isinstance(raw_assignments, str):
+        try:
+            raw_assignments = json.loads(raw_assignments)
+        except Exception:
+            raw_assignments = None
+
+    if isinstance(raw_assignments, list):
+        for item in raw_assignments:
+            if isinstance(item, dict):
+                s = str(item.get('subject') or '').strip()
+                cls_list = item.get('classes') or []
+                if isinstance(cls_list, str):
+                    try:
+                        cls_list = json.loads(cls_list)
+                    except Exception:
+                        cls_list = [x.strip() for x in cls_list.split(',') if x.strip()]
+                clean_cls = [str(c).strip() for c in cls_list if str(c).strip()]
+                if s:
+                    parsed.append({'subject': s, 'classes': clean_cls})
+            elif isinstance(item, str) and item.strip():
+                parsed.append({'subject': item.strip(), 'classes': []})
+
+    # Fallback agar faqat subject va/yoki assignedClasses kelgan bo'lsa
+    if not parsed and single_subject:
+        s_list = [x.strip() for x in str(single_subject).split(',') if x.strip()]
+        c_list = []
+        if single_classes:
+            if isinstance(single_classes, str):
+                try:
+                    single_classes = json.loads(single_classes)
+                except Exception:
+                    single_classes = [x.strip() for x in single_classes.split(',') if x.strip()]
+            if isinstance(single_classes, list):
+                c_list = [str(c).strip() for c in single_classes if str(c).strip()]
+        for s in s_list:
+            parsed.append({'subject': s, 'classes': c_list})
+
+    distinct_subjects = []
+    with transaction.atomic():
+        TeacherSubjectClass.objects.filter(teacher=teacher).delete()
+        for item in parsed:
+            s_name = item['subject']
+            if s_name not in distinct_subjects:
+                distinct_subjects.append(s_name)
+            Subject.objects.get_or_create(name=s_name, defaults={'is_active': True})
+            for c_name in item['classes']:
+                try:
+                    sc = SchoolClass.objects.filter(name=c_name).first()
+                    if not sc:
+                        sc = SchoolClass.objects.create(name=c_name)
+                    TeacherSubjectClass.objects.get_or_create(
+                        teacher=teacher,
+                        subject=s_name,
+                        school_class=sc,
+                    )
+                except Exception:
+                    pass
+
+        if distinct_subjects:
+            teacher.subject = ", ".join(distinct_subjects)
+            teacher.save(update_fields=['subject'])
+
+    return parsed
+
 
 TEACHER_COIN_WINDOW_HOURS = 1  # Har bir sinf uchun har 1 soatda (dars oralig'ida) limit
 HOURLY_TEACHER_MAX_COINS = 5  # Har bir sinf uchun 1 soatda ko'pi bilan 5 Coin
@@ -802,12 +952,16 @@ def save_validated_user_avatar(user, img_file, lang='uz'):
 
 def serialize_user_payload(user):
     assigned_classes = []
+    subject_assignments = []
     if user.role == 'tutor':
         assigned_classes = list(
             user.tutor_classes.filter(is_active=True)
             .order_by('grade_level', 'language', 'name')
             .values_list('name', flat=True)
         )
+    elif user.role == 'teacher':
+        assigned_classes = get_teacher_assigned_classes(user)
+        subject_assignments = get_teacher_assignments(user)
     return {
         'id': user.id,
         'username': user.username,
@@ -815,7 +969,11 @@ def serialize_user_payload(user):
         'role': user.role,
         'grade': user.grade,
         'subject': user.subject,
+        'subjectAssignments': subject_assignments,
+        'subjects': [a['subject'] for a in subject_assignments] or ([user.subject] if user.subject else []),
         'phone': user.phone or '',
+        'parentName': getattr(user, 'parent_name', '') or '',
+        'parentPhone': getattr(user, 'parent_phone', '') or '',
         'bio': user.bio or '',
         'coins': getattr(user, 'coins', 0),
         'isActive': bool(getattr(user, 'is_active', True)),
@@ -1008,7 +1166,7 @@ def api_meta(request):
     return JsonResponse({
         'classes': get_active_classes_list(),
         'classesMeta': get_active_classes_meta(),
-        'subjects': SUBJECTS_LIST,
+        'subjects': get_all_subjects_list(),
         'studentTestsPolicy': serialize_student_tests_policy(lang=lang),
     })
 
@@ -1027,6 +1185,152 @@ def api_current_user(request):
 
 # ================= 👑 ADMIN APIS =================
 
+# 0. Subjects list, create, update & delete
+@csrf_exempt
+def api_admin_subjects(request, subject_id=None):
+    """Admin panel: Fanlar ro'yxati, yangi fan qo'shish, tahrirlash va o'chirish"""
+    auth_err = check_admin_permission(request)
+    if auth_err:
+        return auth_err
+    lang = _req_lang(request)
+
+    # Standart fanlarning barchasi DB da bo'lishini ta'minlash
+    for s_def in SUBJECTS_LIST:
+        Subject.objects.get_or_create(name=s_def, defaults={'is_active': True})
+
+    if request.method == 'GET':
+        subjects_qs = Subject.objects.filter(is_active=True).order_by('name')
+        data = []
+        for s in subjects_qs:
+            # Ushbu fanga biriktirilgan o'qituvchilar
+            assigned_teachers_qs = (
+                TeacherSubjectClass.objects.filter(subject=s.name)
+                .values_list('teacher__full_name', flat=True)
+                .distinct()
+            )
+            t_names = [t for t in assigned_teachers_qs if t]
+            if not t_names:
+                legacy_teachers = CustomUser.objects.filter(
+                    role='teacher', subject__icontains=s.name
+                ).values_list('full_name', flat=True)
+                t_names = [t for t in legacy_teachers if t]
+
+            # Ushbu fan biriktirilgan sinflar
+            assigned_classes_qs = (
+                TeacherSubjectClass.objects.filter(subject=s.name)
+                .values_list('school_class__name', flat=True)
+                .distinct()
+            )
+            c_names = sorted([c for c in assigned_classes_qs if c], key=_cls_sort_key)
+
+            tests_count = Test.objects.filter(subject=s.name).count()
+            data.append({
+                'id': s.id,
+                'name': s.name,
+                'isActive': s.is_active,
+                'teachersCount': len(t_names),
+                'teachers': t_names,
+                'classesCount': len(c_names),
+                'classes': c_names,
+                'testsCount': tests_count,
+                'createdAt': s.created_at.strftime('%d.%m.%Y') if s.created_at else '',
+            })
+        return JsonResponse(data, safe=False)
+
+    elif request.method == 'POST':
+        try:
+            is_json = (request.content_type or '').startswith('application/json')
+            data = json.loads(request.body.decode('utf-8')) if is_json and request.body else request.POST
+            name = (data.get('name') or '').strip()
+            if not name:
+                return JsonResponse({'error': _msg(lang, "Fan nomini kiriting!", "Введите название предмета!")}, status=400)
+            if len(name) < 2:
+                return JsonResponse({'error': _msg(lang, "Fan nomi kamida 2 ta harfdan iborat bo'lsin!", "Название предмета должно содержать минимум 2 буквы!")}, status=400)
+
+            # Mavjudligini tekshirish (case-insensitive)
+            existing = Subject.objects.filter(name__iexact=name).first()
+            if existing:
+                if not existing.is_active:
+                    existing.is_active = True
+                    existing.name = name
+                    existing.save(update_fields=['is_active', 'name'])
+                subject = existing
+            else:
+                subject = Subject.objects.create(name=name, is_active=True)
+
+            return JsonResponse({
+                'success': True,
+                'subject': {
+                    'id': subject.id,
+                    'name': subject.name,
+                    'isActive': subject.is_active,
+                },
+                'message': _msg(lang, f"'{subject.name}' fani muvaffaqiyatli saqlandi!", f"Предмет '{subject.name}' успешно сохранен!"),
+            })
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+
+    elif request.method in ['PUT', 'PATCH']:
+        if not subject_id:
+            return JsonResponse({'error': _msg(lang, "Fan ID si ko'rsatilmadi!", "ID предмета не указан!")}, status=400)
+        try:
+            subject = Subject.objects.get(id=subject_id)
+            is_json = (request.content_type or '').startswith('application/json')
+            data = json.loads(request.body.decode('utf-8')) if is_json and request.body else request.POST
+            new_name = (data.get('name') or '').strip()
+            if not new_name:
+                return JsonResponse({'error': _msg(lang, "Fan nomini kiriting!", "Введите название предмета!")}, status=400)
+            if len(new_name) < 2:
+                return JsonResponse({'error': _msg(lang, "Fan nomi kamida 2 ta harfdan iborat bo'lsin!", "Название предмета должно содержать минимум 2 буквы!")}, status=400)
+
+            old_name = subject.name
+            if new_name != old_name:
+                if Subject.objects.filter(name__iexact=new_name).exclude(id=subject.id).exists():
+                    return JsonResponse({'error': _msg(lang, "Ushbu nomdagi fan allaqachon mavjud!", "Предмет с таким названием уже существует!")}, status=400)
+
+                with transaction.atomic():
+                    subject.name = new_name
+                    subject.save(update_fields=['name'])
+                    TeacherSubjectClass.objects.filter(subject=old_name).update(subject=new_name)
+                    Test.objects.filter(subject=old_name).update(subject=new_name)
+                    LessonSchedule.objects.filter(subject=old_name).update(subject=new_name)
+                    for t in CustomUser.objects.filter(role='teacher', subject__icontains=old_name):
+                        parts = [p.strip() for p in (t.subject or '').split(',') if p.strip()]
+                        updated_parts = [new_name if p == old_name else p for p in parts]
+                        t.subject = ", ".join(updated_parts)
+                        t.save(update_fields=['subject'])
+
+            return JsonResponse({
+                'success': True,
+                'subject': {
+                    'id': subject.id,
+                    'name': subject.name,
+                    'isActive': subject.is_active,
+                },
+                'message': _msg(lang, "Fan nomi muvaffaqiyatli yangilandi!", "Название предмета успешно обновлено!"),
+            })
+        except Subject.DoesNotExist:
+            return JsonResponse({'error': _msg(lang, "Fan topilmadi!", "Предмет не найден!")}, status=404)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+
+    elif request.method == 'DELETE':
+        if not subject_id:
+            return JsonResponse({'error': _msg(lang, "Fan ID si ko'rsatilmadi!", "ID предмета не указан!")}, status=400)
+        try:
+            subject = Subject.objects.get(id=subject_id)
+            subject.is_active = False
+            subject.save(update_fields=['is_active'])
+            return JsonResponse({
+                'success': True,
+                'message': _msg(lang, f"'{subject.name}' fani muvaffaqiyatli o'chirildi!", f"Предмет '{subject.name}' успешно удален!"),
+            })
+        except Subject.DoesNotExist:
+            return JsonResponse({'error': _msg(lang, "Fan topilmadi!", "Предмет не найден!")}, status=404)
+
+    return JsonResponse({'error': _msg(lang, "Metod qo'llab-quvvatlanmaydi", "Метод не поддерживается")}, status=405)
+
+
 # 1. Teachers list & create (ALOHIDA)
 @csrf_exempt
 def api_admin_teachers(request):
@@ -1044,11 +1348,17 @@ def api_admin_teachers(request):
             results = TestResult.objects.filter(test__teacher=t)
             sub_count = results.count()
             avg_score = round(results.aggregate(avg=Avg('score_percentage'))['avg'] or 0)
+            assignments = get_teacher_assignments(t)
+            assigned_classes = get_teacher_assigned_classes(t)
+            teacher_subjects = [a['subject'] for a in assignments] or ([t.subject] if t.subject else [])
             data.append({
                 'id': t.id,
                 'username': t.username,
                 'fullName': t.full_name,
                 'subject': t.subject or _msg(lang, 'Fan belgilanmagan', 'Предмет не указан'),
+                'subjectAssignments': assignments,
+                'assignedClasses': assigned_classes,
+                'subjects': teacher_subjects,
                 'phone': t.phone or '-',
                 'rawPhone': t.phone or '',
                 'bio': t.bio or '',
@@ -1071,10 +1381,12 @@ def api_admin_teachers(request):
             password = (data.get('password') or '').strip()
             full_name = (data.get('fullName') or data.get('full_name') or '').strip()
             subject = (data.get('subject') or '').strip()
+            subject_assignments = data.get('subjectAssignments') or data.get('subject_assignments')
+            assigned_classes = data.get('assignedClasses') or data.get('assigned_classes')
             phone = (data.get('phone') or '').strip()
             bio = (data.get('bio') or '').strip()
 
-            if not username or not password or not full_name or not subject:
+            if not username or not password or not full_name or (not subject and not subject_assignments):
                 return JsonResponse({'error': _msg(lang, "Barcha majburiy maydonlarni to'ldiring!", "Заполните все обязательные поля!")}, status=400)
 
             if len(password) < 3:
@@ -1088,9 +1400,15 @@ def api_admin_teachers(request):
                 password=password,
                 role='teacher',
                 full_name=full_name,
-                subject=subject,
+                subject=subject or 'Matematika',
                 phone=phone,
                 bio=bio
+            )
+            sync_teacher_assignments(
+                user,
+                raw_assignments=subject_assignments,
+                single_subject=subject,
+                single_classes=assigned_classes,
             )
             if 'avatar' in request.FILES:
                 save_validated_user_avatar(user, request.FILES['avatar'], lang=lang)
@@ -1321,6 +1639,8 @@ def api_admin_students(request):
                 'fullName': s.full_name,
                 'grade': s.grade or '-',
                 'phone': s.phone or '-',
+                'parentName': s.parent_name or '',
+                'parentPhone': s.parent_phone or '',
                 'bio': s.bio or '',
                 'avatarUrl': s.get_avatar_url(),
                 'hasCustomAvatar': bool(s.avatar),
@@ -1343,6 +1663,8 @@ def api_admin_students(request):
             full_name = (data.get('fullName') or data.get('full_name') or '').strip()
             grade = (data.get('grade') or '').strip()
             phone = (data.get('phone') or '').strip()
+            parent_name = (data.get('parentName') or data.get('parent_name') or '').strip()
+            parent_phone = (data.get('parentPhone') or data.get('parent_phone') or '').strip()
 
             if not username or not password or not full_name or not grade:
                 return JsonResponse({'error': _msg(lang, "Barcha majburiy maydonlarni to'ldiring!", "Заполните все обязательные поля!")}, status=400)
@@ -1359,7 +1681,9 @@ def api_admin_students(request):
                 role='student',
                 full_name=full_name,
                 grade=grade,
-                phone=phone
+                phone=phone,
+                parent_name=parent_name,
+                parent_phone=parent_phone
             )
             if 'avatar' in request.FILES:
                 save_validated_user_avatar(user, request.FILES['avatar'], lang=lang)
@@ -1394,26 +1718,40 @@ def api_admin_user_manage(request, user_id):
         return JsonResponse({'error': _msg(lang, 'Foydalanuvchi topilmadi!', 'Пользователь не найден!')}, status=404)
 
     if request.method == 'GET':
-        assigned_classes = (
-            list(
-                user.tutor_classes.filter(is_active=True)
-                .order_by('grade_level', 'language', 'name')
-                .values_list('name', flat=True)
+        if user.role == 'tutor':
+            assigned_classes = (
+                list(
+                    user.tutor_classes.filter(is_active=True)
+                    .order_by('grade_level', 'language', 'name')
+                    .values_list('name', flat=True)
+                )
             )
-            if user.role == 'tutor'
-            else []
-        )
+            subject_assignments = []
+            teacher_subjects = []
+        elif user.role == 'teacher':
+            assigned_classes = get_teacher_assigned_classes(user)
+            subject_assignments = get_teacher_assignments(user)
+            teacher_subjects = [a['subject'] for a in subject_assignments] or ([user.subject] if user.subject else [])
+        else:
+            assigned_classes = []
+            subject_assignments = []
+            teacher_subjects = []
+
         return JsonResponse({
             'id': user.id,
             'username': user.username,
             'fullName': user.full_name,
             'role': user.role,
             'subject': user.subject,
+            'subjectAssignments': subject_assignments,
+            'subjects': teacher_subjects,
             'grade': user.grade,
             'coins': int(user.coins or 0),
             'isActive': bool(getattr(user, 'is_active', True)),
             'assignedClasses': assigned_classes,
             'phone': user.phone or '',
+            'parentName': getattr(user, 'parent_name', '') or '',
+            'parentPhone': getattr(user, 'parent_phone', '') or '',
             'bio': user.bio or '',
             'avatarUrl': user.get_avatar_url(),
             'hasCustomAvatar': bool(user.avatar),
@@ -1428,6 +1766,8 @@ def api_admin_user_manage(request, user_id):
             new_password = (data.get('password') or data.get('newPassword') or '').strip()
             new_full_name = (data.get('fullName') or data.get('full_name') or '').strip()
             new_phone = data.get('phone') if 'phone' in data else None
+            new_parent_name = data.get('parentName') if 'parentName' in data else (data.get('parent_name') if 'parent_name' in data else None)
+            new_parent_phone = data.get('parentPhone') if 'parentPhone' in data else (data.get('parent_phone') if 'parent_phone' in data else None)
             new_bio = data.get('bio') if 'bio' in data else None
             new_subject = (data.get('subject') or '').strip()
             new_grade = (data.get('grade') or '').strip()
@@ -1444,6 +1784,10 @@ def api_admin_user_manage(request, user_id):
                 user.full_name = new_full_name
             if new_phone is not None:
                 user.phone = str(new_phone).strip()
+            if new_parent_name is not None:
+                user.parent_name = str(new_parent_name).strip()
+            if new_parent_phone is not None:
+                user.parent_phone = str(new_parent_phone).strip()
             if new_bio is not None:
                 user.bio = str(new_bio).strip()
             if user.role == 'teacher' and new_subject:
@@ -1498,6 +1842,16 @@ def api_admin_user_manage(request, user_id):
                             current_cls_names,
                             replace=False,
                             prev_tutor_name=prev_full_name,
+                        )
+                elif user.role == 'teacher':
+                    raw_teacher_assignments = data.get('subjectAssignments') or data.get('subject_assignments')
+                    raw_single_classes = data.get('assignedClasses') or data.get('assigned_classes')
+                    if raw_teacher_assignments is not None or new_subject or raw_single_classes is not None:
+                        sync_teacher_assignments(
+                            user,
+                            raw_assignments=raw_teacher_assignments,
+                            single_subject=new_subject or user.subject,
+                            single_classes=raw_single_classes,
                         )
 
             return JsonResponse({
@@ -1603,6 +1957,8 @@ def api_tutor_dashboard(request):
             'grade': g or '-',
             'phone': s.phone or '-',
             'rawPhone': s.phone or '',
+            'parentName': s.parent_name or '',
+            'parentPhone': s.parent_phone or '',
             'bio': s.bio or '',
             'coins': int(s.coins or 0),
             'avatarUrl': s.get_avatar_url(),
@@ -1717,6 +2073,8 @@ def api_tutor_students(request):
                 'grade': s.grade or '-',
                 'phone': s.phone or '-',
                 'rawPhone': s.phone or '',
+                'parentName': s.parent_name or '',
+                'parentPhone': s.parent_phone or '',
                 'bio': s.bio or '',
                 'avatarUrl': s.get_avatar_url(),
                 'hasCustomAvatar': bool(s.avatar),
@@ -1738,6 +2096,8 @@ def api_tutor_students(request):
             full_name = (data.get('fullName') or data.get('full_name') or '').strip()
             raw_grade = (data.get('grade') or '').strip()
             phone = (data.get('phone') or '').strip()
+            parent_name = (data.get('parentName') or data.get('parent_name') or '').strip()
+            parent_phone = (data.get('parentPhone') or data.get('parent_phone') or '').strip()
             bio = (data.get('bio') or '').strip()
 
             resolved_grade, scope_err = _assert_tutor_grade_allowed(cls_qs, is_admin_all, raw_grade, lang=lang)
@@ -1758,6 +2118,8 @@ def api_tutor_students(request):
                 full_name=full_name,
                 grade=resolved_grade,
                 phone=phone,
+                parent_name=parent_name,
+                parent_phone=parent_phone,
                 bio=bio,
             )
             if 'avatar' in request.FILES:
@@ -1804,6 +2166,8 @@ def api_tutor_student_manage(request, student_id):
             'role': student.role,
             'grade': student.grade,
             'phone': student.phone or '',
+            'parentName': student.parent_name or '',
+            'parentPhone': student.parent_phone or '',
             'bio': student.bio or '',
             'coins': int(student.coins or 0),
             'avatarUrl': student.get_avatar_url(),
@@ -1819,6 +2183,8 @@ def api_tutor_student_manage(request, student_id):
             new_password = (data.get('password') or data.get('newPassword') or '').strip()
             new_full_name = (data.get('fullName') or data.get('full_name') or '').strip()
             new_phone = data.get('phone') if 'phone' in data else None
+            new_parent_name = data.get('parentName') if 'parentName' in data else (data.get('parent_name') if 'parent_name' in data else None)
+            new_parent_phone = data.get('parentPhone') if 'parentPhone' in data else (data.get('parent_phone') if 'parent_phone' in data else None)
             new_bio = data.get('bio') if 'bio' in data else None
             new_grade = (data.get('grade') or '').strip()
             clear_avatar = str(data.get('clearAvatar', '')).lower() in ['true', '1', 'yes', 'да']
@@ -1832,6 +2198,10 @@ def api_tutor_student_manage(request, student_id):
                 student.full_name = new_full_name
             if new_phone is not None:
                 student.phone = str(new_phone).strip()
+            if new_parent_name is not None:
+                student.parent_name = str(new_parent_name).strip()
+            if new_parent_phone is not None:
+                student.parent_phone = str(new_parent_phone).strip()
             if new_bio is not None:
                 student.bio = str(new_bio).strip()
             if new_grade:
@@ -1870,6 +2240,550 @@ def api_tutor_student_manage(request, student_id):
         })
 
     return JsonResponse({'error': _msg(lang, "Metod qo'llab-quvvatlanmaydi", "Метод не поддерживается")}, status=405)
+
+
+# ----------------- TUTOR & PARENT INTERVIEWS (OTA-ONALAR BILAN SUHBATLAR) -----------------
+
+def serialize_parent_interview(interview, lang='uz'):
+    std = interview.student
+    tutor = interview.tutor
+    cls_obj = interview.school_class
+    period_labels = {
+        'weekly': ("Haftalik suhbat", "Еженедельная беседа"),
+        'monthly': ("Oylik suhbat", "Ежемесячная беседа"),
+        'quarterly': ("Choraklik suhbat", "Четвертная беседа"),
+        'other': ("Boshqa suhbat", "Другая беседа"),
+    }
+    p_pair = period_labels.get(interview.period_type, (interview.period_type, interview.period_type))
+
+    status_labels = {
+        'completed': ("Suhbat o'tkazildi", "Беседа проведена"),
+        'no_answer': ("Javob bermadi", "Не ответил(а)"),
+        'rescheduled': ("Qayta qo'ng'iroq belgilandi", "Перезвонить"),
+    }
+    s_pair = status_labels.get(interview.call_status, (interview.call_status, interview.call_status))
+
+    return {
+        'id': interview.id,
+        'studentId': std.id if std else None,
+        'studentName': std.full_name if std else '',
+        'studentUsername': std.username if std else '',
+        'studentAvatarUrl': std.get_avatar_url() if std else '',
+        'classId': cls_obj.id if cls_obj else None,
+        'className': interview.class_name or (std.grade if std else ''),
+        'tutorId': tutor.id if tutor else None,
+        'tutorName': tutor.full_name if tutor else '',
+        'tutorAvatarUrl': tutor.get_avatar_url() if tutor else '',
+        'parentName': interview.parent_name or (getattr(std, 'parent_name', '') if std else '') or '',
+        'parentPhone': interview.parent_phone or (getattr(std, 'parent_phone', '') if std else '') or (std.phone if std else '') or '',
+        'periodType': interview.period_type,
+        'periodLabel': _msg(lang, p_pair[0], p_pair[1]),
+        'date': interview.date.strftime('%Y-%m-%d') if interview.date else '',
+        'dateFormatted': interview.date.strftime('%d.%m.%Y') if interview.date else '',
+        'score': int(interview.score or 10),
+        'scorePercentage': interview.get_score_percentage(),
+        'summary': interview.summary or '',
+        'callStatus': interview.call_status,
+        'statusLabel': _msg(lang, s_pair[0], s_pair[1]),
+        'adminNotes': interview.admin_notes or '',
+        'createdAt': _fmt_local_dt(interview.created_at) or (interview.created_at.strftime('%d.%m.%Y %H:%M') if interview.created_at else ''),
+        'updatedAt': _fmt_local_dt(interview.updated_at) or (interview.updated_at.strftime('%d.%m.%Y %H:%M') if interview.updated_at else ''),
+    }
+
+
+@csrf_exempt
+def api_tutor_parent_interviews(request):
+    """Tyuter portali: biriktirilgan sinf o'quvchilari ota-onalari bilan suhbatlar jurnali (ro'yxat va yangi suhbat kiritish)"""
+    tutor_actor, is_admin_all, cls_qs, auth_err = _resolve_tutor_scope(request)
+    if auth_err:
+        return auth_err
+    lang = _req_lang(request)
+    assigned_names = list(cls_qs.values_list('name', flat=True))
+
+    if request.method == 'GET':
+        period_filter = (request.GET.get('period') or '').strip().lower()
+        grade_filter = (request.GET.get('grade') or request.GET.get('className') or '').strip()
+        student_id_param = (request.GET.get('studentId') or '').strip()
+        search_query = (request.GET.get('search') or '').strip().lower()
+
+        interviews_qs = ParentInterview.objects.select_related('student', 'tutor', 'school_class')
+        if not is_admin_all:
+            if assigned_names:
+                interviews_qs = interviews_qs.filter(
+                    Q(tutor=tutor_actor) | Q(class_name__in=assigned_names) | Q(student__grade__in=assigned_names)
+                )
+            else:
+                interviews_qs = interviews_qs.filter(tutor=tutor_actor)
+
+        if grade_filter and grade_filter != 'all':
+            interviews_qs = interviews_qs.filter(Q(class_name__iexact=grade_filter) | Q(student__grade__iexact=grade_filter))
+
+        if student_id_param:
+            interviews_qs = interviews_qs.filter(student_id=student_id_param)
+
+        if period_filter in ('weekly', 'monthly', 'quarterly', 'other'):
+            interviews_qs = interviews_qs.filter(period_type=period_filter)
+
+        if search_query:
+            interviews_qs = interviews_qs.filter(
+                Q(student__full_name__icontains=search_query) |
+                Q(student__username__icontains=search_query) |
+                Q(parent_name__icontains=search_query) |
+                Q(parent_phone__icontains=search_query) |
+                Q(summary__icontains=search_query)
+            )
+
+        interviews_list = list(interviews_qs.order_by('-date', '-created_at'))
+        serialized_interviews = [serialize_parent_interview(item, lang=lang) for item in interviews_list]
+
+        # Calculate statistics
+        total_interviews = len(interviews_list)
+        assigned_students_qs = CustomUser.objects.filter(role='student')
+        if not is_admin_all:
+            assigned_students_qs = assigned_students_qs.filter(grade__in=assigned_names) if assigned_names else assigned_students_qs.none()
+        total_assigned_students = assigned_students_qs.count()
+
+        contacted_student_ids = {item.student_id for item in interviews_list if item.student_id}
+        coverage_pct = round((len(contacted_student_ids) / total_assigned_students) * 100, 1) if total_assigned_students > 0 else 0.0
+
+        scores = [item.score for item in interviews_list if item.score is not None]
+        avg_score = round(sum(scores) / len(scores), 1) if scores else 0.0
+        avg_pct = round((avg_score / 10.0) * 100, 1) if scores else 0.0
+
+        weekly_count = sum(1 for item in interviews_list if item.period_type == 'weekly')
+        monthly_count = sum(1 for item in interviews_list if item.period_type == 'monthly')
+
+        return JsonResponse({
+            'success': True,
+            'interviews': serialized_interviews,
+            'summary': {
+                'totalInterviews': total_interviews,
+                'uniqueContactedStudents': len(contacted_student_ids),
+                'totalAssignedStudents': total_assigned_students,
+                'coveragePercentage': coverage_pct,
+                'avgScore': avg_score,
+                'avgScorePercentage': avg_pct,
+                'weeklyCount': weekly_count,
+                'monthlyCount': monthly_count,
+            },
+            'assignedClasses': assigned_names,
+        })
+
+    elif request.method == 'POST':
+        try:
+            is_json = (request.content_type or '').startswith('application/json')
+            data = json.loads(request.body.decode('utf-8')) if is_json and request.body else request.POST
+
+            student_id = data.get('studentId') or data.get('student_id')
+            if not student_id:
+                return JsonResponse({'error': _msg(lang, "O'quvchini tanlash majburiy!", "Необходимо выбрать ученика!")}, status=400)
+
+            student = CustomUser.objects.filter(id=student_id, role='student').first()
+            if not student:
+                return JsonResponse({'error': _msg(lang, "O'quvchi topilmadi!", "Ученик не найден!")}, status=404)
+
+            # Check permissions
+            _, grade_err = _assert_tutor_grade_allowed(cls_qs, is_admin_all, student.grade, lang=lang)
+            if grade_err:
+                return grade_err
+
+            period_type = (data.get('periodType') or data.get('period_type') or 'weekly').strip().lower()
+            if period_type not in ('weekly', 'monthly', 'quarterly', 'other'):
+                period_type = 'weekly'
+
+            date_str = (data.get('date') or '').strip()
+            interview_date = timezone.now().date()
+            if date_str:
+                try:
+                    interview_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                except Exception:
+                    pass
+
+            raw_score = data.get('score')
+            try:
+                score = int(raw_score)
+                if score < 1 or score > 10:
+                    score = 10
+            except (ValueError, TypeError):
+                score = 10
+
+            summary = (data.get('summary') or '').strip()
+            if not summary:
+                return JsonResponse({'error': _msg(lang, "Suhbat xulosasini kiritish majburiy!", "Введите заключение беседы!")}, status=400)
+
+            call_status = (data.get('callStatus') or data.get('call_status') or 'completed').strip().lower()
+            if call_status not in ('completed', 'no_answer', 'rescheduled'):
+                call_status = 'completed'
+
+            parent_name = (data.get('parentName') or data.get('parent_name') or '').strip() or getattr(student, 'parent_name', '')
+            parent_phone = (data.get('parentPhone') or data.get('parent_phone') or '').strip() or getattr(student, 'parent_phone', '')
+
+            # Sync to student profile if changed/provided
+            sync_phone = _parse_bool_flag(data.get('syncParentPhone'), default=True)
+            if sync_phone:
+                st_changed = False
+                new_p_name = (data.get('parentName') or data.get('parent_name') or '').strip()
+                new_p_phone = (data.get('parentPhone') or data.get('parent_phone') or '').strip()
+                if new_p_name and new_p_name != student.parent_name:
+                    student.parent_name = new_p_name
+                    st_changed = True
+                if new_p_phone and new_p_phone != student.parent_phone:
+                    student.parent_phone = new_p_phone
+                    st_changed = True
+                if st_changed:
+                    student.save(update_fields=['parent_name', 'parent_phone'])
+
+            sch_cls = SchoolClass.objects.filter(name=student.grade).first() if student.grade else None
+
+            interview = ParentInterview.objects.create(
+                tutor=tutor_actor,
+                student=student,
+                school_class=sch_cls,
+                class_name=student.grade or '',
+                parent_name=parent_name,
+                parent_phone=parent_phone,
+                period_type=period_type,
+                date=interview_date,
+                score=score,
+                summary=summary,
+                call_status=call_status,
+                admin_notes=(data.get('adminNotes') or '').strip() if is_admin_all else '',
+            )
+
+            return JsonResponse({
+                'success': True,
+                'message': _msg(
+                    lang,
+                    f"Ota-ona bilan suhbat xulosasi ({score} ball, {round(score * 10)}%) muvaffaqiyatli saqlandi!",
+                    f"Заключение беседы с родителем ({score} баллов, {round(score * 10)}%) успешно сохранено!",
+                ),
+                'interview': serialize_parent_interview(interview, lang=lang),
+            })
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+
+    return JsonResponse({'error': _msg(lang, "Metod qo'llab-quvvatlanmaydi", "Метод не поддерживается")}, status=405)
+
+
+@csrf_exempt
+def api_tutor_parent_interview_manage(request, interview_id):
+    """Suhbat xulosasini ko'rish, tahrirlash va o'chirish"""
+    tutor_actor, is_admin_all, cls_qs, auth_err = _resolve_tutor_scope(request)
+    if auth_err:
+        return auth_err
+    lang = _req_lang(request)
+
+    interview = ParentInterview.objects.filter(id=interview_id).select_related('student', 'tutor', 'school_class').first()
+    if not interview:
+        return JsonResponse({'error': _msg(lang, "Suhbat yozuvi topilmadi!", "Запись беседы не найдена!")}, status=404)
+
+    if not is_admin_all and interview.tutor_id != tutor_actor.id:
+        assigned_names = list(cls_qs.values_list('name', flat=True))
+        if interview.class_name not in assigned_names and (not interview.student or interview.student.grade not in assigned_names):
+            return JsonResponse({'error': _msg(lang, "Siz faqat o'z o'quvchilaringiz suhbatlarini tahrirlashingiz mumkin!", "Вы можете редактировать беседы только своих учеников!")}, status=403)
+
+    if request.method == 'GET':
+        return JsonResponse({'success': True, 'interview': serialize_parent_interview(interview, lang=lang)})
+
+    elif request.method in ['PUT', 'POST', 'PATCH']:
+        try:
+            is_json = (request.content_type or '').startswith('application/json')
+            data = json.loads(request.body.decode('utf-8')) if is_json and request.body else request.POST
+
+            if 'periodType' in data or 'period_type' in data:
+                pt = (data.get('periodType') or data.get('period_type') or '').strip().lower()
+                if pt in ('weekly', 'monthly', 'quarterly', 'other'):
+                    interview.period_type = pt
+
+            if 'date' in data:
+                date_str = (data.get('date') or '').strip()
+                if date_str:
+                    try:
+                        interview.date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                    except Exception:
+                        pass
+
+            if 'score' in data:
+                try:
+                    sc = int(data.get('score'))
+                    if 1 <= sc <= 10:
+                        interview.score = sc
+                except (ValueError, TypeError):
+                    pass
+
+            if 'summary' in data:
+                sm = (data.get('summary') or '').strip()
+                if sm:
+                    interview.summary = sm
+
+            if 'callStatus' in data or 'call_status' in data:
+                cs = (data.get('callStatus') or data.get('call_status') or '').strip().lower()
+                if cs in ('completed', 'no_answer', 'rescheduled'):
+                    interview.call_status = cs
+
+            if 'parentName' in data or 'parent_name' in data:
+                interview.parent_name = (data.get('parentName') or data.get('parent_name') or '').strip()
+
+            if 'parentPhone' in data or 'parent_phone' in data:
+                interview.parent_phone = (data.get('parentPhone') or data.get('parent_phone') or '').strip()
+
+            if is_admin_all and ('adminNotes' in data or 'admin_notes' in data):
+                interview.admin_notes = (data.get('adminNotes') or data.get('admin_notes') or '').strip()
+
+            # Optional student phone sync
+            sync_phone = _parse_bool_flag(data.get('syncParentPhone'), default=True)
+            if sync_phone and interview.student:
+                st_changed = False
+                if interview.parent_name and interview.parent_name != interview.student.parent_name:
+                    interview.student.parent_name = interview.parent_name
+                    st_changed = True
+                if interview.parent_phone and interview.parent_phone != interview.student.parent_phone:
+                    interview.student.parent_phone = interview.parent_phone
+                    st_changed = True
+                if st_changed:
+                    interview.student.save(update_fields=['parent_name', 'parent_phone'])
+
+            interview.save()
+            return JsonResponse({
+                'success': True,
+                'message': _msg(lang, "Suhbat ma'lumotlari muvaffaqiyatli yangilandi!", "Данные беседы успешно обновлены!"),
+                'interview': serialize_parent_interview(interview, lang=lang),
+            })
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+
+    elif request.method == 'DELETE':
+        interview.delete()
+        return JsonResponse({
+            'success': True,
+            'message': _msg(lang, "Suhbat yozuvi o'chirildi!", "Запись беседы удалена!"),
+        })
+
+    return JsonResponse({'error': _msg(lang, "Metod qo'llab-quvvatlanmaydi", "Метод не поддерживается")}, status=405)
+
+
+@csrf_exempt
+def api_admin_parent_interview_stats(request):
+    """Admin portali: Sinflar bo'yicha foiz reytingi va ota-onalar suhbati statistikasi"""
+    auth_err = check_admin_permission(request)
+    if auth_err:
+        return auth_err
+    lang = _req_lang(request)
+
+    period_filter = (request.GET.get('period') or 'all').strip().lower()
+    search_query = (request.GET.get('search') or '').strip().lower()
+
+    now = timezone.now()
+    today = now.date()
+
+    interviews_qs = ParentInterview.objects.select_related('student', 'tutor', 'school_class')
+
+    if period_filter == 'this_month':
+        first_day_of_month = today.replace(day=1)
+        interviews_qs = interviews_qs.filter(date__gte=first_day_of_month)
+    elif period_filter == 'this_week':
+        monday = today - timedelta(days=today.weekday())
+        interviews_qs = interviews_qs.filter(date__gte=monday)
+    elif period_filter in ('weekly', 'monthly', 'quarterly'):
+        interviews_qs = interviews_qs.filter(period_type=period_filter)
+
+    all_interviews = list(interviews_qs)
+
+    # All active classes
+    classes = list(SchoolClass.objects.filter(is_active=True).select_related('tutor').order_by('grade_level', 'language', 'name'))
+
+    # Build Class Rankings by Percentage
+    class_rankings = []
+    total_school_students = 0
+    total_contacted_students = 0
+    total_interviews_count = len(all_interviews)
+
+    for sc in classes:
+        cls_students = list(CustomUser.objects.filter(role='student', grade=sc.name))
+        std_count = len(cls_students)
+        total_school_students += std_count
+
+        sc_interviews = [i for i in all_interviews if (i.school_class_id == sc.id) or (i.class_name and i.class_name.strip().lower() == sc.name.strip().lower())]
+        int_cnt = len(sc_interviews)
+
+        contacted_std_ids = {i.student_id for i in sc_interviews if i.student_id}
+        contacted_cnt = len(contacted_std_ids)
+        total_contacted_students += contacted_cnt
+
+        cov_pct = round((contacted_cnt / std_count) * 100, 1) if std_count > 0 else 0.0
+
+        scores = [i.score for i in sc_interviews if i.score is not None]
+        avg_score = round(sum(scores) / len(scores), 1) if scores else 0.0
+        avg_pct = round((avg_score / 10.0) * 100, 1) if scores else 0.0
+
+        t_9_10 = sum(1 for s in scores if s >= 9)
+        t_7_8 = sum(1 for s in scores if 7 <= s < 9)
+        t_5_6 = sum(1 for s in scores if 5 <= s < 7)
+        t_under5 = sum(1 for s in scores if s < 5)
+
+        tutor_name = sc.tutor.full_name if sc.tutor else ''
+        tutor_avatar = sc.tutor.get_avatar_url() if sc.tutor else ''
+
+        if search_query:
+            if (search_query not in sc.name.lower()) and (search_query not in tutor_name.lower()):
+                continue
+
+        class_rankings.append({
+            'classId': sc.id,
+            'className': sc.name,
+            'gradeLevel': sc.grade_level,
+            'language': sc.language,
+            'room': sc.room or '-',
+            'headTeacher': sc.head_teacher or '',
+            'tutorId': sc.tutor_id,
+            'tutorName': tutor_name,
+            'tutorAvatarUrl': tutor_avatar,
+            'totalStudents': std_count,
+            'contactedStudents': contacted_cnt,
+            'coveragePercentage': cov_pct,
+            'interviewsCount': int_cnt,
+            'avgScore': avg_score,
+            'avgScorePercentage': avg_pct,
+            'scoreDistribution': {
+                'tier9_10': t_9_10,
+                'tier7_8': t_7_8,
+                'tier5_6': t_5_6,
+                'tierUnder5': t_under5,
+            },
+        })
+
+    # Sort class rankings by avgScorePercentage descending, then coveragePercentage descending, then interviewsCount
+    class_rankings.sort(
+        key=lambda item: (
+            item['avgScorePercentage'] if item['interviewsCount'] > 0 else -1,
+            item['coveragePercentage'],
+            item['interviewsCount'],
+        ),
+        reverse=True
+    )
+
+    # Assign ranks
+    for idx, item in enumerate(class_rankings, start=1):
+        item['rank'] = idx
+
+    # Overall Summary
+    overall_scores = [i.score for i in all_interviews if i.score is not None]
+    overall_avg_score = round(sum(overall_scores) / len(overall_scores), 1) if overall_scores else 0.0
+    overall_avg_pct = round((overall_avg_score / 10.0) * 100, 1) if overall_scores else 0.0
+    global_coverage = round((total_contacted_students / total_school_students) * 100, 1) if total_school_students > 0 else 0.0
+
+    recent_interviews = [
+        serialize_parent_interview(i, lang=lang)
+        for i in sorted(all_interviews, key=lambda x: (x.date, x.created_at), reverse=True)[:25]
+    ]
+
+    return JsonResponse({
+        'success': True,
+        'classRankings': class_rankings,
+        'overallSummary': {
+            'totalClasses': len(classes),
+            'totalStudents': total_school_students,
+            'totalInterviews': total_interviews_count,
+            'totalContactedStudents': total_contacted_students,
+            'globalCoveragePercentage': global_coverage,
+            'overallAvgScore': overall_avg_score,
+            'overallAvgPercentage': overall_avg_pct,
+        },
+        'recentInterviews': recent_interviews,
+    })
+
+
+@csrf_exempt
+def api_admin_class_parent_interviews(request, class_id):
+    """Admin portali: Muayyan sinfdagi o'quvchilar va ularning ota-onalari bilan suhbatlar to'liq statistikasi"""
+    auth_err = check_admin_permission(request)
+    if auth_err:
+        return auth_err
+    lang = _req_lang(request)
+
+    sc = SchoolClass.objects.filter(id=class_id).select_related('tutor').first()
+    if not sc:
+        return JsonResponse({'error': _msg(lang, "Sinf topilmadi!", "Класс не найден!")}, status=404)
+
+    students = list(CustomUser.objects.filter(role='student', grade=sc.name).order_by('full_name'))
+    interviews = list(
+        ParentInterview.objects.filter(Q(school_class=sc) | Q(class_name=sc.name))
+        .select_related('student', 'tutor')
+        .order_by('-date', '-created_at')
+    )
+
+    student_interviews_map = {}
+    for iv in interviews:
+        student_interviews_map.setdefault(iv.student_id, []).append(iv)
+
+    students_data = []
+    contacted_count = 0
+    all_class_scores = []
+
+    for st in students:
+        st_ivs = student_interviews_map.get(st.id, [])
+        iv_count = len(st_ivs)
+        if iv_count > 0:
+            contacted_count += 1
+
+        latest_iv = st_ivs[0] if st_ivs else None
+        st_scores = [i.score for i in st_ivs if i.score is not None]
+        all_class_scores.extend(st_scores)
+        st_avg = round(sum(st_scores) / len(st_scores), 1) if st_scores else 0.0
+
+        students_data.append({
+            'id': st.id,
+            'fullName': st.full_name,
+            'username': st.username,
+            'avatarUrl': st.get_avatar_url(),
+            'phone': st.phone or '-',
+            'parentName': getattr(st, 'parent_name', '') or (latest_iv.parent_name if latest_iv else '') or '-',
+            'parentPhone': getattr(st, 'parent_phone', '') or (latest_iv.parent_phone if latest_iv else '') or '-',
+            'interviewsCount': iv_count,
+            'hasInterview': iv_count > 0,
+            'avgScore': st_avg,
+            'avgScorePercentage': round((st_avg / 10.0) * 100, 1) if st_scores else 0.0,
+            'latestInterview': {
+                'id': latest_iv.id,
+                'date': latest_iv.date.strftime('%d.%m.%Y'),
+                'periodType': latest_iv.period_type,
+                'score': latest_iv.score,
+                'scorePercentage': latest_iv.get_score_percentage(),
+                'summary': latest_iv.summary,
+                'callStatus': latest_iv.call_status,
+                'tutorName': latest_iv.tutor.full_name if latest_iv.tutor else '',
+            } if latest_iv else None,
+            'interviews': [serialize_parent_interview(iv, lang=lang) for iv in st_ivs],
+        })
+
+    students_data.sort(key=lambda x: (not x['hasInterview'], x['fullName']))
+
+    avg_class_score = round(sum(all_class_scores) / len(all_class_scores), 1) if all_class_scores else 0.0
+    avg_class_pct = round((avg_class_score / 10.0) * 100, 1) if all_class_scores else 0.0
+    coverage_pct = round((contacted_count / len(students)) * 100, 1) if students else 0.0
+
+    return JsonResponse({
+        'success': True,
+        'schoolClass': {
+            'id': sc.id,
+            'name': sc.name,
+            'gradeLevel': sc.grade_level,
+            'language': sc.language,
+            'room': sc.room or '-',
+            'headTeacher': sc.head_teacher or '',
+            'tutorId': sc.tutor_id,
+            'tutorName': sc.tutor.full_name if sc.tutor else '',
+            'tutorAvatarUrl': sc.tutor.get_avatar_url() if sc.tutor else '',
+            'studentsCount': len(students),
+            'contactedCount': contacted_count,
+            'coveragePercentage': coverage_pct,
+            'interviewsCount': len(interviews),
+            'avgScore': avg_class_score,
+            'avgScorePercentage': avg_class_pct,
+        },
+        'students': students_data,
+        'interviews': [serialize_parent_interview(iv, lang=lang) for iv in interviews],
+    })
 
 
 # Foydalanuvchi profilini yangilash (JSON yoki FormData)
@@ -2346,6 +3260,73 @@ def api_teacher_download_template(request):
         return response
 
 
+def serialize_test_reward_fields(test):
+    """Test uchun kengaytirilgan Diamond Coin mukofot sozlamalarini serialize qilish"""
+    return {
+        'rewardMode': getattr(test, 'reward_mode', 'both') or 'both',
+        'rewardRank1Coins': int(getattr(test, 'reward_rank1_coins', 50) or 50),
+        'rewardRank2Coins': int(getattr(test, 'reward_rank2_coins', 30) or 30),
+        'rewardRank3Coins': int(getattr(test, 'reward_rank3_coins', 20) or 20),
+        'rewardParticipantCoins': int(getattr(test, 'reward_participant_coins', 5) or 5),
+        'rewardTier80_100Coins': int(getattr(test, 'reward_tier_80_100_coins', 40) or 40),
+        'rewardTier60_80Coins': int(getattr(test, 'reward_tier_60_80_coins', 20) or 20),
+        'rewardTier20_60Coins': int(getattr(test, 'reward_tier_20_60_coins', 10) or 10),
+        'rewardTierUnder20Coins': int(getattr(test, 'reward_tier_under20_coins', 0) or 0),
+        'rewardTopCount': int(getattr(test, 'reward_top_count', 0) or 0),
+        'rewardCoinsAmount': int(getattr(test, 'reward_coins_amount', 0) or 0),
+        'rewardMinScore': int(getattr(test, 'reward_min_score', 0) or 0),
+    }
+
+
+def extract_test_reward_fields(data, default_obj=None):
+    """Frontenddan kelgan test parametrlaridan mukofot sozlamalarini ajratib olish"""
+    mode = data.get('rewardMode', data.get('reward_mode', getattr(default_obj, 'reward_mode', 'both'))) or 'both'
+    if mode not in ['both', 'percentage', 'ranks', 'none']:
+        mode = 'both'
+
+    def _val(keys, default_val):
+        for k in keys:
+            if k in data and data[k] is not None:
+                try:
+                    return max(0, int(data[k]))
+                except (ValueError, TypeError):
+                    pass
+        if default_obj is not None:
+            for k in keys:
+                if hasattr(default_obj, k):
+                    val = getattr(default_obj, k)
+                    if val is not None:
+                        return max(0, int(val))
+        return default_val
+
+    rank1 = _val(['reward_rank1_coins', 'rewardRank1Coins', 'rank1Coins', 'rank1'], 50)
+    rank2 = _val(['reward_rank2_coins', 'rewardRank2Coins', 'rank2Coins', 'rank2'], 30)
+    rank3 = _val(['reward_rank3_coins', 'rewardRank3Coins', 'rank3Coins', 'rank3'], 20)
+    participant = _val(['reward_participant_coins', 'rewardParticipantCoins', 'participantCoins', 'participant'], 5)
+    tier80_100 = _val(['reward_tier_80_100_coins', 'rewardTier80_100Coins', 'tier80_100', 'tier80100'], 40)
+    tier60_80 = _val(['reward_tier_60_80_coins', 'rewardTier60_80Coins', 'tier60_80', 'tier6080'], 20)
+    tier20_60 = _val(['reward_tier_20_60_coins', 'rewardTier20_60Coins', 'tier20_60', 'tier2060'], 10)
+    tier_under20 = _val(['reward_tier_under20_coins', 'rewardTierUnder20Coins', 'tierUnder20', 'tierunder20'], 0)
+    top_cnt = _val(['reward_top_count', 'rewardTopCount'], 0)
+    top_amt = _val(['reward_coins_amount', 'rewardCoinsAmount'], 0)
+    min_sc = min(100, _val(['reward_min_score', 'rewardMinScore'], 0))
+
+    return {
+        'reward_mode': mode,
+        'reward_rank1_coins': rank1,
+        'reward_rank2_coins': rank2,
+        'reward_rank3_coins': rank3,
+        'reward_participant_coins': participant,
+        'reward_tier_80_100_coins': tier80_100,
+        'reward_tier_60_80_coins': tier60_80,
+        'reward_tier_20_60_coins': tier20_60,
+        'reward_tier_under20_coins': tier_under20,
+        'reward_top_count': top_cnt,
+        'reward_coins_amount': top_amt,
+        'reward_min_score': min_sc,
+    }
+
+
 @csrf_exempt
 def api_teacher_tests(request):
     lang = _req_lang(request)
@@ -2389,7 +3370,7 @@ def api_teacher_tests(request):
                 .count()
             ) if (t.reward_top_count or 0) > 0 else 0
 
-            data.append({
+            test_data_item = {
                 'id': t.id,
                 'title': t.title,
                 'description': t.description,
@@ -2414,9 +3395,6 @@ def api_teacher_tests(request):
                 'portalOpen': policy['portalOpen'],
                 'lockReason': lock_reason,
                 'lockMessage': lock_message,
-                'rewardTopCount': int(t.reward_top_count or 0),
-                'rewardCoinsAmount': int(t.reward_coins_amount or 0),
-                'rewardMinScore': int(t.reward_min_score or 0),
                 'rewardSlotsUsed': slots_used,
                 'isUpcoming': is_upcoming,
                 'isExpired': is_expired,
@@ -2427,7 +3405,9 @@ def api_teacher_tests(request):
                 'submissionsCount': s_count,
                 'submissions_count': s_count,
                 'createdAt': _fmt_local_dt(t.created_at) or ''
-            })
+            }
+            test_data_item.update(serialize_test_reward_fields(t))
+            data.append(test_data_item)
         return JsonResponse(data, safe=False)
 
     elif request.method == 'POST':
@@ -2452,9 +3432,7 @@ def api_teacher_tests(request):
                 data.get('isStudentAllowed') if 'isStudentAllowed' in data else data.get('is_student_allowed'),
                 default=False,
             )
-            reward_top_count = max(0, int(data.get('rewardTopCount', data.get('reward_top_count', 0)) or 0))
-            reward_coins_amount = max(0, int(data.get('rewardCoinsAmount', data.get('reward_coins_amount', 0)) or 0))
-            reward_min_score = min(100, max(0, int(data.get('rewardMinScore', data.get('reward_min_score', 0)) or 0)))
+            reward_fields = extract_test_reward_fields(data)
 
             imm_raw = data.get('immediateReward') if isinstance(data.get('immediateReward'), dict) else {}
             imm_enabled = imm_raw.get('enabled', True)
@@ -2491,10 +3469,8 @@ def api_teacher_tests(request):
                     end_time=end_time,
                     max_attempts=max_attempts,
                     is_student_allowed=is_student_allowed,
-                    reward_top_count=reward_top_count,
-                    reward_coins_amount=reward_coins_amount,
-                    reward_min_score=reward_min_score,
-                    description=description
+                    description=description,
+                    **reward_fields
                 )
 
                 for idx, q_item in enumerate(questions_data, 1):
@@ -2605,19 +3581,18 @@ def api_teacher_tests(request):
                     f"Тест успешно сохранён, и {imm_cnt} активным ученикам начислено +{imm_amount} Diamond Coin!",
                 )
 
-            return JsonResponse({
+            res_payload = {
                 'success': True,
                 'testId': test.id,
                 'grade': test.grade,
                 'isStudentAllowed': bool(test.is_student_allowed),
-                'rewardTopCount': test.reward_top_count,
-                'rewardCoinsAmount': test.reward_coins_amount,
-                'rewardMinScore': test.reward_min_score,
                 'immediateRewardedCount': imm_cnt,
                 'immediateRewardTotalCoins': imm_cnt * imm_amount,
                 'immediateRewardedStudents': imm_rewarded_students,
                 'message': msg,
-            })
+            }
+            res_payload.update(serialize_test_reward_fields(test))
+            return JsonResponse(res_payload)
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=400)
 
@@ -2669,7 +3644,7 @@ def api_teacher_test_manage(request, test_id):
             .count()
         ) if (test.reward_top_count or 0) > 0 else 0
         allowed_now, lock_reason, lock_message, _ = _evaluate_test_student_access(test, lang=lang)
-        return JsonResponse({
+        manage_data = {
             'id': test.id,
             'title': test.title,
             'description': test.description,
@@ -2691,12 +3666,11 @@ def api_teacher_test_manage(request, test_id):
             'isActive': bool(allowed_now),
             'lockReason': lock_reason,
             'lockMessage': lock_message,
-            'rewardTopCount': int(test.reward_top_count or 0),
-            'rewardCoinsAmount': int(test.reward_coins_amount or 0),
-            'rewardMinScore': int(test.reward_min_score or 0),
             'rewardSlotsUsed': slots_used,
             'questions': questions_list
-        })
+        }
+        manage_data.update(serialize_test_reward_fields(test))
+        return JsonResponse(manage_data)
 
     elif request.method in ['PUT', 'POST', 'PATCH']:
         try:
@@ -2742,12 +3716,10 @@ def api_teacher_test_manage(request, test_id):
             if 'isStudentAllowed' in data or 'is_student_allowed' in data:
                 raw_allowed = data.get('isStudentAllowed') if 'isStudentAllowed' in data else data.get('is_student_allowed')
                 test.is_student_allowed = _parse_bool_flag(raw_allowed, default=bool(test.is_student_allowed))
-            if 'rewardTopCount' in data or 'reward_top_count' in data:
-                test.reward_top_count = max(0, int(data.get('rewardTopCount', data.get('reward_top_count', 0)) or 0))
-            if 'rewardCoinsAmount' in data or 'reward_coins_amount' in data:
-                test.reward_coins_amount = max(0, int(data.get('rewardCoinsAmount', data.get('reward_coins_amount', 0)) or 0))
-            if 'rewardMinScore' in data or 'reward_min_score' in data:
-                test.reward_min_score = min(100, max(0, int(data.get('rewardMinScore', data.get('reward_min_score', 0)) or 0)))
+
+            reward_fields = extract_test_reward_fields(data, default_obj=test)
+            for k, v in reward_fields.items():
+                setattr(test, k, v)
 
             with transaction.atomic():
                 test.save()
@@ -3402,7 +4374,7 @@ def api_student_tests(request):
             .count()
         ) if (r_top > 0 and r_amt > 0) else 0
 
-        data.append({
+        test_item_dict = {
             'id': t.id,
             'title': t.title,
             'description': t.description,
@@ -3440,7 +4412,9 @@ def api_student_tests(request):
             'endTime': _fmt_local_dt(t.end_time),
             'userScore': last_result.score_percentage if last_result else None,
             'userCorrect': last_result.correct_answers if last_result else None
-        })
+        }
+        test_item_dict.update(serialize_test_reward_fields(t))
+        data.append(test_item_dict)
 
     return JsonResponse(data, safe=False)
 
@@ -3512,7 +4486,7 @@ def api_student_test_detail(request, test_id):
             .count()
         ) if (r_top > 0 and r_amt > 0) else 0
 
-        return JsonResponse({
+        detail_payload = {
             'id': test.id,
             'title': test.title,
             'description': test.description,
@@ -3530,7 +4504,9 @@ def api_student_test_detail(request, test_id):
             'startTime': _fmt_local_dt(test.start_time),
             'endTime': _fmt_local_dt(test.end_time),
             'questions': questions
-        })
+        }
+        detail_payload.update(serialize_test_reward_fields(test))
+        return JsonResponse(detail_payload)
     except Test.DoesNotExist:
         return JsonResponse({'error': _msg(lang, 'Test topilmadi!', 'Тест не найден!')}, status=404)
 
@@ -3718,16 +4694,28 @@ def api_student_submit_test(request, test_id):
         test_result.save()
 
         # O'quvchilarga testdagi faollik va yuqori natijalar uchun avtomatik Diamond Coin berish
-        if score_percent == 100:
-            base_coins = 50
-        elif score_percent >= 85:
-            base_coins = 35
-        elif score_percent >= 70:
-            base_coins = 20
-        elif score_percent >= 50:
-            base_coins = 10
-        else:
-            base_coins = 5  # Ishtirok uchun rag'bat
+        # (Admin belgilagan 20-60%, 60-80%, 80-100% foiz oraliqlari yoki qatnashuvchi stavkasi)
+        reward_mode = getattr(test, 'reward_mode', 'both') or 'both'
+        base_coins = 0
+        tier_label = ''
+        if reward_mode != 'none':
+            if reward_mode in ['percentage', 'both']:
+                if score_percent >= 80:
+                    base_coins = int(getattr(test, 'reward_tier_80_100_coins', 40) or 0)
+                    tier_label = "80-100% ⭐"
+                elif score_percent >= 60:
+                    base_coins = int(getattr(test, 'reward_tier_60_80_coins', 20) or 0)
+                    tier_label = "60-80% ⚡"
+                elif score_percent >= 20:
+                    base_coins = int(getattr(test, 'reward_tier_20_60_coins', 10) or 0)
+                    tier_label = "20-60% 🌟"
+                else:
+                    base_coins = int(getattr(test, 'reward_tier_under20_coins', 0) or 0)
+                    tier_label = "0-20% 🎁"
+            elif reward_mode == 'ranks':
+                # Faqat o'rinlar rejimida: topshirishda qatnashuvchi bonusi beriladi (agar > 0 bo'lsa)
+                base_coins = int(getattr(test, 'reward_participant_coins', 5) or 0)
+                tier_label = "Ishtirokchi 🎖️"
 
         bonus_coins_earned = 0
         bonus_slot_rank = None
@@ -3743,8 +4731,8 @@ def api_student_submit_test(request, test_id):
                     amount=base_coins,
                     reason=_msg(
                         lang,
-                        f"\"{locked_test.title}\" testida {score_percent}% natija uchun 🏆",
-                        f"За результат {score_percent}% в тесте «{locked_test.title}» 🏆",
+                        f"\"{locked_test.title}\" testida {score_percent}% natija uchun ({tier_label}) 🏆",
+                        f"За результат {score_percent}% ({tier_label}) в тесте «{locked_test.title}» 🏆",
                     ),
                     test_result=test_result,
                     portal='test_score',
@@ -5790,33 +6778,33 @@ def api_teacher_test_participants(request, test_id):
         .count()
     ) if (test.reward_top_count or 0) > 0 else 0
 
+    test_summary_meta = {
+        'id': test.id,
+        'title': test.title,
+        'grade': test.grade,
+        'subject': test.subject,
+        'language': test.language,
+        'questionsCount': len(t_questions),
+        'totalParticipants': len(participants),
+        'uniqueStudents': unique_students,
+        'avgScore': avg_score,
+        'minScore': min_score,
+        'maxScore': max_score,
+        'passCount': pass_count,
+        'passRate': pass_rate,
+        'avgTimeSeconds': avg_time_seconds,
+        'totalCoinsAwarded': total_coins_awarded,
+        'rewardSlotsUsed': reward_slots_used,
+        'distribution': distribution,
+        'classComparison': class_comparison,
+        'questionStats': question_stats,
+        'questionStatsByClass': question_stats_by_class,
+    }
+    test_summary_meta.update(serialize_test_reward_fields(test))
+
     return JsonResponse({
         'success': True,
-        'test': {
-            'id': test.id,
-            'title': test.title,
-            'grade': test.grade,
-            'subject': test.subject,
-            'language': test.language,
-            'questionsCount': len(t_questions),
-            'totalParticipants': len(participants),
-            'uniqueStudents': unique_students,
-            'avgScore': avg_score,
-            'minScore': min_score,
-            'maxScore': max_score,
-            'passCount': pass_count,
-            'passRate': pass_rate,
-            'avgTimeSeconds': avg_time_seconds,
-            'totalCoinsAwarded': total_coins_awarded,
-            'rewardTopCount': int(test.reward_top_count or 0),
-            'rewardCoinsAmount': int(test.reward_coins_amount or 0),
-            'rewardMinScore': int(test.reward_min_score or 0),
-            'rewardSlotsUsed': reward_slots_used,
-            'distribution': distribution,
-            'classComparison': class_comparison,
-            'questionStats': question_stats,
-            'questionStatsByClass': question_stats_by_class,
-        },
+        'test': test_summary_meta,
         'participants': participants,
         'dailyCoinStatus': get_teacher_daily_coin_status(giver, enforce_for_portal=enforce_for_portal),
     })
@@ -5863,17 +6851,73 @@ def api_teacher_test_distribute_coins(request, test_id):
                 unique_results.append(r)
 
         # Smart distribution presets
-        if mode == 'top3':
+        if mode in ['ranks_custom', 'top3', 'podium']:
+            rank1_coins = max(0, int(data.get('rank1Coins', data.get('rank1', getattr(test, 'reward_rank1_coins', 50))) or 0))
+            rank2_coins = max(0, int(data.get('rank2Coins', data.get('rank2', getattr(test, 'reward_rank2_coins', 30))) or 0))
+            rank3_coins = max(0, int(data.get('rank3Coins', data.get('rank3', getattr(test, 'reward_rank3_coins', 20))) or 0))
+            participant_coins = max(0, int(data.get('participantCoins', data.get('participant', getattr(test, 'reward_participant_coins', 0))) or 0))
+
             distributions = []
-            for idx, r in enumerate(unique_results[:3], 1):
-                amt = 50 if idx == 1 else (30 if idx == 2 else 20)
-                emoji = "🥇" if idx == 1 else ("🥈" if idx == 2 else "🥉")
-                distributions.append({
-                    'studentId': r.student_id,
-                    'amount': amt,
-                    'reason': _msg(lang, f"\"{test.title}\" testida {idx}-o'rin {emoji}", f"{idx}-е место в тесте «{test.title}» {emoji}"),
-                    'resultId': r.id
-                })
+            for idx, r in enumerate(unique_results, 1):
+                if idx == 1 and rank1_coins > 0:
+                    distributions.append({
+                        'studentId': r.student_id,
+                        'amount': rank1_coins,
+                        'reason': _msg(lang, f"\"{test.title}\" testida 1-o'rin ({r.score_percentage}%) 🥇", f"1-е место ({r.score_percentage}%) в тесте «{test.title}» 🥇"),
+                        'resultId': r.id
+                    })
+                elif idx == 2 and rank2_coins > 0:
+                    distributions.append({
+                        'studentId': r.student_id,
+                        'amount': rank2_coins,
+                        'reason': _msg(lang, f"\"{test.title}\" testida 2-o'rin ({r.score_percentage}%) 🥈", f"2-е место ({r.score_percentage}%) в тесте «{test.title}» 🥈"),
+                        'resultId': r.id
+                    })
+                elif idx == 3 and rank3_coins > 0:
+                    distributions.append({
+                        'studentId': r.student_id,
+                        'amount': rank3_coins,
+                        'reason': _msg(lang, f"\"{test.title}\" testida 3-o'rin ({r.score_percentage}%) 🥉", f"3-е место ({r.score_percentage}%) в тесте «{test.title}» 🥉"),
+                        'resultId': r.id
+                    })
+                elif idx > 3 and participant_coins > 0:
+                    distributions.append({
+                        'studentId': r.student_id,
+                        'amount': participant_coins,
+                        'reason': _msg(lang, f"\"{test.title}\" testidagi ishtirok uchun ({r.score_percentage}%) 🎖️", f"За участие в тесте «{test.title}» ({r.score_percentage}%) 🎖️"),
+                        'resultId': r.id
+                    })
+        elif mode == 'percentage_tiers':
+            tier_80_100 = max(0, int(data.get('tier80_100', data.get('tier80100', getattr(test, 'reward_tier_80_100_coins', 40))) or 0))
+            tier_60_80 = max(0, int(data.get('tier60_80', data.get('tier6080', getattr(test, 'reward_tier_60_80_coins', 20))) or 0))
+            tier_20_60 = max(0, int(data.get('tier20_60', data.get('tier2060', getattr(test, 'reward_tier_20_60_coins', 10))) or 0))
+            tier_under20 = max(0, int(data.get('tierUnder20', data.get('tierunder20', getattr(test, 'reward_tier_under20_coins', 0))) or 0))
+
+            distributions = []
+            for r in unique_results:
+                sc = int(r.score_percentage or 0)
+                amt = 0
+                label = ''
+                if sc >= 80 and tier_80_100 > 0:
+                    amt = tier_80_100
+                    label = _msg(lang, f"\"{test.title}\" testida 80-100% a'lo natija ({sc}%) ⭐", f"Результат 80-100% ({sc}%) в тесте «{test.title}» ⭐")
+                elif sc >= 60 and tier_60_80 > 0:
+                    amt = tier_60_80
+                    label = _msg(lang, f"\"{test.title}\" testida 60-80% yaxshi natija ({sc}%) ⚡", f"Результат 60-80% ({sc}%) в тесте «{test.title}» ⚡")
+                elif sc >= 20 and tier_20_60 > 0:
+                    amt = tier_20_60
+                    label = _msg(lang, f"\"{test.title}\" testida 20-60% o'rtacha natija ({sc}%) 🌟", f"Результат 20-60% ({sc}%) в тесте «{test.title}» 🌟")
+                elif sc < 20 and tier_under20 > 0:
+                    amt = tier_under20
+                    label = _msg(lang, f"\"{test.title}\" testidagi ishtirok ({sc}%) 🎁", f"Участие в тесте ({sc}%) «{test.title}» 🎁")
+
+                if amt > 0:
+                    distributions.append({
+                        'studentId': r.student_id,
+                        'amount': amt,
+                        'reason': label,
+                        'resultId': r.id
+                    })
         elif mode == 'top_n':
             top_n = max(1, int(data.get('topCount') or data.get('topN') or 3))
             amt = int(data.get('amount') or 20)

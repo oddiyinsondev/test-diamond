@@ -34,8 +34,10 @@ urlpatterns = [
     path('api/meta/', views.api_meta, name='api_meta'),
     path('api/profile/update/', views.api_update_profile, name='api_update_profile'),
 
-    # 3. ADMIN APIS (O'qituvchilar, Tyuterlar va O'quvchilar ALOHIDA)
+    # 3. ADMIN APIS (O'qituvchilar, Fanlar, Tyuterlar va O'quvchilar ALOHIDA)
     path('api/admin/teachers/', views.api_admin_teachers, name='api_admin_teachers'),
+    path('api/admin/subjects/', views.api_admin_subjects, name='api_admin_subjects'),
+    path('api/admin/subjects/<int:subject_id>/', views.api_admin_subjects, name='api_admin_subject_manage'),
     path('api/admin/tutors/', views.api_admin_tutors, name='api_admin_tutors'),
     path('api/admin/students/', views.api_admin_students, name='api_admin_students'),
     path('api/admin/users/<int:user_id>/', views.api_admin_user_manage, name='api_admin_user_manage'),
@@ -45,6 +47,10 @@ urlpatterns = [
     path('api/tutor/dashboard/', views.api_tutor_dashboard, name='api_tutor_dashboard'),
     path('api/tutor/students/', views.api_tutor_students, name='api_tutor_students'),
     path('api/tutor/students/<int:student_id>/', views.api_tutor_student_manage, name='api_tutor_student_manage'),
+    path('api/tutor/parent-interviews/', views.api_tutor_parent_interviews, name='api_tutor_parent_interviews'),
+    path('api/tutor/parent-interviews/<int:interview_id>/', views.api_tutor_parent_interview_manage, name='api_tutor_parent_interview_manage'),
+    path('api/admin/parent-interviews/stats/', views.api_admin_parent_interview_stats, name='api_admin_parent_interview_stats'),
+    path('api/admin/parent-interviews/classes/<int:class_id>/', views.api_admin_class_parent_interviews, name='api_admin_class_parent_interviews'),
 
     # 4. TEACHER APIS
     path('api/teacher/tests/', views.api_teacher_tests, name='api_teacher_tests'),
