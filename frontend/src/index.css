@@ -3700,6 +3700,7 @@ body,
 
   .admin-portal-wrapper,
   .teacher-portal-wrapper,
+  .tutor-portal-wrapper,
   .student-portal-wrapper {
     padding-bottom: 84px !important;
   }
@@ -3970,6 +3971,7 @@ body,
 
   .admin-portal-wrapper,
   .teacher-portal-wrapper,
+  .tutor-portal-wrapper,
   .student-portal-wrapper {
     padding-bottom: 84px !important;
   }
