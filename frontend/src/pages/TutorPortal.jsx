@@ -1117,34 +1117,6 @@ export default function TutorPortal() {
               <span className="portal-nav-label">{tr('Mening Profilim', 'Мой профиль')}</span>
             </button>
           </nav>
-
-          {/* Assigned classes quick card in sidebar */}
-          {assignedClasses.length > 0 && (
-            <div className="mt-4 p-3 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
-              <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                {tr('Biriktirilgan Sinflar:', 'Назначенные классы:')}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {assignedClasses.map((cls) => (
-                  <button
-                    key={cls.id}
-                    type="button"
-                    onClick={() => {
-                      setActiveTab('students');
-                      setGradeFilter((prev) => (prev === cls.name ? 'all' : cls.name));
-                    }}
-                    className={`px-2 py-1 rounded-lg text-[11px] font-bold border transition-all ${
-                      gradeFilter === cls.name
-                        ? 'bg-purple-500/25 border-purple-400 text-purple-200'
-                        : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-purple-500/40'
-                    }`}
-                  >
-                    {localizeGrade(cls.name, language)} ({cls.studentsCount})
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </aside>
 
         {/* Main Content */}
@@ -1166,93 +1138,6 @@ export default function TutorPortal() {
                       )}
                     </p>
                   </div>
-                </div>
-              )}
-
-              {/* Live Class Coins Strip (Visible immediately on Tutor main tab) */}
-              {(assignedClasses.length > 0 || coinHistory.length > 0) && (
-                <div
-                  data-testid="tutor-class-coins-strip"
-                  className="p-4 rounded-2xl bg-slate-900/75 border border-amber-500/30 space-y-3 shadow-lg"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 text-xs sm:text-sm font-black text-white">
-                      <Coins size={17} className="text-amber-400" />
-                      <span>{tr('Sinflarga Berilgan Coinlar (Admin Hisobidan)', 'Койны, начисленные классам администратором')}</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs">
-                      <span className="text-slate-300">
-                        {tr('Sinflar fondi:', 'Фонд классов:')}{' '}
-                        <strong className="text-amber-300 font-mono">{summary.classBonusTotal ?? 0} 💎</strong>
-                      </span>
-                      <span className="text-slate-300">
-                        {tr('Hamyon:', 'Кошелёк:')}{' '}
-                        <strong className="text-purple-300 font-mono">{summary.tutorCoins ?? 0} 💎</strong>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('coins')}
-                        className="text-[11px] font-bold text-cyan-300 hover:text-cyan-200 underline underline-offset-2"
-                      >
-                        {tr('Barcha tarix →', 'Вся история →')}
-                      </button>
-                    </div>
-                  </div>
-
-                  {assignedClasses.length > 0 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                      {assignedClasses.map((cls) => (
-                        <div
-                          key={cls.id}
-                          className="p-3 rounded-xl bg-slate-950/75 border border-slate-800 hover:border-amber-500/40 transition-all flex flex-col justify-between gap-2"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-black text-xs text-white px-2 py-0.5 rounded-md bg-purple-500/20 border border-purple-500/40">
-                              {localizeGrade(cls.name, language)}
-                            </span>
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-black font-mono">
-                              💎 {cls.bonusCoins ?? 0}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between text-[11px] text-slate-400">
-                            <span>
-                              {tr("O'quvchilar coini:", 'Койны учеников:')}{' '}
-                              <strong className="text-cyan-300">{cls.studentCoins ?? 0} 💎</strong>
-                            </span>
-                            <span>
-                              {tr('Jami:', 'Итого:')}{' '}
-                              <strong className="text-white">{cls.totalCoins ?? 0} 💎</strong>
-                            </span>
-                          </div>
-                          {cls.lastAward ? (
-                            <div className="text-[10px] text-emerald-300/90 bg-emerald-500/10 border border-emerald-500/25 rounded-lg px-2 py-1 truncate">
-                              +{cls.lastAward.amount} 💎 • {cls.lastAward.reason} ({cls.lastAward.date})
-                            </div>
-                          ) : (
-                            <div className="text-[10px] text-slate-500 italic">
-                              {tr("Hali sinfga alohida coin yozilmagan", "Классу ещё не начислялись койны")}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {coinHistory.length > 0 && (
-                    <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center gap-2 text-[11px]">
-                      <span className="text-slate-400 font-bold">{tr("So'nggi o'tkazmalar:", 'Последние начисления:')}</span>
-                      {coinHistory.slice(0, 3).map((tx) => (
-                        <span
-                          key={tx.id}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-200"
-                        >
-                          <strong className="text-purple-300">{localizeGrade(tx.className, language)}</strong>
-                          <span className="text-amber-300 font-black">+{tx.amount} 💎</span>
-                          <span className="text-slate-400 truncate max-w-[160px]">({tx.reason})</span>
-                        </span>
-                      ))}
-                    </div>
-                  )}
                 </div>
               )}
 
